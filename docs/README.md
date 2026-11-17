@@ -132,6 +132,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `39-portables-paket.md` | Portables Zip je Plattform: Server-Binary, unsignierte XPI und zwei Anleitungen (Firefox, MCP-Clients) in Englisch nach STE100 — entpacken, `start.sh`, fertig; Token entsteht im Ordner, nichts wird installiert | `active` |
 | `40-ci-ablauf.md` | Zwei Prüfungen statt einer: Unit-Tests ohne Browser bei jedem Push, dazu ein Blackbox-Workflow auf Windows — Firefox starten, XPI installieren, über MCP eine Seite öffnen, Beweis ist der Beacon der Seite selbst; dann Zip-Bau und Release | `active` |
 | `41-anleitungen.md` | Die zwei Nutzertexte im portablen Zip — `FIREFOX.md` (XPI laden, Endpunkt und Token, Warnung vor der Temporär-Eigenschaft) und `CLIENTS.md` (pi, Codex, OpenCode plus generisches Muster); Englisch nach STE100 als Schreibregel, ohne Lint | `active` |
+| `42-mv3-migration.md` | Die Erweiterung auf MV3: der Socket zieht in einen eigenen Tab, weil Firefox eine MV3-Eventpage nach 30 s Leerlauf entlädt; der Hintergrund wird Koordinator, `scripting` ersetzt `tabs.executeScript`, `<all_urls>` wird `host_permissions` — und am Ende steht eine Messung statt einer Behauptung | `proposed` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.
