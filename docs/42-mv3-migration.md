@@ -1,5 +1,5 @@
 ---
-description: Die Erweiterung auf MV3 — der Socket lebt in einem eigenen Tab, weil Firefox die Eventpage nach 30 Sekunden Leerlauf entlädt; der Hintergrund koordiniert, die Werkzeuge ziehen mit.
+description: Die Erweiterung auf MV3 — der Socket lebt in einem eigenen Tab, weil Firefox die Eventpage nach 30 Sekunden entlädt; der Hintergrund koordiniert.
 status: proposed
 ---
 
