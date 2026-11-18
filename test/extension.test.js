@@ -2455,6 +2455,119 @@ test("endpoint_withAStoredValue_shouldDialThatValue", async () => {
 });
 
 /**
+ * The dial address of a bridge page with the given endpoint and a token.
+ *
+ * The observed value, never a literal from this file: the guards below compare against
+ * *what the page did*, so a test cannot agree with a broken implementation by sharing
+ * its assumption.
+ */
+async function dialAddressOf(storedEndpoint) {
+  await startBackground({ settings: { endpoint: storedEndpoint, token: TOKEN } });
+  const socket = FakeWebSocket.latest();
+  assert.notEqual(socket, undefined, "the endpoint must be dialled");
+  return socket.url;
+}
+
+/**
+ * The `ws://` rule: plain WebSocket only to this machine, `wss://` everywhere.
+ *
+ * The three loopback spellings are separate cases because they are three different
+ * strings in a URL, and only the parsed host decides — `[::1]` arrives with its brackets
+ * and `localhost` is a name, not an address.
+ */
+test("endpoint_wsOnLoopback_shouldConnect", async () => {
+  // GIVEN a plain `ws://` endpoint on the loopback address the bridge binds,
+  const storedEndpoint = ENDPOINT;
+
+  // WHEN the bridge page starts,
+  const dialled = await dialAddressOf(storedEndpoint);
+
+  // THEN it dials exactly that — the local install needs no TLS:
+  assert.equal(dialled, storedEndpoint);
+  assert.equal(FakeWebSocket.instances.length, 1, "one endpoint, one socket");
+});
+
+test("endpoint_wsOnIpv6Loopback_shouldConnect", async () => {
+  // GIVEN a plain `ws://` endpoint on the IPv6 loopback, brackets and all,
+  const storedEndpoint = "ws://[::1]:8110";
+
+  // WHEN the bridge page starts,
+  const dialled = await dialAddressOf(storedEndpoint);
+
+  // THEN the bracket form counts as this machine too:
+  assert.equal(dialled, storedEndpoint);
+  assert.equal(FakeWebSocket.instances.length, 1, "one endpoint, one socket");
+});
+
+test("endpoint_wsOnLocalhost_shouldConnect", async () => {
+  // GIVEN a plain `ws://` endpoint spelled with the name instead of the address,
+  const storedEndpoint = "ws://localhost:8110";
+
+  // WHEN the bridge page starts,
+  const dialled = await dialAddressOf(storedEndpoint);
+
+  // THEN the name resolves to this machine as well:
+  assert.equal(dialled, storedEndpoint);
+  assert.equal(FakeWebSocket.instances.length, 1, "one endpoint, one socket");
+});
+
+test("endpoint_wsOnAnotherHost_shouldRefuseAndLogOnce", async () => {
+  // GIVEN a plain `ws://` endpoint on a machine that is not this one, behind a path
+  // so the path half of the rule is covered as well,
+  const storedEndpoint = "ws://bridge.example.test:8110/browser-control/ws";
+  const { clock, consoleLines } = await startBackground({
+    settings: { endpoint: storedEndpoint, token: TOKEN },
+  });
+
+  // WHEN the bridge page starts,
+  await settleAsyncWork();
+
+  // THEN nothing is dialled at all — not "dialled and closed by the browser":
+  assert.equal(FakeWebSocket.instances.length, 0, "an unencrypted remote dial must not happen");
+  // ... and nothing is retried either. A wrong endpoint does not heal itself, so a
+  // backoff loop would only repeat a message the operator has already been told.
+  assert.deepStrictEqual(clock.pendingDelays(), [], "a misconfiguration is not a network error");
+
+  // ... and the operator reads exactly one line, which names the way out:
+  const refusedLines = consoleLines.filter((line) => line.includes("bc: ws:// ist nur für 127.0.0.1"));
+  assert.equal(refusedLines.length, 1, "the rule must be reported exactly once");
+  assert.ok(refusedLines[0].includes("wss://"), "the line must name the TLS alternative");
+  assert.ok(refusedLines[0].includes("SSH-Tunnel"), "the line must name the tunnel alternative");
+  // The endpoint stays out of the log: a hand-typed URL can carry credentials in its
+  // authority, and this line is the one that ends up in a bug report.
+  assert.equal(
+    refusedLines[0].includes("bridge.example.test"),
+    false,
+    "the endpoint must not be logged",
+  );
+});
+
+test("endpoint_wssOnAnotherHost_shouldConnect", async () => {
+  // GIVEN a TLS endpoint on another machine — the Caddy path of `INSTALL.md` §9,
+  const storedEndpoint = "wss://bridge.example.test/browser-control/ws";
+
+  // WHEN the bridge page starts,
+  const dialled = await dialAddressOf(storedEndpoint);
+
+  // THEN the rule does not touch it: only the *scheme* on a non-loopback host is
+  // refused, and this one is encrypted.
+  assert.equal(dialled, storedEndpoint);
+  assert.equal(FakeWebSocket.instances.length, 1, "one endpoint, one socket");
+});
+
+test("endpoint_wsWithPathOnLoopback_shouldConnect", async () => {
+  // GIVEN a plain `ws://` endpoint on loopback with a path behind it,
+  const storedEndpoint = "ws://127.0.0.1:8110/browser-control/ws";
+
+  // WHEN the bridge page starts,
+  const dialled = await dialAddressOf(storedEndpoint);
+
+  // THEN the path is none of the rule's business — the host decides:
+  assert.equal(dialled, storedEndpoint);
+  assert.equal(FakeWebSocket.instances.length, 1, "one endpoint, one socket");
+});
+
+/**
  * The switch of spec 44, page side: a page that was not switched on does not dial.
  *
  * The state is written by `background.js` and tested there (criterion 2 and the click);

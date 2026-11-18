@@ -29,9 +29,17 @@ kein mDNS, kein Caddy-Erraten. Der Standard ist eine **Vorgabe**, die man
 - **Gespeicherte Endpunkte bleiben unangetastet.** Wer eine `wss://`-Adresse
   hinter Caddy eingetragen hat, merkt nichts — der Standard greift nur bei
   leerem Feld.
-- **`ws://` bleibt erlaubt und geprüft wie bisher.** Ein ungültiger Endpunkt
-  endet weiter mit `bc: Endpunkt ungültig:` und einem erneuten Versuch, nicht
-  mit einem Absturz.
+- **`ws://` gilt nur für Loopback, `wss://` überall.** Ein `ws://`-Dial auf
+  `127.0.0.1`, `[::1]` oder `localhost` bleibt erlaubt und geprüft wie bisher;
+  auf jeden anderen Host verweigert die Seite den Dial mit **einer** deutschen
+  Logzeile statt eines Sockets und ohne erneuten Versuch (Betreiberentscheid
+  2026-11-18, `INSTALL.md` §9 „No certificate? Tunnel it.“). Grund: ein
+  unverschlüsseltes `ws://` über das Netz schickt das Token im `hello` im
+  Klartext. `wss://` ist auch auf Loopback erlaubt, und ein Pfad ändert nichts —
+  das Schema am Host entscheidet. Ein ungültiger Endpunkt endet weiter mit
+  `bc: Endpunkt ungültig:` und einem erneuten Versuch, nicht mit einem Absturz;
+  die Regel greift **vor** dem Dial und **nicht** in der Optionsseite, wo sie
+  nur das Speichern verweigern würde.
 - **Die Optionsseite bleibt abhängigkeitsfrei** (eine Datei, kein Build), und
   das Manifest ändert sich nicht.
 
@@ -326,7 +334,11 @@ Stand 2026-11-15, vor der Umsetzung:
 - **`ws://` ist unverschlüsselt, und das Token geht im `hello` mit
   (2026-11-15).** Auf einem Einzelplatzrechner ist das vertretbar; wer Port
   8110 vor der Bridge belegt, bekommt ein gültiges Token. `wss://` (§9) oder
-  Token-Rotation sind die Antworten, nicht dieses Inkrement.
+  Token-Rotation sind die Antworten, nicht dieses Inkrement. **Seit
+  2026-11-18 ist der Fernfall geschlossen:** der Dial verweigert `ws://` auf
+  jedem Nicht-Loopback-Host und nennt `wss://` und den SSH-Tunnel
+  (`INSTALL.md` §9). Offen bleibt allein der lokale Fall — dort ist der
+  Klartext auf das Loopback-Interface begrenzt.
 - **Der Endpunkt-Half der Leer-Prüfung ist toter Code (N1, 2026-11-15).**
   Nach dem Fallback kann `settings.endpoint` nicht mehr `""` sein; die Spec
   wollte die Zeile behalten. Beim nächsten Inkrement streichen — zusammen mit

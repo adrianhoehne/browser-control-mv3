@@ -5,6 +5,31 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+**`ws://` gilt nur noch für Loopback** — der Fernfall braucht `wss://` oder einen
+SSH-Tunnel (Betreiberentscheid 2026-11-18).
+
+- **Regel im Code, vor dem Dial:** `extension/bridge.js` prüft den Endpunkt,
+  bevor es einen Socket baut. `ws:` auf `127.0.0.1`, `[::1]` oder `localhost`
+  verbindet wie bisher; `ws:` auf jedem anderen Host wird verweigert — kein
+  Socket, kein Reconnect, genau eine Zeile `bc: ws:// ist nur für 127.0.0.1
+  erlaubt — für andere Rechner wss:// verwenden oder einen SSH-Tunnel auf
+  127.0.0.1 legen`. Der Endpunkt selbst wird nicht geloggt (ein Hostname kann
+  Zugangsdaten tragen). `wss://` bleibt überall erlaubt, auch auf Loopback; ein
+  Pfad ändert nichts (`isUnencryptedRemoteEndpoint`). Die Optionsseite prüft die
+  Regel nicht — dort würde sie nur das Speichern verweigern.
+- **Die CSP bleibt weit** (`connect-src 'self' ws: wss:`;
+  `extension/manifest.json` unverändert): eine engere Policy würde den
+  Fehlversuch mit einem stummen `1015` beenden, statt unsere Meldung sprechen zu
+  lassen (`docs/43`, Punkt 5).
+- **`INSTALL.md` §9, neu „No certificate? Tunnel it.“:**
+  `ssh -N -L 8110:127.0.0.1:8110 <user>@<server>` auf dem Browser-Rechner,
+  offen halten (zweites Terminal, `tmux`/`autossh`), danach `ws://127.0.0.1:8110`
+  eintragen; dazu `ss -ltn | grep 8110` als Fehlersuche. §8 hat die passende
+  Troubleshooting-Zeile.
+- **Tests:** sechs neue Fälle in `test/extension.test.js` (Loopback IPv4/IPv6/Name,
+`ws://` mit Pfad, `wss://` auf fremdem Host, und die Verweigerung mit genau einer
+Logzeile, ohne Socket und ohne Timer).
+
 **Spec 43 (Manifest auf MV3) ist `active`** — das Manifest steht auf MV3, die
 Werkzeuge antworten im echten Firefox.
 

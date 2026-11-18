@@ -529,6 +529,14 @@
     "bc: Schalterzustand nicht lesbar — die Erweiterung bleibt aus";
   const INVALID_ENDPOINT_LOG_PREFIX = "bc: Endpunkt ungültig:";
   const RECONNECT_LOG_PREFIX = "bc: neuer Verbindungsversuch in";
+  // What a plain `ws://` dial to another machine is told instead of a socket. The
+  // endpoint itself is *not* in the line: a hand-typed URL can carry a hostname with
+  // credentials in it, and this message is the one the operator reads.
+  const INSECURE_ENDPOINT_LOG_LINE =
+    "bc: ws:// ist nur für 127.0.0.1 erlaubt — für andere Rechner wss:// verwenden oder einen SSH-Tunnel auf 127.0.0.1 legen";
+  // The hosts that count as "this machine". `new URL` hands back the IPv6 literal with
+  // its brackets, so `[::1]` is the spelling to compare, not `::1`.
+  const LOOPBACK_HOSTS = ["127.0.0.1", "[::1]", "localhost"];
 
   let socket = null;
   // Consecutive failed attempts. Reset to 0 by `welcome`, so a reload of the
@@ -545,6 +553,9 @@
   // Only the operator matters here: one message about the missing settings, not
   // one per reconnect.
   let missingSettingsLogged = false;
+  // Same idea for the refused `ws://` dial: a misconfiguration is reported once, not
+  // once per attempt — and there is no attempt to repeat anyway (see `connect`).
+  let insecureEndpointLogged = false;
   // The calls that have not answered yet, one entry per tab: a navigation, a click
   // or a type — all three change the page, so two of them must not race for the
   // same tab. The newer call ends the older one of *that* tab with `superseded`
@@ -658,6 +669,22 @@
       return;
     }
 
+    // Before the dial: an unencrypted connection to another machine is a
+    // misconfiguration, not a network error — the operator has to change the endpoint,
+    // and no retry can do that for them. Deliberately *not* enforced in the options
+    // page: there it would only refuse to save, and the person who needs the reason is
+    // the one reading the extension console. The manifest CSP stays as wide as it is
+    // (`connect-src 'self' ws: wss:`) for the same reason: a policy that forbade `ws://`
+    // to a remote host would fail this dial inside the browser with a silent `1015`
+    // instead of letting this line say why.
+    if (isUnencryptedRemoteEndpoint(settings.endpoint)) {
+      if (!insecureEndpointLogged) {
+        insecureEndpointLogged = true;
+        console.warn(INSECURE_ENDPOINT_LOG_LINE);
+      }
+      return;
+    }
+
     try {
       openSocket(settings);
     } catch {
@@ -672,6 +699,26 @@
       scheduleReconnect(reconnectAttempt + 1);
       return;
     }
+  }
+
+  /**
+   * Whether the endpoint is a plain `ws://` dial to a machine that is not this one.
+   *
+   * Only the scheme on a non-loopback host is refused: `wss://` is fine anywhere (TLS
+   * over loopback included), and a path after the host changes nothing about who
+   * terminates the encryption. An address that is no URL at all answers `false` here —
+   * `openSocket` reports that typo as an invalid endpoint, and a second message about
+   * the same mistake would only bury the first.
+   */
+  function isUnencryptedRemoteEndpoint(endpoint) {
+    let parsed;
+    try {
+      parsed = new URL(endpoint);
+    } catch {
+      return false;
+    }
+    if (parsed.protocol !== "ws:") return false;
+    return !LOOPBACK_HOSTS.includes(parsed.hostname);
   }
 
   function openSocket(settings) {

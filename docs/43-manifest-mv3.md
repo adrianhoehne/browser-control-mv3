@@ -104,6 +104,15 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
    sagte warum. `content_security_policy.extension_pages` steht deshalb im
    Manifest, ohne `upgrade-insecure-requests` und mit `connect-src 'self' ws:
    wss:`; ein Manifest-Fall pinnt es, weil der Fehler stumm ist.
+   **Warum die Policy weit bleibt (2026-11-18):** `ws:` ließe sich in der CSP auf
+   Loopback verengen, aber eine enge Policy scheitert **im Browser** mit einem
+   stummen `1015`, bevor die Seite ein Wort sagen kann. Die Regel „`ws://` nur
+   für Loopback“ steht deshalb im Code (`isUnencryptedRemoteEndpoint` in
+   `extension/bridge.js`) und meldet sich mit `bc: ws:// ist nur für 127.0.0.1
+   erlaubt — für andere Rechner wss:// verwenden oder einen SSH-Tunnel auf
+   127.0.0.1 legen`; die CSP bleibt `connect-src 'self' ws: wss:`. Der Nutzer
+   liest die Meldung, statt einen Close-Code zu erraten (Betreiberentscheid
+   2026-11-18, `docs/36`, `INSTALL.md` §9).
 
 ## Risiken
 
@@ -121,7 +130,9 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
    MV3s Vorgabe-Policy hebt `ws://` auf `wss://` an, der Socket scheitert mit
    `1015`, und weder Bridge noch Konsole sagen warum. Wer die Policy wieder
    entfernt oder `upgrade-insecure-requests` hinzufügt, macht die lokale
-   Installation unbrauchbar.
+   Installation unbrauchbar. Er bleibt absichtlich so weit: die Alternative —
+   `ws:` per CSP auf Loopback verengen — erzeugt bei einem Fehlversuch einen
+   stummen `1015` statt der Logzeile aus Punkt 5.
 3. **Die Eventpage schläft weiter** — sie darf es. Jeder Zustand, der einen
    Schlaf überleben muss, gehört in `storage.local` oder in den Tab; ein
    In-Memory-Feld im Hintergrund ist ab hier ein Fehler.

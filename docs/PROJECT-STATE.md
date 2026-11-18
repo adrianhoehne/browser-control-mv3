@@ -8,6 +8,35 @@ Log oder einer Spec widerspricht, gilt der Beleg und diese Datei ist falsch.
 
 **Eine Übergabe-Datei gibt es nicht mehr.** Bis 2026-11-12 lag hier `docs/HANDOVER.md` (Stand, Entscheidungen, Betrieb); für die Veröffentlichung ist sie entfallen, weil sie Betriebsdaten trug. Der Stand steht in dieser Datei, das Verfahren in `CONTRIBUTING.md`, die Einrichtung in `INSTALL.md`.
 
+## Stand (2026-11-18): `ws://` nur für Loopback, sonst `wss://` oder SSH-Tunnel
+
+**Ein unverschlüsselter Dial ins Netz ist keine Verbindung, sondern eine
+Fehlkonfiguration.** Vor dem Dial prüft die Brückenseite den Endpunkt: `ws:` auf
+`127.0.0.1`, `[::1]` oder `localhost` wird verbunden wie bisher; `ws:` auf jedem
+anderen Host wird **verweigert** — kein Socket, kein Reconnect, genau eine
+Zeile `bc: ws:// ist nur für 127.0.0.1 erlaubt — für andere Rechner wss://
+verwenden oder einen SSH-Tunnel auf 127.0.0.1 legen`. Der Endpunkt selbst steht
+nicht in der Zeile (er kann Zugangsdaten im Hostnamen tragen). `wss://` bleibt
+überall erlaubt, auch auf Loopback; ein Pfad ändert nichts, das Schema am Host
+entscheidet (`isUnencryptedRemoteEndpoint` in `extension/bridge.js`).
+
+- **Betreiberentscheid (2026-11-18):** ein TLS-Zertifikat für die Bridge auf
+  einem anderen Rechner ist für viele Nutzer zu aufwendig. Der SSH-Tunnel ist
+  die einfache Alternative (`INSTALL.md` §9, „No certificate? Tunnel it.“):
+  `ssh -N -L 8110:127.0.0.1:8110 <user>@<server>` auf dem Browser-Rechner, dann
+  weiter `ws://127.0.0.1:8110` eintragen — die Erweiterung sieht Loopback, SSH
+  verschlüsselt den Rest.
+- **Die CSP bleibt weit** (`connect-src 'self' ws: wss:`;
+  `extension/manifest.json` unverändert): eine engere Policy würde bei einem
+  `ws://`-Fehlversuch einen stummen `1015` erzeugen, statt unserer lesbaren
+  Meldung (`docs/43`, Punkt 5).
+- **Tests:** sechs neue Fälle in `test/extension.test.js`
+  (`endpoint_wsOnLoopback_shouldConnect`, `endpoint_wsOnIpv6Loopback_shouldConnect`,
+  `endpoint_wsOnLocalhost_shouldConnect`, `endpoint_wsOnAnotherHost_shouldRefuseAndLogOnce`,
+  `endpoint_wssOnAnotherHost_shouldConnect`, `endpoint_wsWithPathOnLoopback_shouldConnect`).
+  Die Optionsseite prüft die Regel bewusst nicht — sie würde nur das Speichern
+  verweigern, und die Begründung gehört dorthin, wo der Nutzer sie liest.
+
 ## Stand (2026-11-18): Spec 43 (Manifest auf MV3) ist `active`
 
 **Das Manifest ist MV3, die Werkzeuge antworten im echten Firefox.** `scripting`
