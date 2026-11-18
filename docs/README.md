@@ -132,7 +132,9 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `39-portables-paket.md` | Portables Zip je Plattform: Server-Binary, unsignierte XPI und zwei Anleitungen (Firefox, MCP-Clients) in Englisch nach STE100 — entpacken, `start.sh`, fertig; Token entsteht im Ordner, nichts wird installiert | `active` |
 | `40-ci-ablauf.md` | Zwei Prüfungen statt einer: Unit-Tests ohne Browser bei jedem Push, dazu ein Blackbox-Workflow auf Windows — Firefox starten, XPI installieren, über MCP eine Seite öffnen, Beweis ist der Beacon der Seite selbst; dann Zip-Bau und Release | `active` |
 | `41-anleitungen.md` | Die zwei Nutzertexte im portablen Zip — `FIREFOX.md` (XPI laden, Endpunkt und Token, Warnung vor der Temporär-Eigenschaft) und `CLIENTS.md` (pi, Codex, OpenCode plus generisches Muster); Englisch nach STE100 als Schreibregel, ohne Lint | `active` |
-| `42-mv3-migration.md` | Die Erweiterung auf MV3: der Socket zieht in einen eigenen Tab, weil Firefox eine MV3-Eventpage nach 30 s Leerlauf entlädt; der Hintergrund wird Koordinator, `scripting` ersetzt `tabs.executeScript`, `<all_urls>` wird `host_permissions` — und am Ende steht eine Messung statt einer Behauptung | `proposed` |
+| `42-socket-im-tab.md` | Der Socket zieht aus dem Hintergrund in einen eigenen Tab (Roadmap 26) — die Voraussetzung für MV3; mit dem Umbau der Injection-Naht (`scripting` kennt kein `code`) und dem Ende des Wartens über zwei Kontexte | `proposed` |
+| `43-manifest-mv3.md` | Das Manifest auf MV3 (Roadmap 27+28): `scripting`, `host_permissions`, `docs/02` bewusst umgestellt — und danach 8 h Messung statt Behauptung | `proposed` |
+| `44-schalter.md` | Der Schalter in der Symbolleiste: drei Icons (Brücke, gelber Blitz, überkreuzt), Vorgabe aus, `goodbye` an die Bridge vor dem Schließen (Roadmap 32) | `proposed` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.
