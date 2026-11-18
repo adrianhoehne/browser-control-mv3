@@ -137,7 +137,8 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `44-schalter.md` | Der Schalter in der Symbolleiste: drei Icons (Brücke, gelber Blitz, überkreuzt), Vorgabe aus, `goodbye` an die Bridge vor dem Schließen (Roadmap 32) | `proposed` |
 | `45-injection-naht.md` | Die Injection-Naht (abgespalten von `docs/42`): Quelltext raus, `page-agent.js` plus `callId`-Nachrichten; die Frame-Inventur entsteht aus Selbstmeldungen, mit Frist und definiertem Verhalten für stumme und abgelehnte Frames | `active` |
 | `46-signierung.md` | Die Signierung (AMO, `unlisted`): Daten-Erklärung im Manifest, Reichweiten-Tabelle für `<all_urls>` und `scripting`, Schlüssel außerhalb des Repos — damit die XPI per Doppelklick installiert und behalten wird | `proposed` |
-| `47-eval-in-der-seitenwelt.md` | `browser_eval` zieht in die Seitenwelt, weil die MV3-CSP in der isolierten Welt keinen `Function`-Aufruf erlaubt; `allowEval` bleibt der Schalter, CSP-Verbote der Seite werden erklärt | `proposed` |
+| `47-eval-vertrag.md` | Der Vertrag für `browser_eval` (`args: [code, limits, want]`, Rückgabe mit `message`, ein Serialisierer, DOM-Formen) und der Func-Runner im Harness mit zwei Welten je Frame — Vorarbeit ohne sichtbares Verhalten | `proposed` |
+| `48-eval-in-der-seitenwelt.md` | `browser_eval` läuft in der Seitenwelt (`world: "MAIN"`): gemessen, dass der Parameter trägt; dazu die CSP-Meldung der Seite und der ehrliche Hinweis, dass `allowEval` jetzt auch Seitenvariablen erlaubt | `proposed` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.
