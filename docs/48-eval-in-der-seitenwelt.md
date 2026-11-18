@@ -91,11 +91,11 @@ Messung zeigte `eval()`.
 **Kriterien 1–4 entscheidet der Umsetzer, 5–7 der Betreiber** (echter Browser,
 `allowEval` in der Optionsseite).
 
-1. **Die Seitenwelt ist erreicht.** `injection_forEval_shouldCarryWorldMain` ⇒
+1. **Der Aufruf trifft die Seitenwelt.** `injection_forEval_shouldCarryWorldMain` ⇒
    grün; `world: "MAIN"` steht im Aufruf.
-2. **Seitenvariablen sind sichtbar.** Zwei Aufrufe: setzen, dann lesen ⇒ der Wert
-   kommt zurück.
-3. **Der CSP-Fall ist benannt.** `eval_whenThePageForbidsScript_shouldNameTheCsp`
+2. **Seitenvariablen sind sichtbar.** Der erste Aufruf setzt `window.__bcProbe`.
+   Der zweite liest sie zurück ⇒ der Wert kommt an.
+3. **Der CSP-Fall trägt einen Namen.** `eval_whenThePageForbidsScript_shouldNameTheCsp`
    ⇒ grün, die Meldung enthält „CSP" und den Hinweis auf `read`/`inspect`.
 4. **Die CSP bleibt clean.** `node -e "const m=require('./extension/manifest.json');
    console.log(m.content_security_policy.extension_pages.includes('unsafe-eval'))"`
