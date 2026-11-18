@@ -79,9 +79,31 @@ Der Code wird als Argument übergeben und im Seitenkontext ausgewertet.
 der isolierten Welt, denn es spricht `browser.runtime` an, und `browser` gibt es
 in der Seitenwelt nicht. Die Zielversion ist 152 (gemessen in `docs/02`).
 
-**Ob das trägt, wird gemessen, nicht angenommen** (Stufe 0 unten): ein Aufruf auf
-einer Seite ohne CSP muss ein Ergebnis liefern, und ein Aufruf auf einer Seite mit
-strenger CSP muss den CSP-Fehler der **Seite** melden (nicht unserer).
+**Gemessen am 2026-11-18 (Firefox 152.0.3, headless, Wegwerf-Extension in
+`/tmp`): der Parameter trägt.**
+
+```
+STEP1 world-MAIN accepted. result = [{"frameId":0,"result":"Example Domain"}]
+STEP2 page variable survives = [{"frameId":0,"result":42}]
+STEP3 isolated world sees __bcProbe as = [{"frameId":0,"result":"undefined"}]
+STEP4 github eval result = [{"frameId":0,"result":"caught: EvalError: call to eval() blocked by CSP"}]
+```
+
+Vier Dinge folgen daraus:
+
+- `executeScript({ world: "MAIN", func })` liefert den normalen Vertrag
+  (`frameId`, `result`).
+- Eine Seitenvariable (`window.__bcProbe = 42`) **überlebt** zwischen zwei
+  Aufrufen, und die isolierte Welt sieht sie nicht — die Kontrolle beweist, dass
+  die Grenze wirklich verschoben und nicht nur behauptet wird.
+- Die Injektion selbst überlebt eine strenge CSP (GitHub antwortet). Blockiert
+  wird erst ein **ausdrückliches** `eval`/`Function` im ausgewerteten Code.
+- Der Fehlertext heißt dort **`call to eval() blocked by CSP`**, nicht
+  `Function()`. Die Fehlererkennung darf sich also nicht auf ein Wort
+  festnageln.
+
+**Die zweite Wahl wird damit nicht gebraucht** — sie bleibt als Notiz stehen,
+falls ein künftiges Firefox den Parameter wieder fallen lässt.
 
 **Zweite Wahl, falls `world` nicht greift:** ein `<script>`-Element mit dem Code
 als Text in die Seite hängen und das Ergebnis über eine globale Variable und ein
