@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>Browser Control</title>
+  <!-- A tab favicon receives no theme colour and no context properties from the
+       browser, so this copy carries a fixed blue. It is deliberately not the toolbar
+       icon: that one has to follow the theme, this one has to be visible on a light
+       tab bar. -->
+  <g fill="#2a6fd6">
+    <rect x="2" y="12" width="28" height="4" />
+    <rect x="8" y="16" width="4" height="13" />
+    <rect x="20" y="16" width="4" height="13" />
+    <path d="M8 12a8 8 0 0 1 16 0h-4a4 4 0 0 0-8 0z" />
+  </g>
+</svg>

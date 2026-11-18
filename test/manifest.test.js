@@ -196,13 +196,32 @@ test("manifest_shouldCarryAButtonWithoutPopup", async () => {
   assert.ok(button.default_title.length > 0, "the button needs a title");
 });
 
+/**
+ * The three runtime states of the toolbar button (spec 44), under the names
+ * `extension/background.js` passes to `setIcon`.
+ */
+const TOOLBAR_ICON_NAMES = ["bridge", "bridge-off", "bridge-offline"];
+
+/**
+ * An SVG without its comments.
+ *
+ * The checks below are about attributes, not about prose: these icons document the very
+ * bug they must not repeat, and a raw text search would find the words in the comment and
+ * call the icon stroked. `[\s\S]*?` rather than `.` keeps a multi-line comment in one piece.
+ */
+function withoutXmlComments(svg) {
+  return svg.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+function readIcon(name) {
+  return readFile(new URL(`../extension/icons/${name}.svg`, import.meta.url), "utf8");
+}
+
 test("manifest_shouldShipTheThreeToolbarIcons", async () => {
   // GIVEN the three states of spec 44 — off, on, on without a bridge,
-  const names = ["bridge", "bridge-off", "bridge-offline"];
-
   // WHEN we read the files `setIcon` names at runtime,
-  for (const name of names) {
-    const svg = await readFile(new URL(`../extension/icons/${name}.svg`, import.meta.url), "utf8");
+  for (const name of TOOLBAR_ICON_NAMES) {
+    const svg = await readIcon(name);
 
     // THEN each one is a real, square 32-pixel drawing: the runtime states have no
     // manifest entry, so a missing or mis-sized file would only show up as a blank or
@@ -210,6 +229,78 @@ test("manifest_shouldShipTheThreeToolbarIcons", async () => {
     assert.match(svg, /viewBox="0 0 32 32"/, `${name}.svg must be drawn on a 32×32 canvas`);
     assert.match(svg, /<path /, `${name}.svg must carry a path`);
   }
+});
+
+/**
+ * The drawing rule the toolbar icons have to follow, and the reason it is a test.
+ *
+ * Firefox resolves `context-fill` for an action icon through the `fill` property only —
+ * the browser does not put `stroke` into `-moz-context-properties`. The icons shipped
+ * once as `fill="none"` plus `stroke="context-fill"`, and the result was a bridge that
+ * painted in neither theme: only the red cross and the yellow bolt were visible, and in
+ * the plain "connected" state the button was empty. Nothing about that fails a build, so
+ * the shape rule is pinned here as text — the files are three paths and a rect each.
+ */
+test("manifest_shouldNotStrokeIconsWithContextFill", async () => {
+  // GIVEN the three toolbar icons, which are small enough to read as text,
+  for (const name of TOOLBAR_ICON_NAMES) {
+    const svg = await readIcon(name);
+
+    // WHEN we look for a stroked context colour in the markup,
+    // THEN there is none: `stroke="context-fill"` resolves to nothing in the toolbar,
+    // so every stroke using it is invisible — the exact blank-icon bug this test holds:
+    assert.doesNotMatch(
+      withoutXmlComments(svg),
+      /stroke="context-fill"/,
+      `${name}.svg must not draw with stroke="context-fill"; Firefox only maps context-fill to fill`,
+    );
+  }
+});
+
+test("manifest_shouldGiveEveryIconAContextFill", async () => {
+  // GIVEN the same three icons, which must still follow the theme rather than fight it,
+  for (const name of TOOLBAR_ICON_NAMES) {
+    const svg = await readIcon(name);
+
+    // WHEN we look for the bridge's paint,
+    // THEN it is `fill="context-fill"` — a hard colour here would vanish on one of the two
+    // theme backgrounds, which is why the bridge may not simply hard-code black or white:
+    assert.match(
+      withoutXmlComments(svg),
+      /fill="context-fill"/,
+      `${name}.svg must paint the bridge with fill="context-fill"`,
+    );
+  }
+});
+
+test("manifest_shouldShipAFavicon", async () => {
+  // GIVEN the bridge page, which is an ordinary tab and therefore gets an ordinary
+  // favicon — a tab favicon never receives `context-fill` from the browser,
+  const html = await readFile(new URL("../extension/bridge.html", import.meta.url), "utf8");
+  const faviconUrl = new URL("../extension/icons/favicon.svg", import.meta.url);
+
+  // WHEN we read the icon the page points at,
+  // THEN it names a file of its own,
+  assert.match(
+    html,
+    /<link rel="icon" href="icons\/favicon\.svg"/,
+    "bridge.html must carry its own favicon, not the toolbar icon",
+  );
+
+  // ... that file is shipped,
+  await assert.doesNotReject(readFile(faviconUrl, "utf8"), "icons/favicon.svg must exist");
+  const favicon = await readFile(faviconUrl, "utf8");
+
+  // ... it is drawn on the same canvas as the toolbar icons, and it carries a fixed
+  // colour, because `context-fill` would leave the tab blank — the second half of the
+  // bug this test holds:
+  assert.match(favicon, /viewBox="0 0 32 32"/, "favicon.svg must be drawn on a 32×32 canvas");
+  assert.doesNotMatch(
+    withoutXmlComments(favicon),
+    /context-fill/,
+    "a tab favicon cannot resolve context-fill",
+  );
+  assert.match(favicon, /fill="#[0-9a-fA-F]{6}"/, "a favicon needs a hard colour");
 });
 
 /**
