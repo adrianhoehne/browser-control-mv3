@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Builds the test copy of the extension: `extension/` minus two lines, plus the
- * endpoint and token the E2E run actually needs.
+ * Builds the test copy of the extension: `extension/` minus three lines, plus the
+ * endpoint, token and switch state the E2E run actually needs.
  *
  * The extension reads endpoint and token from `storage.local` and nowhere else,
  * and `about:debugging` cannot be driven by a script. `web-ext` installs a
@@ -9,9 +9,13 @@
  * would type are replaced here, in a **copy**, with the anchors counted first
  * (`docs/40`, step 3).
  *
- * Only `<copy>/background.js` is patched and counted. `options.js` carries the
- * same endpoint anchor, so a count over the whole folder would report 2 and a
- * patch would hit the wrong file.
+ * Only `<copy>/bridge.js` is patched for endpoint and token, and the state line in
+ * `<copy>/bridge.js` **and** `<copy>/background.js`. `options.js` carries the same
+ * endpoint anchor, so a count over the whole folder would report 2 and a patch would
+ * hit the wrong file. Since spec 42 the socket lives in the bridge tab, so that is
+ * where the endpoint and the token are read — `background.js` is the coordinator and
+ * carries neither. Since spec 44 the switch has two sides: the page that must not dial
+ * (`bridge.js`) and the coordinator that must not build the tab (`background.js`).
  *
  * The count is `grep -Fc`, one per anchor, and it must be exactly 1. `-F`
  * matters: the second anchor contains `[` and `]`, which `grep` would read as a
@@ -29,28 +33,44 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DEFAULT_SOURCE = path.join(REPO_ROOT, "extension");
-const BACKGROUND = "background.js";
+// The socket, the settings and the switch live in the bridge tab (spec 42); the
+// coordinator is the second file of the state seam, because it has to decide about the
+// tab before that page exists.
+const SEAM_FILE = "bridge.js";
+const COORDINATOR_FILE = "background.js";
 const MANIFEST = "manifest.json";
 
 /** The port the E2E run owns; 8110 belongs to the operator's service. */
 export const E2E_ENDPOINT = "ws://127.0.0.1:18810";
 
 /**
- * The two seams, in the order `docs/40` lists them. Both are **replacements** of
- * a whole line — that is why `grep -c` can count them before and after.
+ * The three seams, in the order `docs/40` lists them. Every one is a **replacement** of
+ * a whole line — that is why `grep -c` can count it before and after.
+ *
+ * `files` is a list because the state seam has two sides: the page that must not dial
+ * and the coordinator that must not build the tab both default to `off`, and an E2E copy
+ * that patched only one of them would come up switched off and never connect.
  */
 export const SEAMS = [
   {
     name: "endpoint",
+    files: [SEAM_FILE],
     before: 'const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";',
     after: `const DEFAULT_ENDPOINT = "${E2E_ENDPOINT}";`,
   },
   {
     name: "token",
+    files: [SEAM_FILE],
     before: "      token: asText(stored[TOKEN_KEY]),",
     // The fallback keeps a stored token winning; it only fills the empty case the
     // options page would otherwise be needed for.
     after: (token) => `      token: asText(stored[TOKEN_KEY]) || "${token}",`,
+  },
+  {
+    name: "state",
+    files: [SEAM_FILE, COORDINATOR_FILE],
+    before: "const DEFAULT_BRIDGE_ENABLED = false;",
+    after: "const DEFAULT_BRIDGE_ENABLED = true;",
   },
 ];
 
@@ -84,27 +104,37 @@ function seamAnchors(token) {
   }));
 }
 
-/** Counts both anchors in `<sourceDir>/background.js`; throws `seam moved` if any is off. */
+/**
+ * Counts every anchor in every file of its seam; throws `seam moved` if any is off.
+ *
+ * Which files those are is part of the seam: when the socket moved from
+ * `background.js` into the bridge tab (`docs/42`), the endpoint and token lines moved
+ * with it, and a counter aimed at the old file would report 0 hits for both anchors.
+ * `docs/44` added a seam that has to hold in two files at once.
+ */
 export function checkSeams(sourceDir, { token = "<token>" } = {}) {
-  const file = path.join(sourceDir, BACKGROUND);
-  if (!existsSync(file)) {
-    throw new Error(`no ${file} — is --source pointing at the extension folder?`);
+  if (!existsSync(path.join(sourceDir, MANIFEST))) {
+    throw new Error(`no ${MANIFEST} in ${sourceDir} — is --source pointing at the extension folder?`);
   }
   const counts = {};
   const moved = [];
   for (const seam of seamAnchors(token)) {
-    const count = countAnchor(file, seam.before);
-    counts[seam.name] = count;
-    if (count !== 1) moved.push(`${seam.name} (${count} hits)`);
+    for (const file of seam.files) {
+      const fullPath = path.join(sourceDir, file);
+      if (!existsSync(fullPath)) throw new Error(`no ${fullPath} — cannot count ${seam.name}`);
+      const count = countAnchor(fullPath, seam.before);
+      counts[seam.name] = count;
+      if (count !== 1) moved.push(`${seam.name} (${count} hits in ${file})`);
+    }
   }
   if (moved.length > 0) {
-    throw new Error(`seam moved: ${moved.join(", ")} — expected exactly 1 in ${file}`);
+    throw new Error(`seam moved: ${moved.join(", ")} — expected exactly 1 per file`);
   }
   return counts;
 }
 
 /**
- * Copies `sourceDir` to `targetDir` and patches the two anchors in the copy.
+ * Copies `sourceDir` to `targetDir` and patches the seams in the copy.
  *
  * Order matters: every anchor is counted **before** the first write, so a moved
  * seam leaves no half-patched copy behind that a later run could mistake for a
@@ -120,21 +150,24 @@ export function buildTestExtension({ sourceDir = DEFAULT_SOURCE, targetDir, toke
   const counts = checkSeams(sourceDir, { token });
   cpSync(sourceDir, targetDir, { recursive: true });
 
-  const file = path.join(targetDir, BACKGROUND);
-  let source = readFileSync(file, "utf8");
   for (const seam of seamAnchors(token)) {
-    // Exactly one occurrence, so `replaceAll` is the same edit as "replace the
-    // one line" — and it cannot silently pick a second, unexpected site.
-    source = source.replaceAll(seam.before, seam.replacement);
-  }
-  writeFileSync(file, source);
-
-  for (const seam of seamAnchors(token)) {
-    if (countAnchor(file, seam.before) !== 0) {
-      throw new Error(`seam moved: ${seam.name} survived the patch in ${file}`);
+    for (const file of seam.files) {
+      const target = path.join(targetDir, file);
+      const source = readFileSync(target, "utf8");
+      // Exactly one occurrence, so `replaceAll` is the same edit as "replace the
+      // one line" — and it cannot silently pick a second, unexpected site.
+      writeFileSync(target, source.replaceAll(seam.before, seam.replacement));
     }
   }
-  return { file, counts };
+
+  for (const seam of seamAnchors(token)) {
+    for (const file of seam.files) {
+      if (countAnchor(path.join(targetDir, file), seam.before) !== 0) {
+        throw new Error(`seam moved: ${seam.name} survived the patch in ${file}`);
+      }
+    }
+  }
+  return { counts };
 }
 
 function parseArgs(argv) {
@@ -175,8 +208,8 @@ function usage() {
   return (
     "usage: scripts/e2e/build-test-extension.mjs --out <dir> --token <hex> [--source <dir>]\n" +
     "       scripts/e2e/build-test-extension.mjs --self-check [--source <dir>]\n\n" +
-    "Copies the extension and replaces the endpoint and token lines in the copy.\n" +
-    "  --self-check  only count the two anchors; write nothing\n"
+    "Copies the extension and replaces the endpoint, token and state lines in the copy.\n" +
+    "  --self-check  only count the three anchors; write nothing\n"
   );
 }
 
@@ -190,8 +223,8 @@ function main() {
   if (options.selfCheck) {
     const counts = checkSeams(options.source, { token: options.token ?? "<token>" });
     process.stdout.write(
-      `seams ok: endpoint=${counts.endpoint} token=${counts.token} in ` +
-        `${path.join(options.source, BACKGROUND)}\n`,
+      `seams ok: endpoint=${counts.endpoint} token=${counts.token} state=${counts.state} in ` +
+        `${options.source}\n`,
     );
     return 0;
   }
@@ -204,7 +237,7 @@ function main() {
     token: options.token,
   });
   process.stdout.write(
-    `test copy at ${options.out}: endpoint=${counts.endpoint} token=${counts.token}\n`,
+    `test copy at ${options.out}: endpoint=${counts.endpoint} token=${counts.token} state=${counts.state}\n`,
   );
   return 0;
 }

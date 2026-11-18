@@ -8,6 +8,199 @@ Log oder einer Spec widerspricht, gilt der Beleg und diese Datei ist falsch.
 
 **Eine Übergabe-Datei gibt es nicht mehr.** Bis 2026-11-12 lag hier `docs/HANDOVER.md` (Stand, Entscheidungen, Betrieb); für die Veröffentlichung ist sie entfallen, weil sie Betriebsdaten trug. Der Stand steht in dieser Datei, das Verfahren in `CONTRIBUTING.md`, die Einrichtung in `INSTALL.md`.
 
+## Stand (2026-11-18): `ws://` nur für Loopback, sonst `wss://` oder SSH-Tunnel
+
+**Ein unverschlüsselter Dial ins Netz ist keine Verbindung, sondern eine
+Fehlkonfiguration.** Vor dem Dial prüft die Brückenseite den Endpunkt: `ws:` auf
+`127.0.0.1`, `[::1]` oder `localhost` wird verbunden wie bisher; `ws:` auf jedem
+anderen Host wird **verweigert** — kein Socket, kein Reconnect, genau eine
+Zeile `bc: ws:// ist nur für 127.0.0.1 erlaubt — für andere Rechner wss://
+verwenden oder einen SSH-Tunnel auf 127.0.0.1 legen`. Der Endpunkt selbst steht
+nicht in der Zeile (er kann Zugangsdaten im Hostnamen tragen). `wss://` bleibt
+überall erlaubt, auch auf Loopback; ein Pfad ändert nichts, das Schema am Host
+entscheidet (`isUnencryptedRemoteEndpoint` in `extension/bridge.js`).
+
+- **Betreiberentscheid (2026-11-18):** ein TLS-Zertifikat für die Bridge auf
+  einem anderen Rechner ist für viele Nutzer zu aufwendig. Der SSH-Tunnel ist
+  die einfache Alternative (`INSTALL.md` §9, „No certificate? Tunnel it.“):
+  `ssh -N -L 8110:127.0.0.1:8110 <user>@<server>` auf dem Browser-Rechner, dann
+  weiter `ws://127.0.0.1:8110` eintragen — die Erweiterung sieht Loopback, SSH
+  verschlüsselt den Rest.
+- **Die CSP bleibt weit** (`connect-src 'self' ws: wss:`;
+  `extension/manifest.json` unverändert): eine engere Policy würde bei einem
+  `ws://`-Fehlversuch einen stummen `1015` erzeugen, statt unserer lesbaren
+  Meldung (`docs/43`, Punkt 5).
+- **Tests:** sechs neue Fälle in `test/extension.test.js`
+  (`endpoint_wsOnLoopback_shouldConnect`, `endpoint_wsOnIpv6Loopback_shouldConnect`,
+  `endpoint_wsOnLocalhost_shouldConnect`, `endpoint_wsOnAnotherHost_shouldRefuseAndLogOnce`,
+  `endpoint_wssOnAnotherHost_shouldConnect`, `endpoint_wsWithPathOnLoopback_shouldConnect`).
+  Die Optionsseite prüft die Regel bewusst nicht — sie würde nur das Speichern
+  verweigern, und die Begründung gehört dorthin, wo der Nutzer sie liest.
+
+## Stand (2026-11-18): Spec 43 (Manifest auf MV3) ist `active`
+
+**Das Manifest ist MV3, die Werkzeuge antworten im echten Firefox.** `scripting`
+statt `tabs.executeScript`, `host_permissions` statt `<all_urls>` in `permissions`,
+`action` statt `browser_action`, Hintergrund als Eventpage ohne `persistent`,
+`page-agent.js` als MV3-`web_accessible_resources`. Gemessen wurde am 2026-11-18
+mit Firefox 152 (headless, web-ext) gegen einen eigenen Bridge-Prozess auf
+18810/18811: `extension connected` nach 6,5 s, `browser_open_tab` ⇒ `tabId 3`,
+`https://example.com/`, `browser_read` ⇒ 917 Zeichen `innerText`, kein
+`not_readable`.
+
+- **Ein Befund, der in keiner Spec stand:** mit der Vorgabe-CSP von MV3 kam
+  **keine** Verbindung zustande. Firefox lädt `ws://` auf `wss://` hoch, der
+  Socket schloss mit `1015` (TLS-Handshake), und weder Bridge noch Konsole sagten
+  warum. Im Manifest steht deshalb
+  `content_security_policy.extension_pages = "script-src 'self'; object-src
+  'self'; connect-src 'self' ws: wss:"`; ein Manifest-Fall pinnt es
+  (`manifest_shouldLetTheBridgePageDialAPlainWebSocket`).
+- **Tests:** `test/manifest.test.js` trägt die vier MV3-Pins plus den CSP-Pin;
+  `test/extension.test.js` stubbte die Injection auf `browser.scripting`
+  (`injectFile`, `{target, files}`, ein `{frameId, result}` je Rahmen) und hat
+  `action_namespace_shouldFollowTheManifestVersion`. 447 Fälle dort, 524 in
+  `npm test`.
+- **Offen beim Betreiber — Betreiberentscheid (2026-11-18):** die 8-h-Messung
+  (Kriterium 7 von `docs/43`); dazu Kriterien 8 und 9 (Schlaf der Eventpage,
+  Mitschnitt nach dem Schlaf) und Kriterium 6 (`permissions.contains` in der
+  Konsole der Erweiterung). Die Handprobe belegt, dass Rechte und Injection
+  greifen; sie belegt **nicht** acht Stunden.
+- **Beweise:** Kriterium 1 ⇒ `3 false true true true false`; `grep -Fc
+  'browser.tabs.executeScript('` in `bridge.js`/`background.js` ⇒ 0; `grep -Fc
+  'browser.scripting.executeScript(' extension/bridge.js` ⇒ 1; `npm test` 524
+  Fälle `# fail 0`; `npm run check` 0; Parität 7/7.
+
+## Stand (2026-11-18): Spec 30 (Prozess und Konsole) ist `active`
+
+**Der Windows-Betrieb, Teil 1b, ist gebaut — im Rust-Port.** Die Spec war am 2026-11-06
+gegen die Node-Bridge geschrieben worden; deren Dateien sind mit `docs/38` gelöscht.
+Deshalb wurde vor dem Bau jeder Ziel-Punkt und jedes Kriterium gegen den Rust-Stand
+geprüft (`docs/30`, `## Prüfung gegen den Rust-Stand`). Gebaut wurden die zwei Dinge, die
+wirklich fehlten:
+
+- **`Strg+Untbr` beendet die Bridge** wie `Strg+C`: `ctrl_break` neben `ctrl_c`
+  (`bridge-rs/src/main.rs:422`–`:423`), dieselbe Zeile `received SIGBREAK, shutting
+  down`, derselbe Exit-0-Pfad. `docs/38` Stufe 3 hatte den Signal bewusst weggelassen, um
+  zeichengleich zur Vorlage zu bleiben.
+- **Das MCP über stdio schweigt in einer Konsole:** `main.rs:129` startet den Dienst nur
+  bei `!stdio::stdin_is_a_console()` (`stdio.rs:186`, `std::io::IsTerminal`). Pipe,
+  Socketpair und `/dev/null` — pi, Paritäts-Treiber, systemd — sind unverändert.
+
+**Schon mit `docs/38` Stufe 3 erfüllt** und nur noch nachgeprüft: Portbesitzer auf
+Windows (`GetExtendedTcpTable`), Startzeilen, Exit 1/2, die Besitzerzeile, der
+Dienst-Ersatz (Task Scheduler). **Überholt** sind Kriterium 3 (die Node-Skip-Zählung) und
+Kriterium 6 (die zwei `INSTALL.md`-Empfehlungszeilen, mit `docs/41` neu geschrieben).
+
+**Offen beim Betreiber:** die Messung auf einem Windows-Rechner — `Strg+C`/`Strg+Untbr`
+kommen an, stdout bleibt 0 Byte, `tools/list` antwortet (`INSTALL.md` § 10). Der Windows-Bau
+ist kompiliert und lint-frei, nicht gelaufen. **Belege:** Parität 7/7, `cargo test` 283
+Fälle 0 failed, `npm test` 522 Fälle `# fail 0`, `npm run check` 0.
+
+## Stand (2026-11-18): Spec 28 (Log-Hygiene) ist `active`
+
+**Die Whitelist für den Debug-Block ist abgeschlossen** — Code seit 2026-10-30
+(alle vier Stufen, beide Code-Reviews `✅`), jetzt auch Amendments, Lückenprüfung
+und Live-Messung. Im Rust-Port heißt die Tabelle `DEBUG_WHITELIST`
+(`bridge-rs/src/hub.rs`), die Projektion `project`, der Eintritt
+`debug_block_of`; die Node-Fassung `bridge/hub.mjs` ist mit `docs/38` gelöscht.
+
+- **Die Amendments sind nachgezogen** in `docs/05` (Hub-Absatz, `## Bekannte
+  Lücken`, `#logDebugResult`), `docs/08` (Hub und Testing-Zeile), `docs/09`
+  (Inspect-Block, Dev-Plan-Stufe 3) und `docs/07` (`title`-Falle): der
+  Debug-Block ist eine Whitelist, `title` erscheint dort als Länge.
+- **Von fünf Lücken bleiben zwei** (`docs/28`, `## Bekannte Lücken`): ein
+  Ergebnis, das kein Objekt ist, druckt weiter JSON im Klartext (gepinnt, nicht
+  zugesagt), und `title` als Länge ist in `click`/`type` nicht gepinnt. Der
+  Tabellen-Tippfehler, das flache `Object.freeze` und `__proto__` sind mit dem
+  Port entfallen — `__proto__` ist in Rust ein gewöhnlicher Schlüssel und trägt
+  den Marker (am 2026-11-18 gemessen).
+- **Live gemessen am 2026-11-18, ohne Browser:** gegen einen zweiten eigenen
+  Prozess (Ports 18810/18811, `BC_LOG=debug`) mit einer nachgebauten Extension
+  zeigt der `read`-Block `"text": "<19 chars>"`, `"title": "<14 chars>"` und
+  für ein erfundenes Feld `"<unlisted field>"`; `grep -c GEHEIMER-SEITENTEXT` im
+  stderr ⇒ 0. Die zwei Treffer auf `GEHEIMER-TITEL` sind die `status`-Blöcke, in
+  denen `title` absichtlich voll steht (Byte-Pin in `bridge-rs/tests/hub.rs`,
+  `hub_withDebugLogging_shouldLogTheStatusLineAndTheIndentedResult`, und
+  Paritätsvergleich 7) — offen als Folgeinkrement.
+- **Weiter beim Betreiber:** der Haken an Kriterium 5 für den echten Firefox
+  (`browser_read`/`browser_inspect` an einer echten Seite).
+
+**Nicht mehr offen** ist damit der Grund, aus dem `docs/28` als einzige Spec mit
+fertigem Code `proposed` stand (`docs/ROADMAP.md`, Zeile 18 ⇒ erledigt).
+
+## Stand (2026-11-18): der Schalter in der Symbolleiste
+
+**`docs/44` ist `proposed`, Stufen 1–4 sind gebaut** (nicht committet). Die
+Erweiterung hat ein Symbol in der Symbolleiste und ist nach der Installation
+**aus**: kein Tab, kein Socket. Ein Klick schaltet an (Tab, Socket), ein Klick
+schaltet aus — und sagt vorher Servus.
+
+- **Drei Zustände, drei Icons:** `icons/bridge-off.svg` (überkreuzt, Vorgabe),
+  `icons/bridge.svg` (verbunden), `icons/bridge-offline.svg` (gelber Blitz: an,
+  aber die Bridge antwortet nicht). Gezeichnet auf 32 × 32 mit `context-fill`,
+  damit sie in beiden Themes lesbar bleiben. `default_icon` im Manifest ist das
+  `off`-Icon; die anderen zwei setzt `setIcon` zur Laufzeit.
+- **Der Zustand ist `bridgeEnabled` in `storage.local`**, Vorgabe `false` (kein
+  Wert ⇒ aus). Die Zeile `const DEFAULT_BRIDGE_ENABLED = false;` steht in
+  `bridge.js` **und** `background.js` — der Koordinator entscheidet über den Tab,
+  bevor es eine Seite gibt, die Seite entscheidet über den Socket. Der dritte
+  E2E-Seam patcht beide Dateien und zählt **je Datei 1** (`state=1`).
+- **Der Klick lebt im Koordinator**, der Namespace hängt an der
+  `manifest_version` (`browserAction` unter MV2, `action` unter MV3); ein Fall
+  fährt beide Richtungen. Seit `docs/43` ist `action` der laufende Zweig. `extension.test.js` und `test/bridge-tab.test.js`
+  brauchten dafür `storage.local`, `runtime.sendMessage`, `runtime.onMessage`
+  und den Action-Stub.
+- **Ausschalten in der Reihenfolge:** `goodbye` auf die Leitung, `close(1000)`,
+  Tab zu, dann `bridgeEnabled = false`. Ohne offenen Socket entfällt `goodbye`.
+  `onSocketClosed` verbindet bei `aus` nicht weiter (und ein Klick bricht den
+  laufenden Reconnect-Timer ab).
+- **`GOODBYE` steht in beiden Protokolldateien** (`extension/protocol.js`,
+  `bridge-rs/src/protocol.rs`); die Bridge tut nichts damit (`hub.rs` verwirft
+  unbekannte Typen). Beim Bauen fiel auf, dass
+  `protocol_constants_matchTheExtension` **schon vorher rot war**: `docs/45` hatte
+  `INJECTION_REPLY_TIMEOUT_MS` einseitig angelegt. Die Kopie ist nachgetragen.
+- **`docs/42`, Kriterien 13/14 sind mitgebaut:** der Brücken-Tab erscheint nicht
+  in `browser_status` und ist für jedes Werkzeug `no_agent_tab` — auch wenn seine
+  Id in `agentTabIds` steht.
+- **Ungemessen:** Kriterien 5–8 aus `docs/44` (echter Klick, Blitz binnen 5 s,
+  `off` überlebt den Neustart, 60 s ohne `extension connected`) brauchen einen
+  Browser und den Betreiber. Ebenso ungemessen: ob die drei SVGs bei 16 px
+  lesbar sind.
+
+## Stand (2026-11-18): die Injection-Naht ist auf dem Produktionspfad fertig
+
+**`docs/45` ist `proposed`, Stufe 1 ist vollständig gebaut** (1a und beide Blöcke
+von 1b). Alle 16 Aufrufer laden `extension/page-agent.js` als Datei und fragen
+`{callId, op, args}` über `tabs.sendMessage`; die Seite antwortet mit
+`{callId, ok, value}`. Es gibt **keinen Quelltext-Pfad** mehr: `pageSnippetCode`,
+`PAGE_HELPERS_CODE` und der Testhaken `globalThis.__bcInjectionProbe` sind
+gelöscht, `injectPageCode` heißt `askPageAgent` und kennt nur noch den
+Nachrichtenpfad. Kein Werkzeugergebnis, kein Fehlercode und kein deutscher Satz
+hat sich geändert (508 Node-Fälle grün, Parität 7/7).
+
+- **Die Seitenfunktionen leben in `page-agent.js`:** `read`, `settle`, `click`,
+  `type`, `inventory`, `inspect` (mit der `>>>`-Verzweigung), `eval` und die vier
+  Transcript-Ops. Welche `inspect`-Variante läuft, entscheidet die Seite — die
+  Frage nach einem `>>>` ist eine über das DOM, nicht über den Transport.
+- **`frames` kommt aus Selbstmeldungen:** ein `inventory`-Aufruf an den ganzen
+  Tab, jede Antwort trägt `sender.frameId`, `framesOf` filtert die Adressen. Die
+  Sammlung endet erst bei der Frame-Zahl (oder an ihrer 5 000-ms-Frist); späte
+  Antworten fallen über `callId` weg.
+- **Harness:** `createPageAgentChannel` fährt die Ops im Seitenrealm der Fixture
+  (`pageContextOf`) und sammelt die Antworten über den Kanal; `answer` stellt
+  eine Antwort pro Op (`{silent: true}` für einen stummen Op, `{error}` für einen,
+  der wirft), `refuseInjection`/`refuseInjectionTimes`/`refuseInjectionAfter`
+  bilden die drei Wege ab, auf denen Firefox die Datei verweigert.
+  `advanceMs: null` heißt „Uhr leerlaufen lassen“, eine Zahl hält sie an einem
+  benannten Zeitpunkt an. Die vier `injection_*`-Fälle laufen ohne Haken über
+  `inspect`.
+- **Eine Semantik, die die Naht mitbringt:** ein Aufruf, den sein eigener
+  Watchdog beendet (der `eval`-Guard bei 2 500 ms), lässt die Sammel-Frist von
+  5 000 ms stehen; sie räumt sich selbst ab und die späte Antwort wird verworfen.
+  Der Fall, der das berührt, sagt das jetzt ausdrücklich.
+- **Ungemessen:** die Messung am echten Browser (Kriterien 6 und 7 aus `docs/45`)
+  steht aus. Das ist Stufe 3 und der nächste Schritt.
+
 ## Stand (2026-11-17): die CI prüft, was ausgeliefert wird
 
 **`docs/40` ist `active`.** `.github/workflows/test.yml` hat fünf Jobs in einer
@@ -166,7 +359,8 @@ eingearbeitet, gebaut ist dort noch nichts. — **Überholt:** Teil 2 ist seit
 (`scripts/install.sh`), `v0.3.0` (Standard-Endpunkt), `v0.4.0`.
 Die Specs 35 und 36 sind `active`; `docs/28` ist die einzige Spec, deren
 Code fertig ist, die aber noch `proposed` steht (Amendments und
-Live-Messung fehlen).
+Live-Messung fehlen). — **Überholt:** `docs/28` ist seit 2026-11-18 `active`
+(Amendments nachgezogen, live gemessen; Abschnitt oben).
 
 **Sprache der Optionsseite (2026-11-15):** die sichtbaren Texte der
 Erweiterungs-Einstellungen sind **englisch** (Betreiberentscheid, das Projekt ist
@@ -334,14 +528,20 @@ Node läuft — der Windows-Lauf selbst ist Kriterium 2 von Spec 30.
 Prozess und Konsole auf Windows (`SIGBREAK`, stilles stdout im Terminal,
 `portInUseLine`, Amendments an `docs/18`). Sie entstand am 2026-11-06 durch Teilung
 einer dreifach geblockten Spec; die Blocker (N1, N2) sind dort eingearbeitet.
+**Überholt 2026-11-18:** gebaut im Rust-Port, `docs/30` ist `active` (Abschnitt oben).
 
 **Spec 28 (Log-Hygiene) ist weiterhin `proposed`** — Code fertig, beide
 Code-Reviews `✅`, offen: Amendments in `docs/05`, `docs/07`, `docs/08`, `docs/09`,
 die veralteten Verweise auf die gelöschten Redaktionshelfer und die Live-Messung.
+**Überholt 2026-11-18:** alles davon ist erledigt, `docs/28` ist `active`
+(Abschnitt oben); die veralteten Helfer-Verweise in `docs/06`, `docs/16`,
+`docs/19` und `docs/20` stehen noch, sie liegen außerhalb der damaligen Boundary.
 
 Offen im Betriebsteil: der Windows-Rechner für die Messungen aus Spec 30, und die
 90-Sekunden-Frist der Abnahme (`test/mcp.test.js` lief am 2026-11-06 in 61,4 s von
 90 — 1,47 ×, die Begründung in `CONTRIBUTING.md` rechnet mit 1,5 ×).
+**Überholt 2026-11-18:** `test/mcp.test.js` ist mit der Node-Bridge gelöscht, die Frist
+betrifft die Bridge nicht mehr; offen bleibt allein die Windows-Messung.
 
 ## Stand (2026-10-28)
 
@@ -352,7 +552,10 @@ Offen im Betriebsteil: der Windows-Rechner für die Messungen aus Spec 30, und d
 aber noch `proposed`: es fehlen die Amendments in `docs/05`, `docs/07`, `docs/08`,
 `docs/09` und die veralteten Verweise auf die gelöschten Redaktionshelfer
 (`docs/05:422`, `docs/06:297`, `docs/16:284`, `docs/19`, `docs/20:562`), dazu die
-Live-Messung.
+Live-Messung. — **Überholt 2026-11-18:** Amendments und Messung sind erledigt,
+`docs/28` ist `active`; `docs/05:422` ist nachgezogen, die Fundstellen in
+`docs/06`, `docs/16`, `docs/19` und `docs/20` stehen noch (außerhalb der
+Boundary dieses Inkrements).
 
 Was der Agent heute kann: navigieren, lesen (mit `offset`/`maxChars`, Artikelmodus),
 klicken, tippen, fokussieren, inspizieren, Tabs öffnen/schließen, `eval` hinter
@@ -371,7 +574,7 @@ mit mehreren Rahmen läuft.
 
 Ein Werkzeugaufruf von pi bis in die Seite hat sechs Stationen, und der Rückweg
 läuft dieselbe Strecke. Was hier steht, ist aus dem Code gelesen (`bridge/*.mjs`,
-`extension/background.js`, `extension/manifest.json`, `~/.pi/agent/mcp.json`) —
+`extension/bridge.js`, `extension/manifest.json`, `~/.pi/agent/mcp.json`) —
 nicht aus den Specs. Die Bilder sind Mermaid: sie rendern auf GitHub und in jedem
 Markdown-Betrachter mit Diagramm-Unterstützung, und wer nur Text sieht, liest die
 Tabellen daneben. Widerspricht eine Spec dieser Darstellung, gilt der Code und die
@@ -402,7 +605,7 @@ flowchart TB
 
     subgraph FF["Firefox – Betreiber-Rechner"]
         direction TB
-        subgraph BGI["background.js (MV2, persistent)"]
+        subgraph BGI["bridge.js (Brücken-Tab, MV3)"]
             CONN["Verbindungsschicht<br/>Socket, Backoff, hello/welcome"]
             DISP["Dispatch<br/>answerRequest"]
             TABV["Tab-Verwaltung<br/>Liste, Limit 5"]
@@ -415,7 +618,7 @@ flowchart TB
         STORE[("storage.local<br/>Endpunkt, Token, Tab-Liste")]
     end
 
-    APIS["browser.* API<br/>tabs, storage, executeScript"]
+    APIS["browser.* API<br/>tabs, storage, scripting"]
     PAGE["Seite im Agenten-Tab"]
 
     PI -->|"HTTP POST /mcp, JSON-RPC, Bearer"| HTTPE
@@ -448,7 +651,7 @@ Die drei Schnittstellen, an denen etwas kaputtgehen kann:
 |---|---|---|
 | pi ↔ `http-transport.mjs` | JSON-RPC 2.0 über `POST /mcp`, Bearer-Token | 1 MiB Body |
 | `mcp.mjs` ↔ `hub.mjs` | `request(method, params)` als Promise im selben Prozess | 20 s Frist, `HubRequestError` |
-| `Caddy` ↔ `background.js` | eigenes Textprotokoll, Version 1, `hello`/`welcome`/`request`/`response` | 5 MiB Nachricht, 5 s bis `hello` |
+| `Caddy` ↔ `bridge.js` | eigenes Textprotokoll, Version 1, `hello`/`welcome`/`request`/`response` | 5 MiB Nachricht, 5 s bis `hello` |
 
 Wer was allein entscheidet:
 
@@ -458,14 +661,18 @@ Wer was allein entscheidet:
   (`DEBUG_WHITELIST`). Nur dort, nicht in den elf `#report…`-Zweigen (gezählt:
   `git grep -nE '^  #report[A-Za-z]+\(' bridge/hub.mjs` ⇒ 12 Definitionen, eine davon
   `#reportResult`).
-- **`background.js`** — welche Tabs Agenten-Tabs sind (Liste in `storage.local`) und
-  wer den Warte-Slot eines Tabs hält. Die Bridge weiß davon nichts.
+- **`bridge.js`** (seit `docs/42`; vorher `background.js`) — welche Tabs
+  Agenten-Tabs sind (Liste in `storage.local`) und wer den Warte-Slot eines Tabs
+  hält. Die Bridge weiß davon nichts.
+- **`background.js`** — nur noch der Koordinator: legt den Brücken-Tab an
+  (`bridge.html`, angepinnt, gemerktes Fenster) und legt ihn neu an, wenn er
+  geschlossen, verworfen oder weg-navigiert wurde. Kein Socket, kein Backoff.
 - **`protocol.mjs` / `protocol.js`** — die Zahlen und Typen des Drahtprotokolls,
-  doppelt vorhanden, weil der MV2-Background kein ES-Modul importieren kann;
-  `test/protocol.test.js` ist die Klammer.
+  doppelt vorhanden, weil ein klassisches Erweiterungsskript kein ES-Modul
+  importieren kann; `test/protocol.test.js` ist die Klammer.
 
-Nicht im Plan: die Testdoppelung (`test/fixtures/fake-extension.mjs` ersetzt
-`background.js` in den Tests) und das Dienstverhalten (`RestartPreventExitStatus=2`
+Nicht im Plan: die Testdoppelung (`test/fixtures/fake-extension.mjs` ersetzt den
+Brücken-Tab in den Tests) und das Dienstverhalten (`RestartPreventExitStatus=2`
 für das fehlende Token, Exit 1 für einen belegten Port) — beides Betrieb, nicht
 Komponente.
 
@@ -480,7 +687,8 @@ Komponente.
 | WebSocket-Rahmen | `bridge/websocket.mjs` | Handshake und Framing ohne Abhängigkeit, **5 MiB** Nachrichtengrenze |
 | Dienst | systemd-User-Unit `browser-control.service`, Start über `bridge/bridge.mjs` | besitzt den Prozess und beide Ports; `port-owner.mjs` nennt bei `EADDRINUSE` den Besitzer |
 | Caddy | `wss://example.com/browser-control/ws` | TLS-Ende, Weiterleitung an `127.0.0.1:8110`; liegt **außerhalb** der Basic-Auth, weil ein Browser-WebSocket keinen `Authorization`-Header setzen kann |
-| Extension-Background | `extension/background.js` (MV2, `persistent: true`) | wählt sich **raus**, Reconnect mit Backoff, beantwortet Anfragen, hält den Warte-Slot **je Tab**, nutzt `tabs`/`executeScript` |
+| Brücken-Tab | `extension/bridge.html` + `extension/bridge.js` | hält den Socket (wählt sich **raus**, Reconnect mit Backoff), beantwortet Anfragen, hält den Warte-Slot **je Tab**, nutzt `tabs`/`executeScript`, sammelt den `webRequest`-Mitschnitt |
+| Koordinator | `extension/background.js` (MV3-Eventpage, ohne `persistent`) | legt genau einen angepinnten Brücken-Tab an und hält ihn; kein Socket, kein Zustand über den Tab hinaus |
 | Optionsseite | `extension/options.{html,js}` → `storage.local` | Endpunkt, Token, Schalter `allowPasswordFields` / `allowEval` / `allowScreenshot` (alle Default aus) |
 | Die Seite selbst | Betreiber-Tab | dort läuft der injizierte Code (Lesen, Klicken, Tippen, `eval`) |
 
@@ -494,7 +702,7 @@ echte Extension.
 ```mermaid
 sequenceDiagram
     autonumber
-    participant BG as Background (background.js)
+    participant BG as Brücken-Tab (bridge.js)
     participant CAD as Caddy (443, WS-Pfad)
     participant HUB as Hub (hub.mjs, Port 8110)
 
@@ -525,7 +733,7 @@ sequenceDiagram
     participant HTTPE as http-transport.mjs
     participant TOOL as mcp.mjs (Werkzeuge)
     participant HUB as hub.mjs
-    participant BG as background.js
+    participant BG as bridge.js
     participant PAGE as Seite im Tab
 
     PI->>HTTPE: POST /mcp, tools/call browser_read
@@ -548,7 +756,7 @@ sequenceDiagram
 Zwei Dinge, die man am Diagramm leicht falsch annimmt:
 
 - **Der Warte-Slot für `click`/`type` sitzt nicht in der Bridge**, sondern in der
-  Extension (`extension/background.js`, eine Kette je Tab). Ein neuer Aufruf im
+  Extension (`extension/bridge.js`, eine Kette je Tab). Ein neuer Aufruf im
   **selben** Tab beendet den älteren mit `superseded`; andere Tabs sind unberührt.
   Im Diagramm wäre das ein Pfeil innerhalb der Extension, nicht zwischen Bridge
   und Extension. Der Hub kennt keine Werkzeugsemantik — nur Anfrage-Ids, Fristen und
@@ -596,7 +804,7 @@ Im Code:
 | Teil | Dateien | Zustand |
 |---|---|---|
 | Bridge (Node ≥ 22, keine Abhängigkeiten) | `bridge/{protocol,websocket,config,bridge,hub}.mjs` | lauscht auf `BC_BIND`, prüft Token, fragt `status`, loggt auf stderr |
-| Extension (Firefox MV2, persistenter Background) | `extension/{manifest.json,protocol.js,background.js,options.html,options.js}` | wählt sich per WSS raus, Reconnect mit Backoff, Optionsseite für Endpunkt und Token |
+| Extension (Firefox MV3, Eventpage) | `extension/{manifest.json,protocol.js,background.js,bridge.html,bridge.js,options.html,options.js}` | der Brücken-Tab hält die Verbindung (WSS, Reconnect mit Backoff), der Hintergrund hält den Tab; Optionsseite für Endpunkt und Token |
 | Prüfungen | `test/*.test.js`, `test/fixtures/fake-extension.mjs` | 587 Fälle, `npm test` grün (damals 243), ohne Browser und ohne Netz |
 
 Caddy und Token-Datei sind eingerichtet, die Extension läuft als temporäre
@@ -744,6 +952,9 @@ verhandeln; wenn eine davon falsch ist, gehört das in eine Spec mit
   die Verbindung (`1001`), und die Extension kommt nicht von selbst zurück.
   Inkrement 2 (Spec 02) stellt den Background deshalb auf MV2 mit
   `persistent: true` um — umgesetzt, das Code-Review-Gate ist passiert.
+  **Überholt, nicht widerlegt:** `docs/43` hat das Manifest wieder auf MV3
+  gestellt, weil der Socket seit `docs/42` im Brücken-Tab liegt und der
+  Hintergrund nicht mehr die Verbindung trägt.
 - **Spec 02 ist `active` und gemessen** (2026-10-23): `persistent: true` beendet
   den 30-Sekunden-Abbruch — die Verbindung hielt 10 min 31 s ohne
   Trennungszeile (`connected` 1, `disconnected` 0, genau eine Verbindung auf

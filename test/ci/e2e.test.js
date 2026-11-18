@@ -3,12 +3,12 @@
  *
  * What cannot be a unit case is the E2E run itself: it starts Firefox and stands
  * as operator criteria 1–2. What can be pinned is criterion 3 — the patch finds
- * its two lines or says `seam moved` — and the beacon's two answers, which are
- * what criterion 2 turns on.
+ * its lines or says `seam moved` — and the beacon's two answers, which are what
+ * criterion 2 turns on.
  *
- * The patch is a text patch on two lines. It is counted and it fails loudly, but
- * it is not a contract: the cases here are what stops a renamed anchor from
- * turning into a silent no-op patch.
+ * The patch is a text patch on three lines (`docs/44` added the switch state). It is
+ * counted and it fails loudly, but it is not a contract: the cases here are what stops
+ * a renamed anchor from turning into a silent no-op patch.
  */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -65,26 +65,41 @@ test("e2e_seamPatch_shouldFindBothLines", (t) => {
   const directory = scratch(t);
   const target = path.join(directory, "ext");
   const token = "a".repeat(64);
+  // The tracked tree as it was before the build. Compared with itself and not with the
+  // empty string: an increment is *verified* while its own files are uncommitted, and a
+  // case that only held on a clean checkout would be red for the whole run that needs it
+  // (spec 44 stage 3). What this case promises is that the build writes nothing into the
+  // tracked tree — not that the tree has no changes.
+  const trackedBefore = porcelainOfExtension();
 
-  // WHEN the self-check counts the two anchors,
+  // WHEN the self-check counts the three anchors,
   const checked = selfCheck(EXTENSION);
 
   // THEN it finds each exactly once — and so does a real build into a copy,
   const patch = buildCopy(target, token);
 
-  // ... whose background.js carries the rewritten endpoint and the token fallback,
-  // with the token as a *fallback*: a stored token keeps winning.
-  const patched = readFileSync(path.join(target, "background.js"), "utf8");
+  // ... whose bridge.js carries the rewritten endpoint and the token fallback,
+  // with the token as a *fallback*: a stored token keeps winning. That file and not
+  // `background.js`: since spec 42 the socket and the settings live in the bridge tab.
+  const patched = readFileSync(path.join(target, "bridge.js"), "utf8");
+  // The state seam has two sides (spec 44): the page that must not dial and the
+  // coordinator that must not build the tab. A copy with only one of them patched would
+  // load fine and stay switched off — the E2E would fail a minute later with
+  // `no extension connected` instead of at the seam.
+  const patchedCoordinator = readFileSync(path.join(target, "background.js"), "utf8");
 
   // AND the tracked file is untouched by all of it: the patch only ever writes
   // inside the copy, and a dirty `extension/` would make every later diff a lie.
   assert.equal(checked.status, 0, checked.stderr);
-  assert.match(checked.stdout, /endpoint=1 token=1/);
+  assert.match(checked.stdout, /endpoint=1 token=1 state=1/);
   assert.equal(patch.status, 0, patch.stderr);
   assert.match(patched, /const DEFAULT_ENDPOINT = "ws:\/\/127\.0\.0\.1:18810";/);
   assert.match(patched, /token: asText\(stored\[TOKEN_KEY\]\) \|\| "[a]+",/);
   assert.doesNotMatch(patched, /ws:\/\/127\.0\.0\.1:8110/);
-  assert.equal(porcelainOfExtension(), "");
+  assert.match(patched, /const DEFAULT_BRIDGE_ENABLED = true;/);
+  assert.match(patchedCoordinator, /const DEFAULT_BRIDGE_ENABLED = true;/);
+  assert.doesNotMatch(patchedCoordinator, /const DEFAULT_BRIDGE_ENABLED = false;/);
+  assert.equal(porcelainOfExtension(), trackedBefore);
 });
 
 test("e2e_seamPatch_withRenamedAnchor_shouldReportSeamMoved", (t) => {
@@ -93,7 +108,8 @@ test("e2e_seamPatch_withRenamedAnchor_shouldReportSeamMoved", (t) => {
   const directory = scratch(t);
   const copy = path.join(directory, "ext");
   cpSync(EXTENSION, copy, { recursive: true });
-  renameEndpointAnchor(path.join(copy, "background.js"));
+  renameEndpointAnchor(path.join(copy, "bridge.js"));
+  const trackedBefore = porcelainOfExtension();
 
   // WHEN the self-check runs against that copy,
   const result = selfCheck(copy);
@@ -102,10 +118,10 @@ test("e2e_seamPatch_withRenamedAnchor_shouldReportSeamMoved", (t) => {
   // instead of "patching" nothing and letting the E2E fail much later with
   // `auth failed` against the operator's service:
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /seam moved: endpoint \(0 hits\)/);
+  assert.match(result.stderr, /seam moved: endpoint \(0 hits in bridge\.js\)/);
 
   // AND the tracked file is still untouched.
-  assert.equal(porcelainOfExtension(), "");
+  assert.equal(porcelainOfExtension(), trackedBefore);
 });
 
 test("e2e_beacon_shouldAnswerPingWith204AndRecordTheHit", async (t) => {

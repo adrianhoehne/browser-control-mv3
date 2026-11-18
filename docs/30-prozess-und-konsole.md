@@ -1,6 +1,6 @@
 ---
-description: Der Bridge-Prozess läuft auf Windows ohne systemd und ohne /proc, startet aus einer Konsole und endet dort geordnet — Teil 1b, aufbauend auf dem plattformfesten Prüfskript aus Spec 29.
-status: proposed
+description: Der Bridge-Prozess läuft auf Windows ohne systemd und ohne /proc, startet aus einer Konsole und endet dort geordnet — Teil 1b, im Rust-Port gebaut (Ctrl+Break, stilles stdio im Terminal, Portbesitzer über GetExtendedTcpTable), aufbauend auf Spec 29.
+status: active
 ---
 
 # Windows-Betrieb, Teil 1b: der Prozess und die Konsole
@@ -28,28 +28,80 @@ Verhalten ist portiert — die Signal- und stdin-Regeln stehen in
 deshalb das Binary; der Weg über den Task Scheduler steht in
 `deploy/windows/browser-control-bridge.xml`.
 
+**Stand 2026-11-18: gebaut und abgenommen, im Rust-Port.** Zwei Dinge fehlten noch, beide
+sind jetzt drin: `Strg+Untbr` beendet die Bridge wie `Strg+C`
+(`bridge-rs/src/main.rs:422`–`:423`, Zeile `received SIGBREAK, shutting down`, Exit 0), und
+das MCP über stdio schweigt in einer Konsole (`main.rs:129`, `bridge-rs/src/stdio.rs:186`).
+Portbesitzer auf Windows, Startzeilen, Exit-Codes und die Besitzerzeile waren schon mit
+`docs/38` Stufe 3 gebaut. Die Node-Dateien, gegen die diese Spec geschrieben wurde, gibt es
+nicht mehr; was an den Abschnitten unten überholt ist, ist dort markiert, und
+`## Prüfung gegen den Rust-Stand` nennt je Punkt und je Kriterium den Beleg. Offen bleibt
+die Messung auf einem Windows-Rechner (Kriterien 1, 5 und die Windows-Hälfte von 7) — das
+ist Betreiberarbeit, nicht Code.
+
 ## Ziel
 
 - **Die Konsole ist der Normalfall, der Dienst die Option.** Die Bridge läuft im
   Vordergrund eines Terminals und endet mit `Strg+C`; sie braucht keinen Dienst, keinen
   Autostart und kein Hintergrundprogramm.
 - **Konsole heißt: stdout bleibt still.** Im Vordergrundbetrieb darf das MCP über
-  stdio nicht mitlaufen; heute wird `startMcpServer` unbedingt gestartet
-  (`bridge/bridge.mjs:245`).
+  stdio nicht mitlaufen. **Gebaut am 2026-11-18:** der stdio-Dienst startet nur, wenn
+  stdin **keine Konsole** ist (`main.rs:129`, `stdio::stdin_is_a_console` in
+  `bridge-rs/src/stdio.rs:186`). In der Node-Vorlage lief er unbedingt; die Datei ist mit
+  `docs/38` gelöscht.
 - **Geordnetes Ende.** `Strg+C` liefert `SIGINT`, und den Handler gibt es seit dem
-  ersten Inkrement (`bridge.mjs:162`) — das ist Bestand. Neu ist `SIGBREAK`
+  ersten Inkrement — das ist Bestand (`main.rs:422`). Neu ist `SIGBREAK`
   (`Strg+Untbr`), das Windows zusätzlich kennt, und die Ehrlichkeit im Kommentar,
   dass `SIGTERM` dort nie vom System kommt (erst ein Dienst-Wrapper in Teil 2
-  entscheidet, was er schickt).
+  entscheidet, was er schickt). **Gebaut am 2026-11-18:** `ctrl_break` neben `ctrl_c`
+  (`main.rs:423`), beide Arme schreiben dieselbe Zeile und enden mit 0. `docs/38`
+  Stufe 3 hatte `SIGBREAK` bewusst ausgelassen, um zeichengleich zur Vorlage zu bleiben;
+  der Paritätsmaßstab läuft auf Linux und sieht keinen der beiden Handgriffe.
 - **Der Konflikt wird benannt, nicht verhindert.** Läuft der Dienst, endet ein
   zweiter Start mit Exit 1 und der Zeile, die den Portbesitzer nennt — oder, wo das
   nicht ermittelbar ist, die sagt, dass er es nicht ist. Kein Portwechsel, kein
   stiller Doppelbetrieb.
-- **Blind heißt ehrlich.** `port-owner.mjs` kann auf Windows nichts lesen; die
-  Logzeile sagt dann „Besitzer nicht ermittelbar" statt einen PID zu erfinden. Das
-  bleibt so.
-- **Dieselbe Abnahme.** `npm test` bleibt auf beiden Plattformen eine Liste; was
-  plattformbedingt nicht prüfbar ist, wird gezählt übersprungen und benannt.
+- **Blind heißt ehrlich.** Die Besitzersuche antwortet nur, wenn sie es weiß; jeder
+  Zweifel ergibt „Besitzer nicht ermittelbar" statt eines erfundenen PID
+  (`main.rs:339`, `bridge-rs/src/platform/windows.rs:6`–`:8`). **Auf Windows liest sie
+  inzwischen wirklich** (`GetExtendedTcpTable`, `platform/windows.rs:63`), die Zeile nennt
+  dort also meist einen Namen — der ehrliche Zweifelsfall bleibt.
+- **Dieselbe Abnahme.** Die Bridge hat ihre Liste in **`cargo test`**
+  (`--test-threads=1`), Erweiterung und Skripte in `npm test`, das Verhalten gegen die
+  eingefrorenen Artefakte in `scripts/parity.sh --impl rust --check`. Was plattformbedingt
+  nicht prüfbar ist, wird benannt statt stillschweigend übersprungen. (Ursprünglich stand
+  hier „`npm test` bleibt auf beiden Plattformen eine Liste" — das galt, solange die
+  Bridge in Node lief.)
+
+## Prüfung gegen den Rust-Stand (2026-11-18)
+
+Diese Spec wurde am 2026-11-06 gegen die **Node-Bridge** geschrieben (`bridge/bridge.mjs`).
+Seit `docs/38` Stufe 4b gibt es die nicht mehr; betrieben wird `browser-control-bridge`
+(`bridge-rs/`). Deshalb wurde jeder Punkt und jedes Kriterium **vor** dem Bau gegen den
+Rust-Stand geprüft. Soll (`gilt`) und Ist (`erfüllt`) sind getrennt gehalten; „überholt"
+heißt: der Satz hat kein Subjekt mehr, weil die Datei oder der Prüfweg verschwunden ist.
+
+`## Ziel` trägt **sechs** Punkte, nicht sieben.
+
+| Ziel-Punkt | Verdikt | Beleg |
+|---|---|---|
+| Die Konsole ist der Normalfall, der Dienst die Option | **gilt, erfüllt** | `--http` ist ein reines Flag (`main.rs:48`, `:252`); der Start braucht keinen Dienst (`INSTALL.md` § 10.4) |
+| Konsole heißt: stdout bleibt still | **war offen, jetzt gebaut** | `main.rs:129` startet stdio nur bei `!stdin_is_a_console()`; `stdio.rs:186` fragt `IsTerminal` — bis 2026-11-18 lief `stdio::serve` unbedingt |
+| Geordnetes Ende (`SIGINT`, `SIGBREAK`, ehrliches `SIGTERM`) | **`SIGINT` erfüllt, `SIGBREAK` gebaut** | `main.rs:422` (`SIGINT`), `:423` (`SIGBREAK`); der Kommentar `main.rs:377`–`:391` sagt, dass `SIGTERM` auf Windows nie vom System kommt |
+| Der Konflikt wird benannt, nicht verhindert | **erfüllt** | `main.rs:331`–`:341` schreibt zwei Zeilen und endet mit 1 (`:97`–`:98`, `:312`–`:313`); Paritätsvergleich 5 pinnt die Besitzerzeile |
+| Blind heißt ehrlich | **erfüllt, teils überholt** | Zweifel ⇒ „Besitzer nicht ermittelbar" (`main.rs:339`); auf Windows wird jetzt wirklich gelesen (`platform/windows.rs:63`) |
+| Dieselbe Abnahme | **überholt im Wortlaut, erfüllt im Geist** | Bridge: `cargo test` (283 Fälle, 0 failed); Erweiterung und Skripte: `npm test` (522, `# fail 0`); Verhalten: Parität 7/7 |
+
+| Kriterium | Verdikt | Beleg |
+|---|---|---|
+| 1 Start und Ende auf Windows | **gilt; Code belegt, Lauf = Betreiber** | Token-Vorbedingung: `config.rs:26`, `:75`, `:106`, Exit 2 in `main.rs:70`–`:73`; Startzeilen `main.rs:101`–`:104`, `:305`–`:308`; `Strg+C` ⇒ `main.rs:422`, `Strg+Untbr` ⇒ `:423`, beide über `main.rs:187` nach 0. Windows-Lauf: `INSTALL.md` § 10.4, Proben in `bridge-rs/README.md`, `## Windows` |
+| 2 Dieselbe Abnahme | **erfüllt, Wortlaut überholt** | `npm test` ⇒ 522 Fälle, `# fail 0`, `# cancelled 0`, `# skipped 0`; `npm run check` ⇒ 0; Secret-grep ohne Ausgabe; `git status --porcelain extension/manifest.json` leer; dazu `cargo test` 283/0 failed und Parität 7/7. Die Zahl `# tests N` beider Läufe gegeneinander zu halten hat kein Subjekt mehr — die Bridge steht nicht mehr in der Node-Suite |
+| 3 Übersprungen wird gezählt | **überholt** | `test/bridge.test.js` existiert nicht mehr; die zwölf `skip:`-Zeilen von damals sind mit den Dateien verschwunden. Die zwölf heutigen Treffer in `test/` sind `bundle_`/`package_`-Fälle, die ohne gebaute Zips übersprungen werden (`test/bundle/bundle.test.js:228`); lokal `# skipped 0` |
+| 4 `port-owner` erfindet nichts | **erfüllt, auf Rust gezogen** | `platform::find_port_owner` gibt `Option<PortOwner>` (`platform/mod.rs:42`), `main.rs:339` schreibt ohne Fund „Besitzer nicht ermittelbar" und keinen PID; Paritätsvergleich 5 pinnt die gemischtsprachige Zeile mit Besitzer |
+| 5 Der MCP-Pfad antwortet auf Windows | **gilt; Code belegt, Lauf = Betreiber** | `tools/list` **ohne** `initialize`: `tests/http.rs:398` (`http_startHttpTransport_withToolsListAndValidToken_shouldAnswer200WithApplicationJson`) und Paritätsvergleich 1; der Windows-Aufruf steht in `INSTALL.md` § 10.6 |
+| 6 Die Linux-Anleitung bleibt gültig | **überholt** | `INSTALL.md` ist mit `docs/41` neu geschrieben; „Nicht dauerhaft" und „(empfohlen)" gibt es nicht mehr (`grep` leer), ein Diff-Zähler hat kein Subjekt. An ihre Stelle tritt § 10 |
+| 7 Die Konsole schweigt | **lokal erfüllt; Windows-Hälfte = Betreiber** | Entscheidung `stdio.rs:186` + `main.rs:129`; der Client-Pfad bleibt offen — `tests/bridge.rs:749` (`mcp_whenStdinEnds_shouldExitZeroAfterASingleShutdownLine`, Pipe) und 114 Fälle in `tests/mcp.rs`; Parität 1–3. Windows: `INSTALL.md` § 10.4 („stdout stays empty") |
+| 8 Der Dienst bleibt eine Betriebsart | **erfüllt** | `test/deploy.test.js:27` pinnt `ExecStart=%h/.local/bin/browser-control-bridge --http`; `tests/bridge.rs:840` (`mcp_withAnIgnoredStdin_shouldKeepRunningAndListeningAfterTheEof`) beweist `/dev/null` ⇒ die Bridge läuft weiter. Die Unit wurde nicht angefasst |
 
 ## Non-goals
 
@@ -90,6 +142,10 @@ deshalb das Binary; der Weg über den Task Scheduler steht in
 
 ## Wo die Änderung sitzt
 
+**Überholt (2026-11-18).** Die Tabelle beschreibt die Node-Dateien, gegen die diese Spec
+am 2026-11-06 geschrieben wurde; sie sind mit `docs/38` Stufe 4b gelöscht. Was tatsächlich
+eingebaut wurde, steht in `## Was gebaut wurde`.
+
 | Datei | Heute | Danach |
 |---|---|---|
 | `bridge/bridge.mjs` | `installShutdownHandlers` hört auf `SIGTERM` und `SIGINT` (`:161`–`:162`); `stdinIsClientChannel` fragt `isFIFO()`/`isSocket()` (`:183`); `startMcpServer` läuft unbedingt (`:245`); `main()` läuft beim Import (`:286`), es gibt **keinen** Export; die Port-Zeile entsteht privat in `logBindFailure`/`describePortOwner` (`:87`–`:99`) | Signalliste statt zwei fester Zeilen (`SIGBREAK` auf `win32`); stdio nur, wenn `process.stdin.isTTY` falsch ist; `portInUseLine` exportiert und mit injizierbarer Besitzersuche; ein Wächter macht die Datei importierbar |
@@ -99,7 +155,50 @@ deshalb das Binary; der Weg über den Task Scheduler steht in
 | `INSTALL.md` | `## 3` sagt „Nicht dauerhaft", `## 5` heißt „(empfohlen)" | zwei Empfehlungszeilen gedreht, ein Abschnitt am Ende; **keine Befehlszeile** in `## 1`–`## 6` geändert |
 | `docs/18-dienst-und-http-mcp.md` | `:351`–`:354`: „`startMcpServer` läuft unbedingt weiter" | die Amendments unten; `docs/README.md` verlangt die Nachziehung in der Stufe, die das Verhalten umsetzt |
 
+## Was gebaut wurde (2026-11-18)
+
+Zwei Änderungen, beide dort, wo das Verhalten entschieden wird — nicht in einem neuen
+Modul:
+
+- **`bridge-rs/src/main.rs:129`** startet den stdio-Dienst nur noch, wenn stdin **keine
+  Konsole** ist. `join_stdio` (`:274`) hält den `select!`-Zweig für den Fall still, dass es
+  ihn nicht gibt — dieselbe Form wie `join_transport`. Grund: in der Konsole ist stdin die
+  Tastatur des Betreibers, und die Vorlage antwortete dem ersten Tastendruck auf dem
+  JSON-RPC-Kanal mit einem Parse-Fehler.
+- **`bridge-rs/src/main.rs:422`–`:423`** beendet bei `Strg+C` **und** `Strg+Untbr`:
+  `ctrl_c` und `windows::ctrl_break` in einem `tokio::select!`; beide schreiben dieselbe
+  Zeile (`received SIGINT, shutting down` bzw. `received SIGBREAK, shutting down`) und
+  laufen in denselben Exit-0-Pfad (`:187`).
+- **`bridge-rs/src/stdio.rs:186`** liefert die Entscheidung als Funktion
+  (`stdin_is_a_console`, `std::io::IsTerminal`, ohne `cfg`). Sie steht neben der anderen
+  stdin-Frage (`stdin_is_client_channel`, `:204`/`:241`/`:263`), weil beide dasselbe
+  betreffen: was Deskriptor 0 gerade ist.
+
+Nicht angefasst: die Unix-Signalarme (`main.rs:344`–`:376`), die Portbesitzer-Suche beider
+Plattformen, `Cargo.toml` (die `signal`-Feature trägt `ctrl_break` schon), jede Datei unter
+`extension/` und die Unit.
+
 ## Testing
+
+**Was heute gilt (2026-11-18).** Geprüft wird im Rust-Port und gegen den Paritätsmaßstab;
+die Node-Fälle der ursprünglichen Fassung sind mit ihren Dateien verschwunden.
+
+| Datei | Fall | Was er beweist |
+|---|---|---|
+| `bridge-rs/tests/bridge.rs:749` | `mcp_whenStdinEnds_shouldExitZeroAfterASingleShutdownLine` | Ein Client, der stdin schließt (Pipe), bekommt Exit 0 und **genau eine** Zeile `stdin closed, shutting down` — das Gate schließt den Client-Pfad nicht mit |
+| `bridge-rs/tests/bridge.rs:799` | `mcp_whenStdinEndsWithAConnectedExtension_shouldAlsoExitZeroWithOneShutdownLine` | dasselbe mit verbundener Extension |
+| `bridge-rs/tests/bridge.rs:840` | `mcp_withAnIgnoredStdin_shouldKeepRunningAndListeningAfterTheEof` | `/dev/null` auf stdin (systemd) beendet nichts — Kriterium 8 |
+| `bridge-rs/tests/http.rs:398` | `http_startHttpTransport_withToolsListAndValidToken_shouldAnswer200WithApplicationJson` | `tools/list` **ohne** `initialize` — Kriterium 5 |
+| `test/deploy.test.js:27` | `REQUIRED_LINES` | der Dienstweg bleibt `ExecStart=%h/.local/bin/browser-control-bridge --http` |
+| `cargo build`/`cargo clippy` mit `--target x86_64-pc-windows-gnu` | Bau und Lint | die Windows-Zweige (`ctrl_break`, `GetExtendedTcpTable`, `GetFileType`) übersetzen und sind lint-frei |
+| `scripts/parity.sh --impl rust --check` | sieben Vergleiche | Startzeilen, Besitzerzeile, Exit-Codes und Logzeilen zeichengleich |
+
+**Nicht lokal prüfbar**, deshalb Betreiber-Messung: dass `Strg+C` und `Strg+Untbr` in einem
+echten Konsolenfenster ankommen und dass stdout dort 0 Byte bleibt. Ein PTY ist kein
+Werkzeug, das diese Spec voraussetzen darf — der Fehler „stdio startet *immer*" würde von
+keinem lokalen Fall gefangen.
+
+**Die Tabelle der Node-Fassung (überholt, nur als Geschichte):**
 
 | Datei | Fall | Was er beweist |
 |---|---|---|
@@ -124,6 +223,12 @@ nur im echten Profil entscheidbar ist, steht das dort"), **nicht** die Ausnahme 
 Halbsätzen, die ein echtes Konsolenfenster brauchen und es dort sagen (`Strg+Untbr`
 in Kriterium 1, der Tastendruck in Kriterium 7). Pfade werden mit
 Vorwärtsschrägstrichen geschrieben.
+
+**Stand 2026-11-18:** Kriterium 4, 7 (lokal) und 8 sind erfüllt, Kriterium 2 ist in der
+Rust-Form erfüllt, die Betreiber-Hälften von 1, 5 und 7 bleiben offen, und **Kriterium 3
+und 6 sind überholt** (kein Subjekt mehr). Die Belege je Kriterium stehen in
+`## Prüfung gegen den Rust-Stand`; der Text darunter bleibt das, was am 2026-11-06
+verlangt wurde.
 
 1. **Start und Ende auf Windows** (Windows, Betreiber). **Vorbedingung: die
    Token-Datei existiert.** Default-Pfad `%USERPROFILE%\.config\browser-control\token`
@@ -152,7 +257,7 @@ Vorwärtsschrägstrichen geschrieben.
    `git status --porcelain extension/manifest.json` ist leer. Die Testzahl ist Teil
    des Kriteriums, weil `# fail 0` allein auch für einen Lauf gilt, der keine Datei
    gefunden hat.
-3. **Übersprungen wird gezählt, nicht versteckt.** (a) Lokal: `npm test` meldet
+3. **Übersprungen wird gezählt, nicht versteckt.** *(überholt, siehe `## Prüfung`)* (a) Lokal: `npm test` meldet
    `# skipped 0`, und `git grep -n "skip:" -- test/` nennt **zwölf Quellzeilen**
    (gezählt werden Zeilen, nicht Fälle — der Laufzeit-Skip in `bridge.test.js:534`
    erscheint dort nicht): vier mit `/proc`-Begründung, acht mit Signal-Begründung.
@@ -178,7 +283,7 @@ Vorwärtsschrägstrichen geschrieben.
 
    ⇒ `12`. Das beweist „läuft", nicht nur „startet" — und umgeht die Endpunkt-Frage
    aus Teil 2.
-6. **Die Linux-Anleitung bleibt gültig** (lokal). Keine **Befehlszeile** in `## 1`
+6. **Die Linux-Anleitung bleibt gültig** *(überholt, siehe `## Prüfung`)* (lokal). Keine **Befehlszeile** in `## 1`
    bis `## 6` ändert sich. Erlaubt sind genau **zwei** geänderte Textzeilen — die
    Empfehlung in `## 3` („Nicht dauerhaft") und die Überschrift von `## 5`
    („(empfohlen)") —, weil die Reihenfolge sich dreht. Prüfung:
@@ -211,6 +316,14 @@ Vorwärtsschrägstrichen geschrieben.
    Browser erreicht.
 
 ## Dev plan
+
+**Überholt (2026-11-18).** Der Plan unten baut die Node-Bridge um (`bridge/bridge.mjs`,
+`test/bridge.test.js`); diese Dateien sind mit `docs/38` gelöscht, und keine seiner fünf
+Stufen wurde so ausgeführt. Gebaut wurde in zwei Schritten, beschrieben in
+`## Was gebaut wurde`: (1) `SIGBREAK` und das stdio-Gate in `main.rs`/`stdio.rs`,
+(2) diese Spec und die Register (`docs/README.md`, `docs/ROADMAP.md`,
+`docs/PROJECT-STATE.md`, `CHANGELOG.md`). Die Stufen bleiben als Geschichte stehen — sie
+zeigen, warum die Spec so geschnitten ist.
 
 **Befund vor dem Bau** (in den Dateien gelesen, nicht geschätzt):
 
@@ -344,9 +457,11 @@ den Ist-Zustand beschreibt.
 
 ## Windows von Hand (Entwurf für `INSTALL.md`, Stufe 5)
 
-Damit die Einzelheiten nicht nur im Gespräch stehen — das ist der Text, den Stufe 5
-in `INSTALL.md` anhängt. Er beschreibt **heute schon mögliches** Verhalten, außer
-`sigbreak` und dem stillen stdout; beides kommt mit Stufe 1–4 dieser Spec.
+**Erledigt (2026-11-18).** Der Entwurf steht als `INSTALL.md` § 10 (Binary, Token,
+Konsole, Task Scheduler, `curl`-Prüfung); § 10.4 nennt `Ctrl+C` und das leere stdout, und
+mit dieser Spec kommt `Strg+Untbr` dazu. Der Text unten bleibt als Geschichte: er nennt
+noch Node für die Token-Datei und behandelt den Endpunkt als offene Frage, die mit
+`docs/36` entschieden ist (`ws://127.0.0.1:8110`, sichtbar vorbelegt).
 
 1. Node >= 22 und Firefox installieren. Kein WSL, kein Caddy, kein Zusatzprogramm.
 2. Token anlegen (der Default-Pfad kommt aus `os.homedir()`, `bridge/config.mjs:110`):
@@ -412,17 +527,14 @@ Linux-Anleitung behalten ihre Befehle, nur die zwei Empfehlungswörter drehen si
 
 ## Open questions
 
-1. **Steht ein Windows-Rechner mit Firefox und Node >= 22 zur Verfügung?** Ohne ihn
-   sind Kriterium 1, 3b, 5 und die Windows-Hälfte von 7 nicht messbar. Bis zur
-   Antwort bleibt diese Spec `proposed`; die lokalen Stufen können trotzdem gebaut
-   werden.
-2. **Die 90-Sekunden-Frist der Abnahme** (aus `## Risiken`): `test/mcp.test.js` lief
-   am 2026-11-06 in 61,4 s von 90 — 1,47 ×, nicht die 1,5 ×, mit denen `CONTRIBUTING.md`
-   die Zahl begründet. Auf einem trägeren Windows-Wirt ergibt das `# cancelled 1`
-   statt `# fail`, und Kriterium 2 verlangt `# cancelled 0`. Entscheidung des
-   Betreibers: Frist in diesem Inkrement erhöhen (eine Zeile in `CONTRIBUTING.md`, die in
-   der Touch boundary liegt) oder `test/mcp.test.js` vorher teilen (eigene Spec, die
-   Datei ist hier verboten).
+**Keine (Stand 2026-11-18).** Beide Fragen von 2026-11-06 sind beantwortet oder überholt:
+
+- **Windows-Rechner** — die Frage blockiert keinen Code mehr. Was fehlt, ist die Messung
+  (Kriterien 1, 5 und die Windows-Hälfte von 7); sie steht als Betreiberarbeit in
+  `INSTALL.md` § 10 und `bridge-rs/README.md`, `## Windows`, nicht als Designfrage.
+- **Die 90-Sekunden-Frist** — überholt: `test/mcp.test.js` und seine 139 Fälle sind mit der
+  Node-Bridge gelöscht. Die Frist in `CONTRIBUTING.md` (`--test-timeout=90000`) gilt für
+  die Node-Suite der Erweiterung und der Skripte; die Bridge läuft in `cargo test`.
 
 **Entschieden am 2026-11-06** (der Betreiber hat mit „los" die jeweilige Empfehlung
 angenommen; ein Widerwort ändert eine Stufe, nicht den Zuschnitt):
@@ -434,33 +546,37 @@ angenommen; ein Widerwort ändert eine Stufe, nicht den Zuschnitt):
 | Betreiber-Liste | Kriterien 1, 3b, 5 und die Windows-Hälfte von 7; Kriterium 2 braucht beide Läufe | 4 |
 | geordnetes Ende | `SIGINT` (Strg+C) und `SIGBREAK` (Strg+Untbr); was ein Dienst-Wrapper schickt, entscheidet Teil 2 | 3 |
 
-## Amendments to previous spec docs
-
-Diese Spec dreht eine Zusage um, die `docs/18` ausdrücklich festhält.
-
-| Datei | Stelle | alt | neu |
-|---|---|---|---|
-| `docs/18-dienst-und-http-mcp.md` | `:351`–`:354` (Stufe 5, Verdrahtung im Einstiegspunkt) | „`startMcpServer` läuft unbedingt weiter — unter systemd ist stdin `/dev/null`, `stdinIsClientChannel()` bleibt `false`, und das EOF beendet den Dienst nicht (das ist der Grund, warum die Unit überhaupt lebt)" | stdio startet weiterhin, wenn stdin **kein Terminal** ist: unter systemd (`/dev/null`) und für pi (Pipe) unverändert an, im Terminal aus. Der Grund, warum die Unit lebt, ist derselbe — `stdinIsClientChannel()` entscheidet weiter über das EOF. |
-
-`docs/03-mcp-browser-status.md` braucht keine Änderung: dort steht die Verdrahtung
-(`startMcpServer({ hub, log: logLine, onInputClosed: … })`), keine Bedingung.
-
 ## Risiken
 
-- **Ohne Windows-Maschine ist die Kernannahme nicht widerlegbar.** Die Tests hier
-  laufen auf Linux und zeigen nur, dass die Nicht-POSIX-Zweige logisch gerade sind.
-- **Signal-Semantik ist Dokumentation, kein Messwert.** Node kann `SIGTERM`
-  abonnieren, Windows erzeugt es nie; `SIGINT` kommt von `Strg+C`, `SIGBREAK` von
-  `Strg+Untbr`. Was ein Dienst-Stopp schickt, entscheidet der Wrapper in Teil 2.
-- **Die 90-Sekunden-Frist wird enger** — siehe offene Frage 2. Keine Stufe dieses
-  Inkrements fasst `test/mcp.test.js` an; die Frist wird durch den gewachsenen
-  Bestand eng (139 Fälle statt der 138, mit denen `CONTRIBUTING.md` rechnet).
-- **Konsolen-Encoding.** stderr trägt deutsche Sätze; unter `cmd.exe` kann die
-  Codepage Umlaute zerlegen. Kein Protokoll betroffen (stdout bleibt JSON-RPC),
-  aber Logzeilen können unleserlich werden. Wird gemessen, nicht vorab gelöst.
-- **CRLF** — siehe „What could go wrong“.
+- **Ohne Windows-Maschine ist die Kernannahme nicht widerlegbar.** Bau und Lint der
+  Windows-Zweige laufen hier (`--target x86_64-pc-windows-gnu`), der Lauf nicht; dass
+  `Strg+C` und `Strg+Untbr` ankommen, ist eine Betreiber-Messung.
+- **Signal-Semantik ist Dokumentation, kein Messwert.** Windows erzeugt `SIGTERM` nie;
+  `SIGINT` kommt von `Strg+C`, `SIGBREAK` von `Strg+Untbr`. Beide Griffe sind jetzt
+  verdrahtet (`main.rs:422`–`:423`); was ein Dienst-Stopp schickt, entscheidet der Wrapper
+  in Teil 2.
+- **Die 90-Sekunden-Frist** — *überholt (2026-11-18):* `test/mcp.test.js` ist mit der
+  Node-Bridge gelöscht, die Frist betrifft die Bridge nicht mehr.
+- **Konsolen-Encoding.** stderr trägt deutsche Sätze („Besitzer nicht ermittelbar"); unter
+  `cmd.exe` kann die Codepage Umlaute zerlegen. Kein Protokoll betroffen (stdout bleibt
+  JSON-RPC), aber Logzeilen können unleserlich werden. Wird gemessen, nicht vorab gelöst.
+- **CRLF** — siehe „What could go wrong".
 
 ## Touch boundary
+
+**Der Zuschnitt von 2026-11-06 ist überholt** — er nannte Node-Dateien. Die Grenze dieses
+Inkrements (2026-11-18):
+
+- **Angefasst:** `bridge-rs/src/main.rs` (Gate und `SIGBREAK`), `bridge-rs/src/stdio.rs`
+  (`stdin_is_a_console`), diese Spec, `docs/README.md` (Statuszelle), `docs/ROADMAP.md`
+  (Zeile 30), `docs/PROJECT-STATE.md`, `CHANGELOG.md`.
+- **Nicht angefasst:** `extension/**`, `scripts/**`, `test/**`, `deploy/**`, `docs/38`,
+  `docs/18`, `bridge-rs/Cargo.toml` (nichts nötig), `bridge-rs/tests/**` (kein neuer Fall
+  nötig), die Unit `deploy/browser-control.service`.
+- Keine neue Abhängigkeit, kein Token, kein Geheimnis. Der Dienst auf 8110/8111 wurde nicht
+  angefasst, und kein Prozess wurde nach Muster beendet.
+
+**Die ursprüngliche Grenze (überholt, als Geschichte):**
 
 - `bridge/bridge.mjs`, `test/bridge.test.js`, `test/http-mcp.test.js`, `CONTRIBUTING.md`
   (`## Acceptance`), `INSTALL.md` (zwei Empfehlungszeilen plus ein Abschnitt am Ende),
@@ -475,19 +591,33 @@ Diese Spec dreht eine Zusage um, die `docs/18` ausdrücklich festhält.
 
 ## Bekannte Lücken
 
-Stand 2026-11-06, vor der Umsetzung:
+Stand 2026-11-18, nach der Umsetzung:
 
-- **Der TTY-Zweig ist nicht end-to-end gemessen.** Lokal ist nur die Entscheidung
-  gepinnt (`mcpStdioEnabled`), nicht ihre Wirkung im Terminal; die Wirkung hakt der
-  Betreiber ab (Kriterium 7). Ein Fehler, der `startMcpServer` *immer* startet, würde
-  von keinem lokalen Test gefangen.
-- **Die Windows-Messung steht aus** (Kriterien 1, 3b, 5, Windows-Hälfte von 7).
-- **Der Dienstweg wird nicht live gegen die Konsole gemessen** (Kriterium 8): die
-  Unit zu stoppen kappte die Verbindung, über die pi in dieser Sitzung den Browser
-  erreicht.
-- **`port-owner` bleibt auf Windows stumm** — „Besitzer nicht ermittelbar".
-- **Teil 2 fehlt:** Dienst-Ersatz, vollständige Windows-Installationsanleitung,
-  Endpunkt-Entscheidung.
+- **Die Konsole ist nicht end-to-end gemessen.** Lokal ist nur die Entscheidung gebaut
+  (`stdin_is_a_console`, `stdio.rs:186`); dass in einem echten Terminal nichts auf stdout
+  landet und `Strg+Untbr` ankommt, hakt der Betreiber ab (Kriterium 7, `INSTALL.md`
+  § 10.4). Der Fehler „stdio startet *immer*" würde von keinem lokalen Fall gefangen — der
+  Gegenfall (Pipe) ist gepinnt, der Konsolefall nicht.
+- **Die Windows-Messung steht aus** (Kriterien 1, 5, Windows-Hälfte von 7): `main.rs` ist
+  für `x86_64-pc-windows-gnu` gebaut und lint-frei, aber nicht gelaufen.
+- **Der Dienstweg wird nicht live gegen die Konsole gemessen** (Kriterium 8): die Unit zu
+  stoppen kappte die Verbindung, über die pi in dieser Sitzung den Browser erreicht.
+- **`docs/38` Stufe 3 und `bridge-rs/README.md` widersprechen jetzt dem Code.** Beide sagen,
+  `Ctrl+Break` sei bewusst **nicht** verdrahtet (begründet mit der Vorlage, die den Signal
+  nicht kannte). Mit dieser Spec ist er es — `docs/38` liegt außerhalb der Boundary dieses
+  Inkrements, `bridge-rs/README.md:259` ebenfalls; der Satz gehört dort nachgezogen.
+- **`docs/18:365`–`:370` sagt weiter „`startMcpServer` läuft unbedingt weiter".** Die
+  Amendment-Zeile dieser Spec ist **nicht** nachgezogen: der Absatz beschreibt
+  `bridge/bridge.mjs`, eine mit `docs/38` gelöschte Datei. Der heute gültige Vertrag steht
+  in `main.rs:129` und `stdio.rs:186`; eine Änderung an `docs/18` wäre eine Aussage über
+  eine Datei, die es nicht mehr gibt.
+- **Die Besitzerzeile ohne Fund hat keinen eigenen Fall.** Dass `null` zu „Besitzer nicht
+  ermittelbar" ohne PID wird (`main.rs:339`), ist Code und nicht gepinnt; Paritätsvergleich
+  5 pinnt nur die Zeile **mit** Besitzer (der `mask` ersetzt PID und Name). Die Zeilenbildung
+  liegt in `main.rs`, also außerhalb der Bibliothek, die `cargo test` messen kann.
+- **Teil 2 fehlt weiterhin nicht mehr:** Dienst-Ersatz (`docs/38` Stufe 3),
+  Windows-Anleitung (`INSTALL.md` § 10) und Endpunkt (`docs/36`) sind da. Offen ist allein
+  die Betreiber-Messung.
 
 ## Review
 
@@ -505,8 +635,9 @@ Kriterium 7, Vordergrund, echtes Konsolenfenster, getrennte Ströme).
 
 ### Runde 1 dieser Spec
 
-Noch keine Runde — sie geht als neue Spec durch das Gate, sobald der Betreiber sie
-freigibt.
+Keine eigene Review-Runde: die Spec ging am 2026-11-06 als neue Spec ins Gate, und die
+Umsetzung fiel mit dem Rust-Port zusammen (`docs/38`). Geprüft wurde stattdessen gegen den
+Code — `## Prüfung gegen den Rust-Stand`, `## Log`, P1–P5.
 
 ## Log
 
@@ -545,3 +676,29 @@ Je Befund eine Zeile (aus `CONTRIBUTING.md`, Schritt 4).
 - **Nicht übernommen: nichts.** Eine Grenze bleibt: der PTY-Messwert ist im Text von
   Kriterium 7 als Stützung zitiert, aber kein eigenes Kriterium — er braucht `script`
   aus util-linux, ein Werkzeug, das diese Spec nicht voraussetzen darf.
+
+### Prüfung und Umsetzung, 2026-11-18
+
+- **P1: die Spec war gegen eine gelöschte Datei geschrieben.** Jeder Ziel-Punkt und jedes
+  Kriterium wurde gegen den Rust-Stand geprüft; das Ergebnis steht in
+  `## Prüfung gegen den Rust-Stand`. Kriterium 3 und 6 sind überholt (kein Subjekt mehr),
+  Kriterium 4 ist auf Rust gezogen, die Node-Dateitabelle und der Node-Dev-Plan sind
+  markiert statt gelöscht. `## Ziel` trägt sechs Punkte, nicht sieben.
+- **P2: `SIGBREAK` fehlte wirklich.** `docs/38` Stufe 3 hatte ihn bewusst ausgelassen (die
+  Vorlage kannte den Signal nicht; der Paritätsmaßstab läuft auf Linux und sieht keinen
+  Griff). Eingebaut in `main.rs:422`–`:423`: `ctrl_break` neben `ctrl_c`, dieselbe Zeile,
+  derselbe Exit-0-Pfad. `Cargo.toml` braucht nichts — die `signal`-Feature trägt
+  `tokio::signal::windows` schon.
+- **P3: das stdio-Gate fehlte auch.** `main.rs:129` startet stdio nur bei
+  `!stdio::stdin_is_a_console()` (`stdio.rs:186`, `std::io::IsTerminal`); vorher lief
+  `stdio::serve` unbedingt, und der Betreiber hätte den ersten Tastendruck als Parse-Fehler
+  auf stdout gesehen. Das ist eine Verhaltensänderung auch für Linux — aber nur für den
+  Fall „stdin ist ein Terminal": Pipe, Socketpair und `/dev/null` (pi, Paritäts-Treiber,
+  systemd) sind unverändert.
+- **P4: die Amendments an `docs/18` sind fallengelassen.** Der Abschnitt ist nach
+  `docs/README.md` zu entfernen, wenn die Spec umgesetzt ist; die Zusage, die er drehen
+  sollte, beschreibt `bridge/bridge.mjs` — eine Datei, die es nicht mehr gibt. Der Grund
+  steht in `## Bekannte Lücken`.
+- **P5: `docs/38` Stufe 3 und `bridge-rs/README.md:259` sind jetzt ungenau** („Ctrl+Break
+  ist nicht verdrahtet"). Beide liegen außerhalb der Boundary; der Nachtrag gehört in eine
+  Folgeänderung.

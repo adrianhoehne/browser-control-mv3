@@ -1,17 +1,24 @@
 ---
 description: Der Debug-Block auf stderr bekommt eine Whitelist je Werkzeug statt sieben verstreuter Feld-Redaktionen — ein neues Ergebnisfeld landet damit nicht mehr ungefiltert im Log.
-status: proposed
+status: active
 ---
 
 # Was auf stderr darf: Log-Hygiene mit Whitelist
 
-Heute redigiert **vier** der sieben `#report…`-Zweige in `bridge/hub.mjs` selbst ({...result,
-text: "<n chars>"}); die anderen drei haben gar keine Sperrliste, sie haben nur Glück. (Nachgezählt am 2026-10-29: **sieben** Zweige schreiben einen
-Debug-Block, **vier** sind bewusst stumm — `open_tab`, `close_tab`, `eval`,
-`screenshot`; `frames` hat gar keinen Zweig.) Das ist eine **Sperrliste** — sie zählt, was ersetzt wird.
-Kommt ein Ergebnisfeld hinzu (so wie in den letzten acht Inkrementen ständig),
-erscheint es automatisch ungefiltert auf stderr: Seiteninhalt, `href` mit
-Sitzungsschlüssel, was auch immer. Roadmap 18 dreht die Richtung um.
+**Stand 2026-11-18: gebaut und abgenommen, im Rust-Port.** Die Whitelist ist
+`DEBUG_WHITELIST` in `bridge-rs/src/hub.rs`, die Projektion `project` und
+`debug_block_of`; die Node-Fassung `bridge/hub.mjs`, gegen die diese Spec
+geschrieben wurde, ist mit `docs/38` gelöscht. Der Abschnitt unten beschreibt den
+Zustand **vor** dem Inkrement (Vergangenheitsform) und die Entscheidung, die
+daraus wurde.
+
+Vor diesem Inkrement redigierten **vier** der sieben `#report…`-Zweige in `bridge/hub.mjs` selbst ({...result,
+text: "<n chars>"}); die anderen drei hatten gar keine Sperrliste, sie hatten nur Glück. (Nachgezählt am 2026-10-29: **sieben** Zweige schrieben einen
+Debug-Block, **vier** waren bewusst stumm — `open_tab`, `close_tab`, `eval`,
+`screenshot`; `frames` hatte gar keinen Zweig.) Das war eine **Sperrliste** — sie zählte, was ersetzt wird.
+Kam ein Ergebnisfeld hinzu (so wie in den letzten acht Inkrementen ständig),
+erschien es automatisch ungefiltert auf stderr: Seiteninhalt, `href` mit
+Sitzungsschlüssel, was auch immer. Roadmap 18 hat die Richtung umgedreht.
 
 ## Ziel
 
@@ -46,12 +53,17 @@ Sitzungsschlüssel, was auch immer. Roadmap 18 dreht die Richtung um.
 
 ## Wo die Änderung sitzt
 
-`bridge/hub.mjs`. Heute: sieben `#report…`-Zweige mit Debug-Block, jeder mit eigener Sperrliste und
+**Heute:** `bridge-rs/src/hub.rs` — `DEBUG_WHITELIST` (sieben Methodeneinträge,
+Schlüssel sind die Protokollnamen) und `debug_block_of`, das über `project` und
+`apply_rule` die vier Regeln `Full`, `Length`, `LengthEach`, `Shape` anwendet
+und für eine Methode ohne Eintrag `None` liefert.
+
+**Damals, gegen diesen Text gebaut:** `bridge/hub.mjs`. Sieben `#report…`-Zweige mit Debug-Block, jeder mit eigener Sperrliste und
 teils eigenem `#logDebugResult`. Danach: **eine** Funktion `debugBlockOf(method, result)` und **eine** Tabelle `DEBUG_WHITELIST` (je Werkzeug: Feld → `full` |
 `length` | `lengthEach` | `shape`; auf `drop` wird verzichtet, es hätte heute keinen
-Nutzer). Die sieben `#report…`-Zweige rufen nur noch diese Funktion; die
+Nutzer). Die sieben `#report…`-Zweige riefen nur noch diese Funktion; die
 Redaktionshelfer (`redactedPageString`, `inspectDebugResult`,
-`REDACTED_INSPECT_ELEMENT_FIELDS`) gehen in der Tabelle auf.
+`REDACTED_INSPECT_ELEMENT_FIELDS`) gingen in der Tabelle auf.
 
 ## Testing
 
@@ -67,7 +79,10 @@ Redaktionshelfer (`redactedPageString`, `inspectDebugResult`,
 ## Acceptance criteria
 
 **Ausnahme mit Datum** (2026-10-29, `CONTRIBUTING.md`, `## Acceptance`): Kriterium 5 ist live
-und nach dem Commit zu messen; **Kernannahme** ist Kriterium 2.
+und nach dem Commit zu messen; **Kernannahme** ist Kriterium 2. Gemessen wurde es
+am 2026-11-18 **ohne Browser** (`## Messlauf`): die Whitelist hält über den
+echten Transport, der Haken für `browser_read` **und `browser_inspect` an einer
+echten Seite** bleibt beim Betreiber.
 
 1. **Ein Ort** (lokal). Die sieben `#report…`-Zweige enthalten keine eigene
    Feld-Redaktion mehr; `DEBUG_WHITELIST` ist die einzige Stelle, die entscheidet.
@@ -85,7 +100,9 @@ und nach dem Commit zu messen; **Kernannahme** ist Kriterium 2.
 
 ## Dev plan
 
-**Completed 2026-10-30** (alle vier Stufen; offen: E1, die Doku-Verweise auf die gelöschten Helfer, die Amendments und die Live-Messung).
+**Completed 2026-10-30** (alle vier Stufen; E1, die Doku-Verweise auf die
+gelöschten Helfer, die Amendments und die Live-Messung folgten in der
+Schlussstufe am 2026-11-18 — siehe `## Log`).
 
 **Befund vor dem Bau** (in `bridge/hub.mjs` gelesen, nicht geschätzt): `PROTOCOL.METHODS` kennt **zwölf** Methoden, `#reportResult` (`:638`) hat **elf** Zweige — `frames` hat gar keinen. Von den elf schreiben **sieben** einen Debug-Block: `status` (`:698`), `navigate` (`:705`), `focus` (`:779`) über `#logDebugResult` (`:845`), und `read` (`:716`), `click` (`:728`), `type` (`:754`), `inspect` (`:790`) mit eigener Kopie. **Vier** schreiben bewusst keinen: `open_tab` (`:804`), `close_tab` (`:816`), `eval` (`:828`), `screenshot` (`:841`). Die Spec-Zeile „sechs `#report…`-Zweige" zählt also die alten Sperrlisten, nicht die Zweige — die vier stillen Zweige bleiben stumm (§ `#reportEval`-Kommentar, Spec 19/20). `logLevel` wird heute an **fünf** Stellen mit `this.#config.logLevel === "debug"` geprüft (`:715`, `:730`, `:756`, `:792`, `:846`); `#log(message)` ist der injizierte Schreiber, ein Block ist **eine** Message mit Zeilenumbrüchen.
 
@@ -180,19 +197,28 @@ Stufen 1 → 2 → 3 → 4, jede für sich grün; keine Stufe braucht eine spät
 4. **Kriterium 5 hakt der Betreiber ab** (Live-Messung im eigenen Profil).
 ## Amendments to previous spec docs
 
+**Alle Zeilen am 2026-11-18 nachgezogen** — die Nummern links sind die alten
+Fundstellen; gesucht und geändert wurde im heutigen Text (die Zeilennummern
+waren durch spätere Inkremente verschoben, `docs/ROADMAP.md` zum Beispiel von
+`:69` auf `:87`). Jede Zelle nennt links die Fundstelle von damals und rechts,
+was dort heute steht.
+
 | Datei | Stellen | neu |
 |---|---|---|
-| `docs/05-seiteninhalt-lesen.md` | `:190`–`:196` (Logzeile, „keine Inhalte", und der Satz „`status`/`navigate`, wo der Debug-Block das Ergebnis zeigt"), `## Bekannte Lücken` (Sperrliste) | der Debug-Block ist eine Whitelist; `title` ist dort Länge |
-| `docs/08-fokus.md` | `:93`–`:95` („das ganze Ergebnis"), `:123` | der Block zeigt die Whitelist, `title` als Länge |
-| `docs/09-dom-abfrage.md` | `:129` („`url`, `title` bleiben"), `:345` | `title` ist Länge; alles andere bleibt |
-| `docs/07-tippen.md` | `:538`–`:541` (Falle: `title` im Debug-Block trägt den getippten Text) | die Falle ist geschlossen — `title` erscheint als Länge |
-| `docs/ROADMAP.md` | `:69` (Zeile 18) | erledigt |
+| `docs/05-seiteninhalt-lesen.md` | `:190`–`:196` (Logzeile, „keine Inhalte", und der Satz „`status`/`navigate`, wo der Debug-Block das Ergebnis zeigt"), `## Bekannte Lücken` (Sperrliste), `:422` (`#logDebugResult` in „What could go wrong") | der Debug-Block ist eine Whitelist; `title` ist dort Länge; die Sperrliste ist als geschlossen markiert |
+| `docs/08-fokus.md` | `:93`–`:95` („das ganze Ergebnis"), `:123` (Testing-Zeile) | der Block zeigt die Whitelist, `title` als Länge |
+| `docs/09-dom-abfrage.md` | `:129` („`url`, `title` bleiben"), `:345` (Stufe 3 des Dev-Plans) | `title` ist Länge; alles andere bleibt |
+| `docs/07-tippen.md` | `:538`–`:541` (Falle: `title` im Debug-Block trägt den getippten Text) | die Falle ist für `title` geschlossen — es erscheint als Länge; die `url` bleibt voll |
+| `docs/ROADMAP.md` | `:69` (Zeile 18), `:48` (`Gemacht`-Tabelle) | erledigt |
 
 ## Risiken
 
 - **Der `status`-Block ist außerhalb der Umsetzer-Boundary byte-genau gepinnt.**
   `test/bridge.test.js` und `test/mcp.test.js` verlangen `JSON.stringify(STATUS_RESULT,
-  null, 2)` Zeile für Zeile. Deshalb ist `status` der einzige Eintrag, in dem `url`
+  null, 2)` Zeile für Zeile. *(Seit dem Rust-Port: `bridge-rs/tests/hub.rs`,
+  `hub_withDebugLogging_shouldLogTheStatusLineAndTheIndentedResult`, plus
+  Paritätsvergleich 7 — die zwei Node-Dateien sind mit `docs/38` gelöscht.)*
+  Deshalb ist `status` der einzige Eintrag, in dem `url`
   **und** `title` vollständig erscheinen — jede andere Wahl macht `npm test` rot, ohne
   dass der Umsetzer die Datei anfassen darf. Ein Folgeinkrement „einheitliche
   Titel-Länge" muss diese zwei Dateien mitnehmen und die Boundary erweitern.
@@ -211,7 +237,10 @@ Stufen 1 → 2 → 3 → 4, jede für sich grün; keine Stufe braucht eine spät
 
 ## Touch boundary
 
-**Der Umsetzer** fasst an: `bridge/hub.mjs`, `test/hub.test.js`.
+**Der Umsetzer** fasst an: `bridge/hub.mjs`, `test/hub.test.js`. *(Historisch —
+das war der Bau vom 2026-10-30. Im heutigen Baum heißen die zwei Dateien
+`bridge-rs/src/hub.rs` und `bridge-rs/tests/hub.rs`; `bridge/hub.mjs` und
+`test/hub.test.js` sind mit `docs/38` gelöscht.)*
 
 **Der Orchestrator** fasst an: diese Spec, `docs/05-seiteninhalt-lesen.md`, `docs/07-tippen.md`, `docs/08-fokus.md`, `docs/09-dom-abfrage.md`,
 `docs/README.md`, `docs/PROJECT-STATE.md`, `docs/ROADMAP.md`.
@@ -222,29 +251,114 @@ weil dort der `status`-Block byte-genau gepinnt ist (siehe `## Risiken`).
 
 ## Bekannte Lücken
 
-Stand 2026-10-30, nach den Stufen 1–2:
+Stand 2026-11-18, gegen den Rust-Port geprüft (`bridge-rs/src/hub.rs`,
+`bridge-rs/tests/hub.rs`). Von den fünf Lücken des ersten Baus sind drei mit dem
+Port entfallen, zwei gelten weiter.
 
-- **Ein Ergebnis, das kein Objekt ist, druckt `debugBlockOf` als JSON im Klartext.**
-  So schreibt es Stufe 1 vor (für die blocklosen Methoden gedacht), und der alte Code
-  war an derselben Stelle genauso undicht — aber es ist eine offene Flanke, die die
-  Whitelist aussieht, als hätte sie sie geschlossen. Ein Ergebnis, das kein Objekt ist,
-  gehört eigentlich als Marker gedruckt, nicht als Wert.
-- **Ein Tabellen-Tippfehler reißt den Dienst** statt nur eine Anfrage: `#handleResponse`
-  nimmt den Eintrag **vor** `#reportResult` aus der Liste, ein werfender `applyRule`
-  lässt die Promise ewig hängen, und weil niemand `uncaughtException` fängt, endet der
-  Prozess. Ein lautes Scheitern beim **Laden** der Tabelle wäre die richtige Stelle.
-- **`Object.freeze` ist flach**: `shapeOf` friert seine Felder ein, die sieben
-  Methodeneinträge nicht.
-- **`title` als Länge ist in `click` und `type` nicht gepinnt** — beide Fälle prüfen nur
-  die Schlüsselliste, nicht die Form des Wertes (`navigate`, `read`, `focus`, `inspect`
-  tun es). Ein `title: FULL` in der Tabelle bliebe dort grün.
-- **`__proto__` als Feldname fällt lautlos weg**, statt den Marker zu tragen
-  (`projected[field] = UNLISTED` greift den Setter). Kein Leak, keine Pollution, aber
-  die Zusage „der Schlüssel bleibt" gilt für diesen einen Namen nicht.
+- **Ein Ergebnis, das kein Objekt ist, druckt `project` unverändert.** *Gilt
+  weiter.* `project` gibt für alles außer einer Map den Wert zurück, wie er kam
+  (Liste, Skalar, `null`), und `debug_block_of` schreibt ihn als JSON. Das ist
+  als Lücke gepinnt, nicht als Zusage:
+  `debugBlockOf_withAResultThatIsNoObject_shouldPrintItAsItArrived`
+  (`bridge-rs/tests/hub.rs:607`) prüft, dass `["geheim"]` im Block steht. Die
+  Ursache ist unverändert: für beliebiges Seiten-JSON gibt es keine Form-Regel,
+  und eine zu erfinden wäre eine eigene Spec. Die Richtungsumkehr ist an dieser
+  einen Stelle also **nicht** fail-closed — wer sie schließen will, druckt den
+  Marker statt des Werts; genau dieser Test ist die Stelle, an der es auffällt.
+- ~~**Ein Tabellen-Tippfehler reißt den Dienst**~~ — *gilt nicht mehr.* Die
+  Tabelle ist ein `const` mit `enum Rule`: ein falscher Regelname kompiliert
+  nicht, statt zur Laufzeit zu werfen. `debug_block_of` liefert
+  `Option<String>`, es gibt keinen werfenden `applyRule`; der eine `expect`
+  betrifft die Serialisierung eines Werts, den `project` selbst gebaut hat, ist
+  also ein Programmierfehler und kein Tabellenfehler.
+- ~~**`Object.freeze` ist flach**~~ — *gilt nicht mehr.* Es gibt kein `freeze`:
+  `DEBUG_WHITELIST` und die Feldtabellen sind `&'static`-Konstanten, eine
+  Laufzeit-Mutation ist weder vorgesehen noch möglich.
+- **`title` als Länge ist in `click` und `type` nicht gepinnt.** *Gilt weiter.*
+  Beide Debug-Fälle prüfen die Schlüsselliste und die Länge von `clicked` bzw.
+  `typed`, aber nicht den Wert von `title`
+  (`hub_requestWithClickMethodUnderDebugLogging_shouldRedactTextAndClicked`, `hub_requestWithTypeMethodUnderDebugLogging_shouldRedactThePageTextAndTheElementDescription`);
+  `navigate`, `read`, `focus` und `inspect` prüfen ihn. Ein `title: Full` in der
+  Tabelle bliebe an diesen zwei Stellen grün. Hier nicht behoben, weil die
+  Live-Messung keinen Defekt zeigte und Testcode ohne Befund ein anderer Auftrag
+  ist.
+- ~~**`__proto__` als Feldname fällt lautlos weg**~~ — *gilt nicht mehr.* In Rust
+  ist `__proto__` ein gewöhnlicher Schlüssel einer `serde_json`-Map; es gibt
+  keinen Setter zu treffen. Am 2026-11-18 mit einem Wegwerf-Programm außerhalb
+  des Repos gegen die Bibliothek gemessen
+  (`debug_block_of("read", {"tabId":42, "__proto__":"geheim", "constructor":"auch geheim"})`):
+  der Block trägt `"__proto__": "<unlisted field>"` **und**
+  `"constructor": "<unlisted field>"`. Die Zusage „der Schlüssel bleibt" gilt
+  also für jeden Namen.
 
 ## Messlauf
 
-Noch keine Messung — Kriterium 5 ist live und nach dem Commit zu messen.
+**2026-11-18, Kriterium 5 live gemessen — ohne Browser, gegen den echten Dienst
+und gegen einen zweiten eigenen Prozess.**
+
+**1. Der laufende Dienst** (`browser-control.service`, PID 3838770, Ports
+8110/8111, `log=info`). `POST /mcp` auf 8111 mit dem Betreiber-Token,
+`tools/call browser_status`: HTTP 200, `isError` mit „Keine Extension
+verbunden", im Journal **keine neue Zeile** — bei `info` gibt es keinen
+Debug-Block, und angetastet wurde nichts (`systemctl` nur lesend). Ohne
+Extension gibt es hier allerdings auch kein Ergebnis zu prüfen; der Lauf belegt
+den Schalter, nicht den Block.
+
+**2. Ein zweiter Prozess** (eigenes Token aus `openssl rand -hex 32`,
+`BC_BIND=127.0.0.1:18810`, `BC_HTTP_PORT=18811`, `BC_LOG=debug`), gegen den eine
+nachgebaute Extension aus `/tmp` (nicht im Repo) `hello` schickte und jede
+`request` mit einem Ergebnis voller Seiteninhalt beantwortete: `text:
+"GEHEIMER-SEITENTEXT"`, `title: "GEHEIMER-TITEL"`, dazu ein erfundenes
+`surpriseField: "GEHEIMER-FREMDWERT"`. Aufgerufen über `/mcp`:
+`browser_status` und `browser_read`, beide HTTP 200 mit dem vollständigen
+Ergebnis (der Block ist stderr, nicht die Antwort).
+
+Im stderr des zweiten Prozesses, ungekürzt:
+
+```
+2026-11-18T18:11:12.998Z read tab=1 url=https://example.org/ chars=19 truncated=false via=innerText
+2026-11-18T18:11:12.999Z {
+  "tabId": 1,
+  "url": "https://example.org/",
+  "title": "<14 chars>",
+  "text": "<19 chars>",
+  "offset": 0,
+  "chars": 20,
+  "totalChars": 20,
+  "truncated": false,
+  "via": "innerText",
+  "mode": "full",
+  "root": null,
+  "fellBack": false,
+  "settled": true,
+  "waitedMs": 120,
+  "surpriseField": "<unlisted field>"
+}
+```
+
+Damit sind drei Aussagen belegt: Seiteninhalt erscheint als Länge (`text`,
+`title`), ein unbekanntes Feld erscheint als Marker ohne Länge, und die
+Logzeile davor ist unverändert. Gegengeprüft per `grep -c` im gesammelten
+stderr: `GEHEIMER-SEITENTEXT` ⇒ **0**, `GEHEIMER-FREMDWERT` ⇒ **0**,
+`GEHEIMER-TITEL` ⇒ **2**.
+
+Die zwei Treffer sind die **`status`-Blöcke**, in denen `title` absichtlich voll
+erscheint (Byte-Pin, `## Risiken`). Der `read`-Block ist sauber; **der
+Seitentitel in `status` ist die eine Stelle, an der Seiteninhalt live noch auf
+stderr steht** — offen als Folgeinkrement, nicht als Lücke dieses Inkrements.
+
+Gegenprobe `log=info` auf denselben Ports: `browser_read` antwortet, im stderr
+stehen `extension connected`, `status windows=1 tabs=1` und die `read`-Zeile,
+`grep -c '^{'` ⇒ **0** — kein Block.
+
+Beide eigenen Prozesse wurden per PID beendet (`kill $PID`), die Ports
+18810/18811 sind wieder frei; der Dienst auf 8110/8111 blieb unberührt.
+
+**Was dieser Lauf nicht zeigt:** die Seite war nachgebaut, nicht der
+Betreiber-Firefox. Ein `browser_inspect` auf einer echten Seite steht damit
+weiter aus — der Betreiber-Haken an Kriterium 5 für den echten Browser bleibt
+offen, und ohne verbundene Extension (Lauf 1) war auch `browser_read` dort nicht
+zu messen.
 
 ## Review
 
@@ -319,6 +433,23 @@ verbleibenden `logLevel`-Stellen waren vier Stellen mit sechs Zweigen dahinter, 
 vier Zweige.
 
 ## Log
+
+Schlussstufe, 2026-11-18 — Amendments, Lücken, Messung, Abschluss:
+
+- **Amendments nachgezogen**: `docs/05` (Hub-Prosa, `## Bekannte Lücken`,
+  `#logDebugResult` unter „What could go wrong"), `docs/08` (Hub-Absatz und
+  Testing-Zeile), `docs/09` (Inspect-Block und Stufe 3 des Dev-Plans), `docs/07`
+  (`title`-Falle), `docs/ROADMAP.md` (Zeile 18 und `Gemacht`-Tabelle). Die alten
+  Zeilennummern stimmten nicht mehr; gesucht wurde im heutigen Text.
+- **Fünf Lücken geprüft, zwei bleiben offen**: der Nicht-Objekt-Fall gilt weiter
+  (gepinnt), `title` in `click`/`type` ist weiterhin nicht gepinnt. Der
+  Tabellen-Tippfehler, das flache `Object.freeze` und `__proto__` sind mit dem
+  Rust-Port entfallen — Belege in `## Bekannte Lücken`.
+- **Kriterium 5 gemessen** (`## Messlauf`): eine Ergebnisfläche voller
+  Seiteninhalt, im stderr nur Längen und der Marker. Die `status`-Titel-Ausnahme
+  steht dort als offener Punkt.
+- **Abgeschlossen**: `status: active`, `docs/README.md` (Status-Spalte),
+  `docs/PROJECT-STATE.md`, `CHANGELOG.md`.
 
 Runde 1: L1–L12, alle übernommen. Runde 2: M1–M6, alle übernommen — darunter der
 einzige echte Blocker (die Amendments übersahen drei aktive Specs) und zwei

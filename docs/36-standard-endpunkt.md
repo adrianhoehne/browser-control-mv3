@@ -29,9 +29,17 @@ kein mDNS, kein Caddy-Erraten. Der Standard ist eine **Vorgabe**, die man
 - **Gespeicherte Endpunkte bleiben unangetastet.** Wer eine `wss://`-Adresse
   hinter Caddy eingetragen hat, merkt nichts — der Standard greift nur bei
   leerem Feld.
-- **`ws://` bleibt erlaubt und geprüft wie bisher.** Ein ungültiger Endpunkt
-  endet weiter mit `bc: Endpunkt ungültig:` und einem erneuten Versuch, nicht
-  mit einem Absturz.
+- **`ws://` gilt nur für Loopback, `wss://` überall.** Ein `ws://`-Dial auf
+  `127.0.0.1`, `[::1]` oder `localhost` bleibt erlaubt und geprüft wie bisher;
+  auf jeden anderen Host verweigert die Seite den Dial mit **einer** deutschen
+  Logzeile statt eines Sockets und ohne erneuten Versuch (Betreiberentscheid
+  2026-11-18, `INSTALL.md` §9 „No certificate? Tunnel it.“). Grund: ein
+  unverschlüsseltes `ws://` über das Netz schickt das Token im `hello` im
+  Klartext. `wss://` ist auch auf Loopback erlaubt, und ein Pfad ändert nichts —
+  das Schema am Host entscheidet. Ein ungültiger Endpunkt endet weiter mit
+  `bc: Endpunkt ungültig:` und einem erneuten Versuch, nicht mit einem Absturz;
+  die Regel greift **vor** dem Dial und **nicht** in der Optionsseite, wo sie
+  nur das Speichern verweigern würde.
 - **Die Optionsseite bleibt abhängigkeitsfrei** (eine Datei, kein Build), und
   das Manifest ändert sich nicht.
 
@@ -61,9 +69,11 @@ Aus den Dateien gelesen, nicht geschätzt:
 
 - `bridge/config.mjs` bindet per Default `127.0.0.1:8110`; die Bridge sucht
   **keinen** freien Port und beendet sich mit `1`, wenn der belegt ist.
-- `extension/background.js` liest `endpoint` und `token` aus `storage.local`;
+- `extension/bridge.js` liest `endpoint` und `token` aus `storage.local`;
   ist einer davon leer, schreibt es **eine** Warnung (`missing settings`) und
-  verbindet **nicht**. Es gibt heute keinen Default.
+  verbindet **nicht**. Es gibt heute keinen Default. (Das war bis `docs/42` die
+  Datei `extension/background.js`; mit dem Socket zog die Zeile in den
+  Brücken-Tab. Das Kriterium 1 pinnt sie deshalb in `bridge.js`.)
 - `extension/options.js` schreibt beim Speichern `readFieldValue("endpoint").trim()`;
   ein leeres Feld speichert damit `""`.
 - `extension/options.html` trägt heute den Platzhalter
@@ -85,9 +95,9 @@ Aus den Dateien gelesen, nicht geschätzt:
 
 1. **Der Standard ist `ws://127.0.0.1:8110`, genau einmal je Datei.** Beweis —
    der Name **und** der Wert, zeilenweise gepinnt:
-   `grep -Fc 'const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";' extension/background.js`
+   `grep -Fc 'const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";' extension/bridge.js`
    ⇒ **1**; dieselbe Zeile für `extension/options.js` ⇒ **1**; dazu
-   `grep -Fc 'ws://127.0.0.1:8110' extension/background.js` ⇒ **1** (die Adresse
+   `grep -Fc 'ws://127.0.0.1:8110' extension/bridge.js` ⇒ **1** (die Adresse
    wird in der Datei nicht wiederholt — auch nicht in einem Kommentar, sonst
    zählt der Beweis zwei Zeilen und wäre falsch-rot). Die Zeile wird **wörtlich**
    gepinnt, einschließlich doppelter Anführungszeichen und eines Leerzeichens um
@@ -154,7 +164,8 @@ TAP-Kommentar den Treffer nicht verschluckt; `grep -c` mit `0` Treffern endet mi
 Exit 1 — das ist dort das Ergebnis, nicht der Fehler.
 
 **1. Hintergrund: der Standard greift vor der Leer-Prüfung.** (Umsetzer)
-`extension/background.js`: `const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";`
+`extension/background.js` — die Datei heißt seit `docs/42` `extension/bridge.js`,
+dort steht die Zeile: `const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";`
 neben `ENDPOINT_KEY`/`TOKEN_KEY` — der Kommentar darüber nennt
 `bridge/config.mjs` (`DEFAULT_BIND`) und Spec 36, wiederholt die Adresse aber
 **nicht**. In `connect()` direkt nach dem `readSettings`-`try/catch` und **vor**
@@ -323,13 +334,17 @@ Stand 2026-11-15, vor der Umsetzung:
 - **`ws://` ist unverschlüsselt, und das Token geht im `hello` mit
   (2026-11-15).** Auf einem Einzelplatzrechner ist das vertretbar; wer Port
   8110 vor der Bridge belegt, bekommt ein gültiges Token. `wss://` (§9) oder
-  Token-Rotation sind die Antworten, nicht dieses Inkrement.
+  Token-Rotation sind die Antworten, nicht dieses Inkrement. **Seit
+  2026-11-18 ist der Fernfall geschlossen:** der Dial verweigert `ws://` auf
+  jedem Nicht-Loopback-Host und nennt `wss://` und den SSH-Tunnel
+  (`INSTALL.md` §9). Offen bleibt allein der lokale Fall — dort ist der
+  Klartext auf das Loopback-Interface begrenzt.
 - **Der Endpunkt-Half der Leer-Prüfung ist toter Code (N1, 2026-11-15).**
   Nach dem Fallback kann `settings.endpoint` nicht mehr `""` sein; die Spec
   wollte die Zeile behalten. Beim nächsten Inkrement streichen — zusammen mit
   dem Log-Text „Endpunkt oder Token fehlt", der nur noch den Token meint.
 - **Zwei Trimmen (N2, 2026-11-15).** `options.js` trimmt den gespeicherten
-  Endpunkt, `background.js` nicht: ein handgepflegter Wert aus Leerzeichen wird
+  Endpunkt, `bridge.js` nicht: ein handgepflegter Wert aus Leerzeichen wird
   im Feld als Standard gezeigt und beim Verbinden verworfen. Über die
   Optionsseite nicht erreichbar (sie trimmt beim Speichern).
 - **`endpoint_withAStoredValue…` zählt die Sockets nicht (N3).** Eine doppelte

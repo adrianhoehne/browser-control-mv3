@@ -45,7 +45,7 @@ werden nicht neu vergeben.
 | `25-frame-handeln.md` | 15 | Handeln im Frame: `read`/`inspect` über `frame` |
 | `26-frame-click-type.md` | 15 | `click` und `type` im Frame |
 | `27-shadow-dom.md` | 16 | offene Schattenbäume durchdringen (`>>>`) |
-| `28-log-hygiene.md` | 18 | Debug-Block per Whitelist — **Code fertig, Spec noch `proposed`** (Amendments und Live-Messung offen) |
+| `28-log-hygiene.md` | 18 | Debug-Block per Whitelist statt Sperrliste — `active`: Amendments nachgezogen, live gemessen am 2026-11-18 |
 | `29-windows-betrieb.md` | 29 | `npm run check` ohne Shell-Werkzeuge — `scripts/check.mjs` prüft 28 Dateien, `checked 28 files` |
 | `31-youtube-recherche.md` | 17 | Recherche: das Transkript ist lesbar, Werkzeug entschieden |
 | `32-transkript-werkzeug.md` | 17 | `browser_transcript` (Teil 1) — Segmente mit Zeitstempeln |
@@ -84,15 +84,16 @@ Sicherheit und Betrieb (unten) und die Nachträge (oben).
 
 | # | Vorhaben | Warum | Größe |
 |---|---|---|---|
-| 18 | **Log-Hygiene** — Whitelist statt Sperrliste für den Debug-Block | ~~Heute ersetzt die Redaktion nur `text`; ein neues Feld landet sonst ungefiltert auf stderr.~~ **Im Code erledigt durch Spec 28** (alle vier Stufen, beide Code-Reviews `✅`); offen: Amendments, Doku-Verweise, Live-Messung | klein |
-| 23 | **Signierung/XPI, Teil 1** — die Erweiterung signieren und als XPI bauen | Sie ist temporär und nach jedem Firefox-Neustart weg | mittel |
-| 24 | **Signierung/XPI, Teil 2** — Berechtigungsseite und Dokumentation der `<all_urls>`-Reichweite | Teilstück zwei; ohne sie ist eine signierte Auslieferung nicht ehrlich | klein |
+| 18 | ~~**Log-Hygiene** — Whitelist statt Sperrliste für den Debug-Block~~ — **erledigt durch `docs/28`** (alle vier Stufen, beide Code-Reviews `✅`, Amendments nachgezogen, live gemessen am 2026-11-18) | ~~Heute ersetzt die Redaktion nur `text`; ein neues Feld landet sonst ungefiltert auf stderr.~~ Ein neues Ergebnisfeld erscheint jetzt als `"<unlisted field>"`, bis jemand es einträgt | — |
+| 23 | **Signierung/XPI, Teil 1** — die Erweiterung signieren und als XPI bauen | Sie ist temporär und nach jedem Firefox-Neustart weg. Spec: `docs/46-signierung.md` (AMO `unlisted`, Betreiberentscheid 2026-11-18) | mittel |
+| 24 | **Signierung/XPI, Teil 2** — Berechtigungsseite und Dokumentation der `<all_urls>`-Reichweite | Teilstück zwei; ohne sie ist eine signierte Auslieferung nicht ehrlich. In `docs/46` als Reichweiten-Tabelle | klein |
 | 25 | **Reichweite verkleinern (optional)** — Positivliste statt `<all_urls>` | Nur falls der Betreiber das später will; die Entscheidung von 2026-10-23 gilt bis dahin | mittel |
-| 26 | **MV3-Migration, Teil 1** — den Socket in einen dauerhaft offenen Tab verlagern | Wenn Mozilla MV2 abschaltet; Teilstück eins | mittel |
-| 27 | **MV3-Migration, Teil 2** — Manifest auf MV3, Test aus Spec 02 bewusst umstellen | Teilstück zwei, setzt 26 voraus | klein |
-| 28 | **MV3-Migration, Teil 3** — Messung: hält die Verbindung im Tab wirklich? | Teilstück drei; ohne Messung ist der Umzug eine Behauptung | klein |
-| 30 | **Windows-Betrieb, Teil 1b** — der Prozess und die Konsole | Setzt 29 voraus. Der Betreiber will pi, die Bridge und Firefox auf **einem** Windows-Rechner, und der Prozess soll aus einer **Konsole** startbar sein, nicht nur als Dienst: dafür müssen `SIGBREAK` dazukommen, das MCP-stdio im Terminal schweigen und die Amendments an `docs/18` nachgezogen werden. Spec: `docs/30-prozess-und-konsole.md` | mittel |
+| 26 | **MV3-Migration, Teil 1** — den Socket in einen dauerhaft offenen Tab verlagern | Wenn Mozilla MV2 abschaltet; Teilstück eins. Spec: `docs/42-socket-im-tab.md` | mittel |
+| 27 | **MV3-Migration, Teil 2** — Manifest auf MV3, Test aus Spec 02 bewusst umstellen | Teilstück zwei, setzt 26 voraus. Spec: `docs/43-manifest-mv3.md` | klein |
+| 28 | **MV3-Migration, Teil 3** — Messung: hält die Verbindung im Tab wirklich? | Teilstück drei; ohne Messung ist der Umzug eine Behauptung. In `docs/43` als Stufe 3 | klein |
+| 30 | ~~**Windows-Betrieb, Teil 1b** — der Prozess und die Konsole~~ — **erledigt durch `docs/30` (2026-11-18, gebaut im Rust-Port)** | ~~Setzt 29 voraus. Der Betreiber will pi, die Bridge und Firefox auf **einem** Windows-Rechner, und der Prozess soll aus einer **Konsole** startbar sein, nicht nur als Dienst: dafür müssen `SIGBREAK` dazukommen, das MCP-stdio im Terminal schweigen und die Amendments an `docs/18` nachgezogen werden.~~ `Strg+Untbr` beendet mit `received SIGBREAK, shutting down` und Exit 0 (`bridge-rs/src/main.rs:423`), das MCP-stdio startet nur noch, wenn stdin **keine** Konsole ist (`main.rs:129`, `stdio.rs:186`); der Dienst-Ersatz war schon mit `docs/38` Stufe 3 da. Offen bleibt die Messung auf einem Windows-Rechner | — |
 | 31 | ~~**Windows-Betrieb, Teil 2** — den Dienst optional einrichten, dazu der Endpunkt fürs lokale Firefox~~ — **erledigt durch `docs/38`, Stufe 3** | Der Autostart ist **entschieden und gebaut**: `deploy/windows/browser-control-bridge.xml` ist eine Task-Scheduler-Aufgabe (`AtLogOn`, `InteractiveToken`, `LeastPrivilege`) — **ohne NSSM, ohne WinSW**, ohne Adminrechte. Der lokale Endpunkt war schon mit `docs/36` entschieden (`ws://127.0.0.1:8110`, sichtbar vorbelegt), ein lokaler Caddy entfällt. Offen ist nur die Betreiber-Messung auf einem Windows-Rechner (`INSTALL.md`, Abschnitt 10) | — |
+| 32 | **Handle Good Bye** — die Bridge soll auf die Abschiedsnachricht reagieren | Die Erweiterung sendet `{"type":"goodbye"}`, bevor sie den Socket schließt (`docs/44-schalter.md`); **der Absender steht** (Stufen 1–4, 2026-11-18: `goodbye`, dann `close(1000)`, dann Tab zu, dann `bridgeEnabled = false`). Die Bridge **empfängt und ignoriert** sie heute — das ist entschieden, nicht vergessen. Was später damit geschehen soll (Logzeile? Sitzung beenden? Statuszeile?), ist offen | klein |
 
 **Geteilt am 2026-11-06.** Die Zeilen 29 und 30 waren eine Spec. Das Spec-Review-Gate
 hat sie dreimal blockiert (`docs/30-prozess-und-konsole.md`, `## Review`: L1–L6, M1–M5, N1/N2); nach `CONTRIBUTING.md`, Schritt 4, ist

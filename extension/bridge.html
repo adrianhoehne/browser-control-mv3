@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Browser Control — Bridge</title>
+    <link rel="icon" href="icons/bridge.svg" />
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        margin: 0 auto;
+        max-width: 32rem;
+        padding: 1.5rem;
+      }
+      p.hint {
+        color: #444;
+        line-height: 1.4;
+      }
+      code {
+        font-family: ui-monospace, monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Bridge</h1>
+    <p class="hint">
+      This tab holds the connection to the bridge on your machine. The agent's tools
+      run here, and the socket lives as long as this tab exists.
+    </p>
+    <p class="hint">
+      Leave it open. It is pinned, so it stays visible at the front of the tab bar.
+      Closing it is allowed — it comes back by itself, and the connection with it.
+    </p>
+    <p class="hint">
+      What is wrong when nothing connects: <code>about:debugging</code> → this
+      extension → “Inspect”, for the endpoint and the token in the options.
+    </p>
+    <script src="protocol.js"></script>
+    <script src="bridge.js"></script>
+  </body>
+</html>

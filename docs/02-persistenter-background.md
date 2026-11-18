@@ -62,6 +62,12 @@ unbrauchbar: jeder Aufruf fiele in ein Fenster, in dem niemand zuhört.
 
 ## Acceptance criteria
 
+**Der folgende Stand gilt bis `docs/43`:** die Kriterien unten beschreiben den
+Stand, in dem der Socket im Hintergrund lag und `persistent: true` ihn am Leben
+hielt. Seit `docs/43` ist das Manifest MV3, der Hintergrund ist eine Eventpage —
+die Verbindung hält jetzt der Brücken-Tab (`docs/42`). Der Messbeleg unten
+bleibt stehen: ein Messprotokoll schreibt man nicht um.
+
 Wer was fährt, ist Teil des Kriteriums: alles, was sich an der Bridge ablesen
 lässt, prüft der Orchestrator selbst — der Betreiber hat **einen** Handgriff
 (Kriterium 6). Die Reihenfolge 3 → 4 → 5 ist bindend, siehe Kriterium 5.

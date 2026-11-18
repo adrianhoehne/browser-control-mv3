@@ -273,8 +273,8 @@ Then in Firefox:
    file.
 4. Open `about:addons` in a new tab, select **Browser Control**, then select
    **Preferences**. `about:debugging` shows only “Reload” and “Remove” for a
-   temporary add-on — it has no link to the settings. (An extension icon may not
-   be in the toolbar either; `about:addons` is the reliable route.)
+   temporary add-on — it has no link to the settings, so `about:addons` is the
+   reliable route.
 5. The **endpoint** field **is pre-filled with** `ws://127.0.0.1:8110` — the
    address the bridge listens on unless you set `BC_BIND`. Leave it as it is
    while bridge and Firefox run on the same machine; change it only when the
@@ -284,6 +284,10 @@ Then in Firefox:
    server.
 7. **Save**, then **reload the extension once** in `about:debugging` — stored
    options take effect on the next connection attempt.
+8. Select the **Browser Control** icon in the toolbar to switch the extension on.
+   Off by default: nothing happens until you switch it on — no tab, no socket. The
+   crossed-out icon means “off”, the bridge icon means “connected”, the yellow bolt
+   means “on, but the bridge does not answer”.
 
 The extension ID is fixed (`browser-control@bergkaese.dev`), so endpoint and
 token stay in `storage.local` across reloads. **After a Firefox restart** the
@@ -325,8 +329,9 @@ dotfiles out, and refuses to write an archive Firefox would reject.
 3. Restart Firefox: the add-on is still there, and so are endpoint and token.
 
 **Release Firefox has no such switch.** A permanent install there needs a
-signature from AMO (`web-ext sign --channel=unlisted`), and the add-on has to be
-MV3 first — see `docs/ROADMAP.md`, rows 23, 24 and 26–28.
+signature from AMO (`web-ext sign --channel=unlisted`); the manifest has been
+MV3 since `docs/43`, so that is no longer the blocker — see `docs/ROADMAP.md`,
+rows 23 and 24.
 
 ## 5. Check it end to end
 
@@ -439,16 +444,18 @@ token.
 | `No such file or directory` for the binary in the journal | the binary was never installed — build it and run `./scripts/install.sh` (section 3) |
 | `env: node: No such file` in the journal | an old unit from before the Rust port; replace it: `cp ~/browser-control/deploy/browser-control.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user restart browser-control` |
 | `status windows=… tabs=0` | Firefox has no agent tab yet; `browser_navigate` creates one |
-| Nothing in the log, no `extension connected` | extension console (`about:debugging` → “Inspect”), not the page console. `bc: background page started`, `bc: endpoint invalid: …`, or nothing at all. Silence usually means: the token is empty, or step 4.7 (the reload) was skipped |
+| Nothing in the log, no `extension connected` | **first** the switch in the toolbar: a crossed-out icon means off, and that is the normal state after loading the extension. Then the extension console (`about:debugging` → “Inspect”), not the page console: `bc: background page started`, `bc: endpoint invalid: …`, or nothing at all. Silence after a switch-on usually means: the token is empty, or step 4.7 (the reload) was skipped |
 | `auth failed` in the bridge log | the token differs between file and extension options — section 2, “Rotating the token” |
 | `502` from a proxy | bridge not listening, or the upstream is `localhost` instead of `127.0.0.1` — section 9 |
+| `bc: ws:// ist nur für 127.0.0.1 erlaubt …` in the extension console | the endpoint names another machine over plain `ws://`, and the extension refuses that dial on purpose. Use `wss://` through Caddy, or the SSH tunnel in section 9 |
 | Tools missing in the client | the service or the extension still runs the old code: restart it / reload the extension |
 
 ## 9. Optional: a public endpoint via Caddy
 
 Only needed if the browser is on a **different** machine than the bridge and you
 want the connection to cross the network. Everything above works without Caddy
-(plain `ws://127.0.0.1:8110`).
+(plain `ws://127.0.0.1:8110`). If only **your own** browser has to reach the
+bridge, skip the certificate and use the SSH tunnel at the end of this section.
 
 The extension connects to `wss://example.com/browser-control/ws`; Caddy
 terminates TLS and forwards to the bridge on `127.0.0.1:8110`. The site block
@@ -506,6 +513,50 @@ request. Firefox speaks HTTP/1.1 for `wss://` anyway.
 | `401` | basic auth still catches it (auth at site level instead of the second `handle`) |
 | `426` | bridge alive, but it saw no upgrade request — almost always the missing `--http1.1` |
 | `502` | Caddy gets through, but the bridge is not listening on the upstream |
+
+### No certificate? Tunnel it.
+
+A TLS certificate for a bridge on another machine is work: a domain, a port 80
+challenge or a DNS record, a proxy that has to be kept running. If you only need
+**your own** browser to reach **your own** bridge, an SSH tunnel does the same
+job with one command and no certificate at all.
+
+Nothing extra runs on the machine with the bridge. On the **browser machine**:
+
+```bash
+ssh -N -L 8110:127.0.0.1:8110 <user>@<server>
+```
+
+- `-N` — open no shell, just the tunnel.
+- `-L 8110:127.0.0.1:8110` — local port `8110` on this machine is forwarded to
+  `127.0.0.1:8110` **as seen from the server**, i.e. to the bridge.
+- The command **stays open**. It is the tunnel. Run it in a second terminal, or
+  keep it alive with `tmux` or `autossh -M 0 -N -L 8110:127.0.0.1:8110
+  <user>@<server>` if it has to survive a dropped connection.
+
+Then enter `ws://127.0.0.1:8110` in the extension (section 4) — the same value as
+on a single machine. The extension allows plain `ws://` for loopback only, and
+that is exactly what it sees: the traffic leaves the browser towards `127.0.0.1`,
+and SSH encrypts it from there to the server. The token travels inside the
+tunnel. If the extension refuses the dial with
+`bc: ws:// ist nur für 127.0.0.1 erlaubt`, the endpoint still names the remote
+machine instead of the tunnel.
+
+Two limits worth knowing: the tunnel is per machine and per login — it replaces
+a certificate for **your** browser, not for several clients that should reach the
+same bridge. And it does not make the bridge reachable for anyone else; the
+bridge keeps listening on the server's loopback only.
+
+If nothing connects, check whether the tunnel is listening at all:
+
+```bash
+ss -ltn | grep 8110     # a line with 127.0.0.1:8110 means the tunnel is up
+```
+
+An empty answer means the `ssh` command is not running (or died) — the
+extension is then dialling a port nobody holds, and the bridge log stays silent
+because no connection ever arrives.
+
 
 ## 10. Windows: the binary and the Task Scheduler
 

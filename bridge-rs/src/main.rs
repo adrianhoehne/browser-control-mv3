@@ -1,8 +1,8 @@
 //! Entry point of the bridge: read configuration, refuse to start without a
 //! usable token, bind the extension listener, serve the hub on every accepted
-//! connection, serve MCP on stdin/stdout and stop cleanly on SIGTERM/SIGINT — on
-//! Windows on the one signal a console produces, Ctrl+C (`received SIGINT`; there is
-//! no SIGTERM there).
+//! connection, serve MCP on stdin/stdout — unless stdin is a console — and stop cleanly
+//! on SIGTERM/SIGINT. Windows has no SIGTERM at all and two console gestures instead:
+//! Ctrl+C (`received SIGINT`) and Ctrl+Break (`received SIGBREAK`).
 //!
 //! Stages 2a (`docs/38`) and 2b gave this file its configuration, its listener and
 //! the WebSocket codec; 2c added the socket glue for the hub — the per-connection
@@ -121,11 +121,18 @@ async fn run() -> i32 {
         hub: Arc::clone(&hub),
         log: Arc::new(|line: &str| log::log_line(line)),
     });
-    let mut stdio = tokio::spawn(stdio::serve(
-        BufReader::new(tokio::io::stdin()),
-        tokio::io::stdout(),
-        Arc::clone(&tool_context),
-    ));
+    // … but not in a console. `docs/30` is the reason: in the foreground run stdin is the
+    // operator's keyboard, and the template answered the first keypress on the JSON-RPC
+    // channel with a parse error. Every case that speaks stdio hands over a pipe, a
+    // socketpair or `/dev/null` — pi's `command` spawn, the parity driver, systemd — and
+    // all of them are "not a console", so the client path keeps its transport.
+    let mut stdio = (!stdio::stdin_is_a_console()).then(|| {
+        tokio::spawn(stdio::serve(
+            BufReader::new(tokio::io::stdin()),
+            tokio::io::stdout(),
+            Arc::clone(&tool_context),
+        ))
+    });
     let mut stdio_ended = false;
 
     // The second surface, only on request. Bounded after stdio is up, for the reason the
@@ -198,7 +205,7 @@ async fn run() -> i32 {
             // stdin ended. Whether that is a goodbye depends on what stdin *is*: a pipe or
             // a socketpair belongs to a client, `/dev/null` belongs to systemd — and a
             // service that ended on `/dev/null`'s EOF would restart in a loop.
-            ended = &mut stdio, if !stdio_ended => {
+            ended = join_stdio(stdio.as_mut()), if !stdio_ended => {
                 stdio_ended = true;
                 match ended {
                     Ok(Ok(())) => {
@@ -255,6 +262,20 @@ fn wants_http() -> bool {
 async fn join_transport(transport: Option<&mut http::Transport>) -> std::io::Result<()> {
     match transport {
         Some(transport) => transport.joined().await,
+        None => std::future::pending().await,
+    }
+}
+
+/// Waits for the stdio task, and never resolves on a console — where there is no such task.
+///
+/// The same shape as [`join_transport`], for the same reason: a branch whose subject was
+/// never started needs a future that says nothing, not an `expect` that turns a quiet
+/// console into a panic.
+async fn join_stdio(
+    stdio: Option<&mut tokio::task::JoinHandle<std::io::Result<()>>>,
+) -> Result<std::io::Result<()>, tokio::task::JoinError> {
+    match stdio {
+        Some(stdio) => stdio.await,
         None => std::future::pending().await,
     }
 }
@@ -355,27 +376,58 @@ mod stop {
 
 /// Windows has no SIGTERM, and Node never sees one there: `bridge/bridge.mjs:161`–`:162`
 /// registers `SIGTERM` and `SIGINT`, and only the second one ever fires on a console. So
-/// the line here is **`received SIGINT`** — the template's own spelling for the one signal
-/// Windows produces — and not `received SIGTERM`, which would claim a signal the platform
-/// does not have. `tokio::signal::ctrl_c()` is Ctrl+C, and it also fires when a console
-/// window is closed; Ctrl+Break is `SIGBREAK` and is deliberately *not* wired up, because
-/// the template does not handle it either (no `SIGBREAK` in `bridge.mjs`), and a second
-/// exit path nothing measures is a second exit path that can rot.
+/// the line here is **`received SIGINT`** — the template's own spelling for the signal a
+/// console produces most often — and not `received SIGTERM`, which would claim a signal the
+/// platform does not have. `tokio::signal::ctrl_c()` is Ctrl+C, and it also fires when a
+/// console window is closed.
+///
+/// **Ctrl+Break is wired up too** (`docs/30`, criterion 1): Windows produces `SIGBREAK` on
+/// the second console gesture, and the operator asked for the same ordered end on both.
+/// `docs/38`, stage 3 left it out to stay identical to the template, which handled no
+/// `SIGBREAK`; that was a parity decision, and the parity yardstick runs on Linux and
+/// cannot see either gesture. Both handlers log the same sentence and both end with 0 —
+/// the exit path is one line of `main`, so nothing new can rot. What is *not* locally
+/// measured is the keypress itself: it needs a real console window (Windows Terminal or
+/// `cmd.exe`; in mintty no `SIGBREAK` arrives) and stays the operator's measurement.
 #[cfg(not(unix))]
 mod stop {
-    pub struct Signals;
+    /// The Ctrl+Break handler, on the one family of targets that has one. Everywhere else
+    /// the signal does not exist, and a `cfg` in the field is cheaper than a second module
+    /// for a target this tree never builds.
+    #[cfg(windows)]
+    use tokio::signal::windows::CtrlBreak;
+
+    pub struct Signals {
+        #[cfg(windows)]
+        brk: CtrlBreak,
+    }
 
     impl Signals {
         pub fn register() -> std::io::Result<Signals> {
-            Ok(Signals)
+            Ok(Signals {
+                // Registered eagerly, like the unix twin: a `Ctrl+Break` during the bind
+                // must end the process with 0 as well. `ctrl_c` needs no registration —
+                // tokio installs it on first poll, and a signal cannot arrive before that
+                // on a console anyway, because the process is the one holding the terminal.
+                #[cfg(windows)]
+                brk: tokio::signal::windows::ctrl_break()?,
+            })
         }
 
-        /// No handler to register: `ctrl_c` is installed by tokio on first poll, and a
-        /// signal during the bind cannot arrive before that on a console anyway — the
-        /// process is the one holding the terminal.
+        /// The reason `main` logs, spelled the way the environment spells it: the Node
+        /// names, not "SIGINT" and "break".
         pub async fn next(&mut self) -> &'static str {
-            let _ = tokio::signal::ctrl_c().await;
-            "received SIGINT"
+            #[cfg(windows)]
+            let received = tokio::select! {
+                _ = tokio::signal::ctrl_c() => "received SIGINT",
+                _ = self.brk.recv() => "received SIGBREAK",
+            };
+            #[cfg(not(windows))]
+            let received = {
+                let _ = tokio::signal::ctrl_c().await;
+                "received SIGINT"
+            };
+            received
         }
     }
 }

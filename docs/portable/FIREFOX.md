@@ -16,10 +16,15 @@ window of `start.sh`. Keep that window open: it shows the token.
    **Preferences**. A temporary add-on has no settings link in `about:debugging`;
    this page is the only way to its settings.
 6. Enter `ws://127.0.0.1:8110` in the endpoint field.
-7. Enter the token from the `token:` line of the start window.
-8. Select **Save**.
-9. Reload the extension in `about:debugging` one time: select **Reload** next to
-   Browser Control.
+7. Select the **Browser Control** icon in the toolbar to switch the extension on.
+   The icon is crossed out while the extension is off, and **nothing happens
+   until you switch** it on — no tab, no connection. When the tab is open and the
+   bridge answers, the icon shows a bridge. A yellow bolt means: on, but the
+   bridge does not answer.
+8. Enter the token from the `token:` line of the start window.
+9. Select **Save**.
+10. Reload the extension in `about:debugging` one time: select **Reload** next to
+    Browser Control.
 
 The start window shows three lines. The line `endpoint:` carries
 `ws://127.0.0.1:8110`; this address belongs to the extension. The line `http:`

@@ -118,9 +118,9 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `25-frame-handeln.md` | `frame` für `inspect` und `eval` — zweiter Teil von Spec 24 | `active` |
 | `26-frame-click-type.md` | `frame` für `click`/`type` und die Ruhe-Erkennung nach einem Klick im adressierten Rahmen — dritter Teil der Frame-Reihe | `active` |
 | `27-shadow-dom.md` | `>>>` in `browser_inspect` durchdringt offene Schattenbäume (Piercing-Selektor) | `active` |
-| `28-log-hygiene.md` | Whitelist statt Sperrliste für den Debug-Block auf stderr | `proposed` |
+| `28-log-hygiene.md` | Whitelist statt Sperrliste für den Debug-Block auf stderr | `active` |
 | `29-windows-betrieb.md` | `npm run check` prüft die Syntax mit einem Node-Skript statt mit `find`/`xargs` — die Abnahme läuft damit auch dort, wo keine GNU-Werkzeuge installiert sind; Teil 1a der Windows-Reihe | `active` |
-| `30-prozess-und-konsole.md` | Der Bridge-Prozess läuft auf Windows ohne systemd und ohne `/proc`, startet aus einer Konsole und endet dort geordnet; Teil 1b, setzt 29 voraus | `proposed` |
+| `30-prozess-und-konsole.md` | Der Bridge-Prozess läuft auf Windows ohne systemd und ohne `/proc`, startet aus einer Konsole und endet dort geordnet; Teil 1b, setzt 29 voraus. **`active`:** `Strg+Untbr` und das stille stdout im Terminal sind gebaut (`bridge-rs/src/main.rs`, `stdio.rs`); der Windows-Lauf bleibt Betreiber-Messung | `active` |
 | `31-youtube-recherche.md` | Recherche zu Roadmap-Zeile 17: was der Agent von einem YouTube-Video heute bekommt (Transkript, Zeitbezug, Bild), welche Wege tragen und welche nicht; mit den Entscheidungen Q1–Q5 und der benannten Folge-Spec `browser_transcript` | `active` |
 | `32-transkript-werkzeug.md` | Das dreizehnte Werkzeug `browser_transcript`, Teil 1: liest das YouTube-Transkript als Segmente mit Zeitstempeln, mit `offset`/`maxChars` wie `read`; öffnet das Panel selbst und wartet auf dessen Bereitschaft | `active` |
 | `33-spurwahl.md` | `browser_transcript`, Teil 2: die Sprachspur aus der **Spurendatei** — Originalspur über den Original-Audiotrack, die en/de-Regel des Betreibers, Wahl im Untertitel-Menü nach dem Namen aus dem Modell, Lesen der signierten `api/timedtext`-Adresse, danach Spur und Abspielposition zurückstellen. **`active`:** live abgenommen am 2026-11-12 (englisch und japanisch) | `active` |
@@ -132,6 +132,11 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `39-portables-paket.md` | Portables Zip je Plattform: Server-Binary, unsignierte XPI und zwei Anleitungen (Firefox, MCP-Clients) in Englisch nach STE100 — entpacken, `start.sh`, fertig; Token entsteht im Ordner, nichts wird installiert | `active` |
 | `40-ci-ablauf.md` | Zwei Prüfungen statt einer: Unit-Tests ohne Browser bei jedem Push, dazu ein Blackbox-Workflow auf Windows — Firefox starten, XPI installieren, über MCP eine Seite öffnen, Beweis ist der Beacon der Seite selbst; dann Zip-Bau und Release | `active` |
 | `41-anleitungen.md` | Die zwei Nutzertexte im portablen Zip — `FIREFOX.md` (XPI laden, Endpunkt und Token, Warnung vor der Temporär-Eigenschaft) und `CLIENTS.md` (pi, Codex, OpenCode plus generisches Muster); Englisch nach STE100 als Schreibregel, ohne Lint | `active` |
+| `42-socket-im-tab.md` | Der Socket zieht aus dem Hintergrund in einen eigenen Tab (Roadmap 26) — die Voraussetzung für MV3; mit dem Umbau der Injection-Naht (`scripting` kennt kein `code`) und dem Ende des Wartens über zwei Kontexte | `proposed` |
+| `43-manifest-mv3.md` | Das Manifest auf MV3 (Roadmap 27+28): `scripting`, `host_permissions`, `docs/02` bewusst umgestellt — gebaut und im Browser belegt; die 8-h-Messung (Kriterium 7) bleibt auf Betreiberentscheid offen | `active` |
+| `44-schalter.md` | Der Schalter in der Symbolleiste: drei Icons (Brücke, gelber Blitz, überkreuzt), Vorgabe aus, `goodbye` an die Bridge vor dem Schließen (Roadmap 32) | `proposed` |
+| `45-injection-naht.md` | Die Injection-Naht (abgespalten von `docs/42`): Quelltext raus, `page-agent.js` plus `callId`-Nachrichten; die Frame-Inventur entsteht aus Selbstmeldungen, mit Frist und definiertem Verhalten für stumme und abgelehnte Frames | `active` |
+| `46-signierung.md` | Die Signierung (AMO, `unlisted`): Daten-Erklärung im Manifest, Reichweiten-Tabelle für `<all_urls>` und `scripting`, Schlüssel außerhalb des Repos — damit die XPI per Doppelklick installiert und behalten wird | `proposed` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.

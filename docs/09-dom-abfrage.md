@@ -126,8 +126,10 @@ Versehen hält. Bei
 `text`, `href`, `id`, `ariaLabel`, `selector` und die `classes` werden
 `"<n chars>"` — `selector` eingeschlossen, weil ein Kandidat wie
 `tag[aria-label="…"]` den Seitentext im String trägt. `index`, `tag`, `visible`,
-`disabled`, `rect`, `url`, `title` bleiben. Alles, was Elementinhalt ist, darf
-nicht auf stderr.
+`disabled`, `rect` und `url` bleiben. **`title` erscheint seit Spec 28 als Länge**
+(nachgezogen 2026-11-18): ein Seitentitel ist Seiteninhalt, und die Whitelist
+entscheidet das, nicht der Zufall einer geschriebenen Zeile. Alles, was
+Elementinhalt ist, darf nicht auf stderr.
 
 ## Extension
 
@@ -342,9 +344,12 @@ nicht auf stderr.
    Filter aus **params**, mehrzeilig → Leerzeichen wie `singleLineSelector`,
    `found` aus `result.count`, sonst `NO_FIELD`), `inspectDebugResult(result)`
    (Kopie mit `text`, `href`, `id`, `ariaLabel`, `selector` als `<n chars>`;
-   `index`, `tag`, `visible`, `disabled`, `rect`, `url`, `title` bleiben),
+   `index`, `tag`, `visible`, `disabled`, `rect`, `url` bleiben),
    `#reportInspect(params, result)` = Logzeile + Debug-Block, **kein**
    `#logDebugResult`, Zweig mit `return` in `#reportResult`.
+   *(Nachgezogen 2026-11-18 mit Spec 28: die Redaktion ist `DEBUG_WHITELIST` in
+   `bridge-rs/src/hub.rs`, `inspectDebugResult` gibt es nicht mehr — und `title`
+   ist dort eine Länge, nicht mehr voll.)*
    Proof: `node --test --test-reporter=tap test/hub.test.js | grep -E '^# (pass|fail)'`
    → `# fail 0` (heute 33); Neufälle
    `hub_requestWithInspectMethod_shouldLogOneLineWithoutElementText` (Zeile exakt

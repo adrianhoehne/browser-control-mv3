@@ -170,6 +170,25 @@ where
     output.flush().await
 }
 
+/// True when stdin is a console, which is the one case in which the stdio server stays
+/// dark.
+///
+/// The counterpart of [`stdin_is_client_channel`], and the weaker question of the two: a
+/// console is never a client channel, but this one is asked *before* the first read, while
+/// the other is asked *after* stdin has ended. `docs/30` is the reason it exists — in the
+/// foreground run stdin is the operator's keyboard, and answering the first keypress with a
+/// JSON-RPC parse error on stdout is both a lie and a broken channel.
+///
+/// `std::io::IsTerminal` needs no `cfg`: std answers it from `isatty` on unix, from
+/// `GetConsoleMode` on Windows and with `false` on a target that has neither. Every real
+/// stdio client — pi's `command` spawn, the parity driver, systemd's `/dev/null` — is not a
+/// console, so the transport they rely on is untouched.
+pub fn stdin_is_a_console() -> bool {
+    use std::io::IsTerminal;
+
+    std::io::stdin().is_terminal()
+}
+
 /// True only when stdin is a channel whose end means "the client is gone".
 ///
 /// `is_fifo()` alone would be wrong in both directions. A child started with a pipe gets a

@@ -190,10 +190,14 @@ Keine strukturelle Änderung: `request(method, params)` aus Spec 04 trägt die
 dritte Methode. Erfolgreiche `read`-Anfragen bekommen eine Logzeile
 `read tab=<id> url=<url> chars=<n> truncated=<true|false> via=<innerText|textContent>` (kein Seitentext —
 Logzeilen bleiben kurz und enthalten keine Inhalte des Betreibers). Bei
-`BC_LOG=debug` wird ebenfalls **nicht** das Ergebnis geschrieben, sondern eine
-Kopie mit `text: "<n chars>"`: sonst läge der Seiteninhalt des Betreibers auf
-stderr, was `## Touch boundary` verbietet. Das ist der Unterschied zu `status`
-und `navigate`, wo der Debug-Block das Ergebnis zeigt.
+`BC_LOG=debug` wird ebenfalls **nicht** das Ergebnis geschrieben, sondern der
+Block aus `DEBUG_WHITELIST` (`bridge-rs/src/hub.rs`): je Werkzeug nur die dort
+eingetragenen Felder, Seiteninhalt als Länge (`text`, `title` ⇒ `"<n chars>"`),
+alles Ungelistete als `"<unlisted field>"`. Sonst läge der Seiteninhalt des
+Betreibers auf stderr, was `## Touch boundary` verbietet. `status` und `navigate`
+zeigen damit ebenfalls eine Whitelist statt des ganzen Ergebnisses.
+(Nachgezogen 2026-11-18 mit Spec 28: hier stand eine Sperrliste für `text` und
+der Satz „das ist der Unterschied zu `status` und `navigate`".)
 
 ## Testing
 
@@ -419,10 +423,11 @@ und `navigate`, wo der Debug-Block das Ergebnis zeigt.
   geändert werden (er pinnt `["browser_status","browser_navigate"]` per
   `deepEqual`) — also **102 unverändert, zwei geändert**. Das Kriterium sagt es
   jetzt; ohne die Zeile wäre es nicht prüfbar.
-- **Der Debug-Block ist die Falle.** `#logDebugResult` schreibt bei
-  `BC_LOG=debug` das ganze Ergebnis — bei `read` also den Seitentext auf stderr.
-  `#reportRead` schreibt deshalb eine gekürzte Kopie (`text: "<n chars>"`);
-  Test: der Seitentext steht auch mit `BC_LOG=debug` nicht in den Logzeilen.
+- **Der Debug-Block ist die Falle.** `#reportRead` schreibt bei
+  `BC_LOG=debug` keine Kopie des Ergebnisses, sondern eine gekürzte
+  (`text: "<n chars>"`); Test: der Seitentext steht auch mit `BC_LOG=debug`
+  nicht in den Logzeilen. (Nachgezogen 2026-11-18: statt der Kopie entscheidet
+  `DEBUG_WHITELIST`, und `#logDebugResult` gibt es nicht mehr.)
 - **`innerText` ist nicht folgenlos.** Sehr große Seiten kosten hunderte
   Millisekunden im Seitenkontext; `executeScript` hat keine eigene Frist, die
   einzige Grenze ist `CALL_TIMEOUT_MS` (20 s) der Bridge. Eine danach
@@ -560,12 +565,13 @@ Stand 2026-10-23, vor der Umsetzung:
   Tokens in URLs hat, findet sie im `bridge.log`.
 - **Kriterium 6 ist erst nach dem Commit messbar** (Extension-Reload,
   pi-Neustart); die Ausnahme steht dort und in `CONTRIBUTING.md`, `## Acceptance`.
-- **Der Debug-Block redigiert per Sperrliste** (2026-10-23, Code-Review): die
-  Kopie ersetzt nur `text`; ein künftiges Feld im `read`-Ergebnis (etwa `html`
-  oder `selection`) landete bei `BC_LOG=debug` ungefiltert auf stderr. Eine
-  Whitelist aller Felder wäre fail-closed — beim nächsten Feld nachziehen.
-  (Seit dem `via`-Nachtrag sind es sechs Felder; die Sperrliste ist mit dem
-  Feld gewachsen, eine Whitelist bleibt trotzdem der bessere Weg.)
+- ~~**Der Debug-Block redigiert per Sperrliste**~~ — **geschlossen 2026-11-18
+  durch Spec 28** (`docs/28-log-hygiene.md`): der Block entsteht aus
+  `DEBUG_WHITELIST` (`bridge-rs/src/hub.rs`), ein künftiges Feld im
+  `read`-Ergebnis (etwa `html` oder `selection`) erscheint als
+  `"<unlisted field>"` statt auf stderr. Der Befund vom 2026-10-23 („die Kopie
+  ersetzt nur `text`", sechs Felder) beschreibt die gelöschte Node-Fassung
+  `bridge/hub.mjs`.
 - **`title` fällt still auf `""` zurück**, während `text`/`url` `read_failed`
   auslösen. Die Spec nennt nur `text` und `url`, also regelkonform; die
   Asymmetrie ist beim nächsten Feld geradezuziehen.
