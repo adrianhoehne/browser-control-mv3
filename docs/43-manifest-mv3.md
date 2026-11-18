@@ -87,8 +87,11 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
    `host_permissions`, kein `persistent`, `page-agent.js` in den web-accessible
    resources, falls nötig); `test/extension.test.js`-Stubs sprechen
    `tabs.executeScript` an und brauchen `scripting`.
-4. **`docs/02`:** `## Ziel` und die Kriterien bekommen „gilt bis `docs/42`";
-   der Messbeleg bleibt, wie er ist.
+4. **Action-Block und API-Namespace ziehen mit.** Hat `docs/44` schon gebaut,
+   steht `browser_action` im Manifest; MV3 verlangt `action`. Der Namespace
+   ändert sich mit: `browser.browserAction.setIcon` ist unter MV3 `undefined`,
+   das Icon bliebe stumm und kein Test merkte es. `test/manifest.test.js` bindet
+   den Schlüssel an `manifest_version`.
 
 ## Risiken
 
@@ -97,8 +100,12 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
    Deshalb ein Kriterium mit `browser.permissions.contains({origins:
    ["<all_urls>"]})` ⇒ `true`.
 2. **`page-agent.js` muss web-accessible sein**, wenn es per `files` injiziert
-   wird; fehlt der Eintrag, schlägt jede Injection fehl und alle Werkzeuge
-   antworten `not_readable`.
+   wird. Fehlt der Eintrag, schlägt jede Injection fehl und alle Werkzeuge
+   antworten `not_readable`. Stufe 1 **misst** das: einmal ohne Eintrag injizieren
+   und den Fehler notieren, dann den Eintrag setzen. Das Ergebnis ersetzt jedes
+   „falls" in dieser Spec. **`bridge.html` und `bridge.js` gehören nie dorthin**
+   — sie tragen Token und Sitzung, und ein `"resources": ["*"]` machte sie für
+   jede Webseite ladbar.
 3. **Die Eventpage schläft weiter** — sie darf es. Jeder Zustand, der einen
    Schlaf überleben muss, gehört in `storage.local` oder in den Tab; ein
    In-Memory-Feld im Hintergrund ist ab hier ein Fehler.
@@ -138,9 +145,11 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
    console.log(m.manifest_version, Boolean(m.background.persistent),
    m.permissions.includes('scripting'), (m.host_permissions||[]).includes('<all_urls>'))"`
    ⇒ `3 false true true`.
-2. **Kein `code` mehr in der Injection.** `grep -c 'tabs.executeScript'
-   extension/*.js` ⇒ **0**; `grep -c 'scripting.executeScript' extension/*.js`
-   ⇒ **≥ 1**.
+2. **Kein `code` mehr in der Injection.** `grep -Fc 'browser.tabs.executeScript('
+   extension/background.js` ⇒ **0**; `grep -Fc 'scripting.executeScript('
+   extension/bridge.js` ⇒ **≥ 1**. Die zwei Kommentare, die den alten Namen
+   nennen, werden mit umgeschrieben — sie erklären sonst einen Aufruf, den es
+   nicht mehr gibt.
 3. **Die Tests stellt der Umbau bewusst um.** `node --test --test-reporter=tap
    test/manifest.test.js` ⇒ `# fail 0`, und die vier neuen Fälle sind darin
    namentlich grün.
@@ -148,9 +157,12 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
    `# cancelled 0`; die 16 Aufrufer laufen gegen den `scripting`-Stub.
 5. **Die Parität bleibt.** `scripts/parity.sh --impl rust --check` ⇒ `7/7 wie
    erwartet`, `--self-test` ⇒ `7/7 rot wie erwartet`.
-6. **Firefox erteilt die Rechte.** (Betreiber.) In der Konsole:
-   `browser.permissions.contains({origins: ["<all_urls>"]})` ⇒ `true`; danach
-   `browser_read` auf eine echte Seite ⇒ Text, kein `not_readable`.
+6. **Firefox erteilt die Rechte.** (Betreiber.) In der Konsole der Erweiterung
+   (`about:debugging` → **Inspect** → Konsole, nicht die Seitenkonsole):
+   `browser.permissions.contains({origins: ["<all_urls>"]})` ⇒ `true`. Danach
+   `browser_read` auf eine echte Seite ⇒ Text, kein `not_readable`. Liefert
+   `contains` `false`, erteilt der Betreiber die Rechte in `about:addons` neu
+   (Add-on öffnen → Berechtigungen) — ohne sie liest nichts.
 7. **Die Verbindung hält 8 Stunden.** (Betreiber.) Wie `docs/42`, Kriterium 9:
    Zeitstempel `T1`, Fenster `T1 … T1+8 h`, `connected` ⇒ **1**,
    `disconnected` ⇒ **0**, `ss -Htn state established '( sport = :8110 )'` ⇒
@@ -173,11 +185,11 @@ Beweis: Kriterien 1, 2, 3, 4, 5.
 
 **Stufe 2 — `docs/02` nachziehen**
 
-Dateien: `docs/02-persistenter-background.md`, `docs/36-standard-endpunkt.md`,
-`docs/40-ci-ablauf.md`.
+Dateien: `docs/02-persistenter-background.md`.
 
 Die Kriterien von `docs/02` bekommen „gilt bis `docs/42`"; der Messbeleg bleibt
-**stehen** — ein Messprotokoll schreibt man nicht um.
+**stehen** — ein Messprotokoll schreibt man nicht um. `docs/36` und `docs/40`
+gehören zu `docs/42` und werden hier **nicht** angefasst.
 
 Beweis: `grep -c 'gilt bis' docs/02-persistenter-background.md` ⇒ ≥ 1, und der
 Messwert `30,0 s` steht weiterhin dort (`grep -c '30,0 s'` ⇒ ≥ 1).
@@ -204,7 +216,23 @@ Content-Script ist verworfen (Gründe im Abschnitt oben).
 
 ## Review
 
-### Runde 1 — steht aus
+### Runde 1 — 2026-11-17, `grizzled-senior-dev`: 🔧, Blocker dabei
+
+Acht Befunde: Kriterium 2 fiel heute durch (`grep -c` über mehrere Dateien,
+Kommentar-Treffer); `web_accessible_resources` widersprach sich („muss" gegen
+„falls"); der Action-Block und der API-Namespace fehlten ganz; „In der Konsole"
+nannte keinen Ort und keinen Fehlerweg; `bridge.html`/`bridge.js` gehörten
+ausdrücklich **nicht** in die web-accessible resources; Stufe 2 fasste
+`docs/36`/`docs/40` an (die gehören zu `docs/42`); `docs/02` wäre zweimal
+geschrieben worden; die Review-Zeile hatte kein Datum.
+
+**Übernommen:** Kriterium 2 mit `grep -Fc` und den zwei Kommentaren;
+`web_accessible_resources` wird in Stufe 1 **gemessen** statt vermutet, mit der
+Verbotszeile für `bridge.html`/`bridge.js`; Action-Schlüssel und
+`browser.browserAction`→`browser.action` stehen jetzt in der Umstellungsliste;
+Kriterium 6 nennt `about:debugging` → Inspect und den Weg zurück über
+`about:addons`; Stufe 2 fasst nur `docs/02` an; die Review-Zeile hat Datum und
+Verdict.
 
 ## Log
 

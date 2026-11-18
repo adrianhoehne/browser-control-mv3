@@ -12,8 +12,9 @@ gelber Blitz statt eines Kreuzes.
 
 **Warum das eine eigene Spec ist:** nichts davon fasst ein MV3-Feature an.
 `browser_action`, `browserAction.setIcon`, `onClicked` und `storage.local` gibt
-es unter MV2 genauso. Diese Spec läuft **parallel** zu `docs/42`/`docs/43` und
-braucht keine von beiden — nur den Brücken-Tab, den `docs/42` baut.
+es unter MV2 genauso. Diese Spec läuft deshalb **nach `docs/42`** (sie ändert
+`extension/bridge.js` und `test/bridge-tab.test.js`, die dort entstehen) und
+**unabhängig von `docs/43`** — sie braucht kein MV3.
 
 ## Ziel
 
@@ -87,8 +88,9 @@ Bye")** und heute offen. Diese Spec liefert nur den Absender.
    expliziten Abbruch bei `off` verbindet die Erweiterung nach dem Ausschalten
    weiter — sichtbar nur im Bridge-Log.
 2. **Ein laufender Auftrag beim Ausschalten.** Der Socket fällt mitten im
-   Auftrag; die Bridge bricht ihn mit `ExtensionUnavailable` ab
-   (`reject_all_pending`). Das ist richtig, gehört aber in die Anleitung.
+   Auftrag; die Bridge bricht ihn über `reject_all_pending` ab
+   (`HubRequestError::unavailable`, Meldung „the extension connection went
+   away"). Das ist richtig, gehört aber in die Anleitung.
 3. **`browser_status` kann „aus" nicht melden.** Die Antwortform ist
    eingefroren (`scripts/parity/expected/2-tools.txt`, `--record` verweigert).
    Der Agent sieht denselben Satz wie bei „Firefox zu". Wer das ändern will,
@@ -103,11 +105,12 @@ Bye")** und heute offen. Diese Spec liefert nur den Absender.
 
 **Erlaubt:** `extension/icons/{bridge,bridge-off,bridge-offline}.svg` (neu),
 `extension/manifest.json` (Action-Block), `extension/bridge.js` (Zustand, Icons,
-`goodbye`), `extension/background.js` (Icon beim Start setzen),
-`extension/protocol.js`, `bridge-rs/src/protocol.rs` (eine Konstante),
-`test/bridge-tab.test.js`, `test/manifest.test.js`, `test/protocol.rs`
-(Rust-Seite ist automatisch mitgeprüft), `scripts/e2e/build-test-extension.mjs`
-(dritter Anker), `docs/40`, `docs/portable/FIREFOX.md`, `docs/41`, `docs/44`,
+`goodbye`, der dritte Seam-Anker), `extension/background.js` (Icon beim Start
+setzen), `extension/protocol.js`, `bridge-rs/src/protocol.rs` (eine Konstante),
+`test/bridge-tab.test.js`, `test/extension.test.js` (die `browser`-Stubs
+brauchen `browserAction`/`action`, sonst wirft der Start), `test/manifest.test.js`,
+`test/ci/e2e.test.js` (dritter Anker), `scripts/e2e/build-test-extension.mjs`,
+`INSTALL.md`, `docs/40`, `docs/portable/FIREFOX.md`, `docs/41`, `docs/44`,
 `docs/ROADMAP.md`, `docs/README.md`, `docs/PROJECT-STATE.md`, `CHANGELOG.md`.
 
 **Nicht:** `bridge-rs/src/hub.rs` (kein Verhalten), `test/fixtures/**`,
@@ -127,12 +130,19 @@ Bye")** und heute offen. Diese Spec liefert nur den Absender.
 
 ## Acceptance criteria
 
-**Kriterien 1–4 entscheidet der Umsetzer, 5–9 der Betreiber.**
+**Kriterien 1–4 und 9 entscheidet der Umsetzer, 5–8 der Betreiber** (die
+brauchen einen echten Browser).
 
-1. **Das Icon ist da und hat kein Popup.** `node -e "const m=require('./extension/manifest.json');
-   const a=m.browser_action||m.action; console.log(Boolean(a), Boolean(a.default_popup),
-   Object.keys(a.default_icon).length)"` ⇒ `true false 3`; die drei Dateien
-   existieren (`test -f extension/icons/bridge-offline.svg` ⇒ 0).
+1. **Das Icon ist da und hat kein Popup.** Der Schlüssel hängt an der
+   Manifest-Version (MV2 ⇒ `browser_action`, MV3 ⇒ `action`), und
+   `default_icon` trägt **eine** Datei — das `off`-Icon, weil der Startzustand
+   `off` ist. Die zwei anderen Icons setzt `setIcon` zur Laufzeit.
+   `node -e "const m=require('./extension/manifest.json'); const a =
+   m.manifest_version === 2 ? m.browser_action : m.action;
+   console.log(Boolean(a), Boolean(a.default_popup))"` ⇒ `true false`;
+   `test -f extension/icons/bridge-off.svg`, `…/bridge.svg`,
+   `…/bridge-offline.svg` ⇒ je **0**. Die Zustände prüft
+   `switch_whenTheBridgeIsUnreachable_shouldShowTheBolt`, nicht das Manifest.
 2. **Die Vorgabe ist `aus`.** Frisches Profil ohne gespeicherten Wert ⇒
    `switch_onAFreshProfile_shouldBeOff` grün; kein Brücken-Tab.
 3. **Die Reihenfolge beim Ausschalten stimmt.** `switch_whenClickedOff_shouldSendGoodbyeThenClose`
@@ -174,10 +184,15 @@ Dateien: `extension/bridge.js`, `extension/background.js`,
 
 Beweis: Kriterien 2, 3, 5, 6, 7, 8.
 
-**Stufe 3 — `goodbye` und die Konstante**
+**Stufe 3 — `goodbye`, die Konstante und der dritte Anker**
 
 Dateien: `extension/protocol.js`, `bridge-rs/src/protocol.rs`,
-`test/ci/e2e.test.js` (dritter Anker), `scripts/e2e/build-test-extension.mjs`.
+`test/ci/e2e.test.js`, `scripts/e2e/build-test-extension.mjs`, `docs/40`
+(dort steht heute „prüft nur die **zwei** Anker").
+
+Der dritte Anker ist eine benannte Konstante in `extension/bridge.js`:
+`const DEFAULT_BRIDGE_ENABLED = false;` — der E2E ersetzt sie durch `true`.
+Ohne diesen Namen zählt der Anker 0 und `checkSeams` meldet „seam moved".
 
 Beweis: Kriterium 3 mit der Frame-Reihenfolge, Kriterium 4, und
 `node scripts/e2e/build-test-extension.mjs --self-check --source extension`
@@ -185,9 +200,11 @@ Beweis: Kriterium 3 mit der Frame-Reihenfolge, Kriterium 4, und
 
 **Stufe 4 — Doku**
 
-Dateien: `docs/portable/FIREFOX.md`, `docs/41-anleitungen.md`,
-`docs/ROADMAP.md` (Zeile 32 verweist auf diese Spec), `docs/PROJECT-STATE.md`,
-`CHANGELOG.md`.
+Dateien: `docs/portable/FIREFOX.md`, `docs/41-anleitungen.md`, `INSTALL.md`
+(§4: der Action-Button ist jetzt da, „an extension icon may not be in the
+toolbar" stimmt nicht mehr; §8: „silence" heißt künftig zuerst „Schalter aus"),
+`docs/40`, `docs/ROADMAP.md` (Zeile 32 verweist auf diese Spec),
+`docs/PROJECT-STATE.md`, `CHANGELOG.md`.
 
 Beweis: Kriterium 9.
 
@@ -208,7 +225,26 @@ benutzten Fenster, bei fehlendem Fenster ein neues, `goodbye` vor dem Schließen
 
 ## Review
 
-### Runde 1 — steht aus
+### Runde 1 — 2026-11-17, `grizzled-senior-dev`: 🔧, Blocker dabei
+
+Neun Befunde: „läuft parallel" stand auf dem Kopf (der Satz selbst nennt den
+Brücken-Tab aus `docs/42`); Kriterium 1 verwechselte `default_icon`-Größen mit
+Zuständen; der Manifest-Schlüssel war als Oder formuliert (`browser_action||
+action`) und hätte nach `docs/43` still das Falsche akzeptiert; die Touch
+boundary verbot `test/extension.test.js` (dessen `browser`-Stubs kein
+`browserAction` kennen) und `test/ci/e2e.test.js`; der dritte Seam-Anker war ein
+Beweis ohne Kriterium und ohne Namen; `ExtensionUnavailable` gibt es im Code
+nicht (er heißt `HubRequestError::unavailable`); Kriterium 9 braucht keinen
+Browser, stand aber bei den Betreiber-Kriterien; `docs/40` stand in der Boundary,
+aber in keiner Stufe; `INSTALL.md` fehlte ganz.
+
+**Übernommen:** Zuschnitt „nach `docs/42`, unabhängig von `docs/43"`;
+`default_icon` = das `off`-Icon, drei Dateien per `test -f`, Zustände über den
+Blitz-Fall; Schlüssel an `manifest_version` gebunden; Boundary um
+`test/extension.test.js` und `test/ci/e2e.test.js` erweitert; dritter Anker als
+`const DEFAULT_BRIDGE_ENABLED = false;` benannt und in Stufe 3 verortet; echter
+Bezeichner `HubRequestError::unavailable`; Kriteriengrenze 1–4 und 9 / 5–8;
+`docs/40` in Stufe 4; `INSTALL.md` in Boundary und Stufe 4.
 
 ## Log
 

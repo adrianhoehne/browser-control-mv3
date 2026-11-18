@@ -61,7 +61,7 @@ Reload.
 |---|---|
 | `extension/manifest.json` | `manifest_version: 2`, `background.scripts: ["protocol.js","background.js"]`, `persistent: true`, `permissions: ["tabs","storage","<all_urls>","webRequest"]`, **kein** `browser_action` |
 | `extension/background.js` | **7 032 Zeilen**, eine IIFE; Sitzung, Tab-Store, Werkzeuge, Logzeilen |
-| Socket | `let socket = null` (506), Aufbau `new WebSocket(settings.endpoint)` (619), `onSocketClosed` ab 6988, `socket = null` (6995) |
+| Socket | `let socket = null` (506), Aufbau `new WebSocket(settings.endpoint)` (618), `onSocketClosed` ab 6990, `socket = null` (6995) |
 | `injectPageCode` | **eine** Definition (2185), **16** echte Aufrufe (2039, 2086, 2943, 3128, 3304, 3357, 3717, 4726, 5450, 6718, 6720, 6736, 6747, 6821, 6840, 6866) |
 | `pageSnippetCode` | baut **Quelltext**: `(() => { ${PAGE_HELPERS_CODE} … return (${source.toString()})(${argumentList}); })()`; die drei Helfer (`describeElement`, `isVisible`, `isAddressedFrame`) reisen als **Text** mit (2229–2233, 2834) |
 | `captureTab` | eine Stelle (5083) |
@@ -144,9 +144,10 @@ nach **Inhalt**, nicht nach Position.
 
 **Erlaubt:** `extension/{bridge.html,bridge.js,background.js,manifest.json,page-agent.js}`,
 `extension/protocol.js` (nur falls nötig), `test/extension.test.js`,
-`test/manifest.test.js`, `test/bridge-tab.test.js` (neu),
-`scripts/e2e/build-test-extension.mjs`, `docs/02`, `docs/34`, `docs/36`,
-`docs/40`, `docs/42`, `docs/README.md`, `docs/PROJECT-STATE.md`, `CHANGELOG.md`.
+`test/manifest.test.js`, `test/bridge-tab.test.js` (neu), `test/ci/e2e.test.js`
+(der Seam-Fall liest den Pfad), `scripts/e2e/build-test-extension.mjs`,
+`docs/02`, `docs/34`, `docs/36`, `docs/40`, `docs/42`, `docs/README.md`,
+`docs/PROJECT-STATE.md`, `CHANGELOG.md`.
 
 **Nicht:** `bridge-rs/**` (keine Bridge-Änderung), `extension/options.*`
 (Optionsseite bleibt), `test/fixtures/**`, `scripts/parity/**`,
@@ -162,6 +163,7 @@ nach **Inhalt**, nicht nach Position.
 | `test/bridge-tab.test.js` | `bridgeTab_whenDiscarded_shouldBeReloaded` | `changeInfo.discarded` führt zum Neuaufbau |
 | `test/bridge-tab.test.js` | `bridgeTab_afterANavigationAway_shouldBeReplaced` | weg-navigierter Tab wird erkannt und ersetzt |
 | `test/bridge-tab.test.js` | `bridgeTab_shouldNeverUseAPrivateWindow` | ein privates Fenster ist keine Adresse |
+| `test/bridge-tab.test.js` | `bridgeTab_shouldNeverLandInAContainer` | der Tab entsteht im Default-Container (`cookieStoreId === "firefox-default"`) |
 | `test/extension.test.js` | die 16 Injection-Aufrufer, Harness auf `page-agent.js` umgestellt | die Werkzeuge antworten unverändert |
 | `test/extension.test.js` | `transcript_captureAndWaiter_shouldLiveInTheSameContext` | Listener und Wartender im selben Kontext (kein Promise über den Worker) |
 | `test/manifest.test.js` | die zwei `background.js`-Leser auf die neue Datei | `ALLOW_EVAL`/`ALLOW_SCREENSHOT` werden weiter gepinnt |
@@ -176,10 +178,10 @@ nach **Inhalt**, nicht nach Position.
 1. **Genau ein Brücken-Tab.** `tabs.query({url: runtime.getURL("bridge.html")})`
    ⇒ **1** nach zwei Aufrufen des Koordinators (Stub-Harness), und ⇒ **1** nach
    einem gleichzeitigen Paar (`bridgeTab_withTwoConcurrentStarts_…`).
-2. **Ein geschlossener Tab kommt zurück.** Tab schließen ⇒ binnen **10 s** legt
-   der Koordinator ihn neu an (gewählt: Eventpage-Wake ≈ 1 s plus
-   `tabs.create` plus Laden; 10 s ist die Reserve) und die Bridge loggt
-   `extension connected`.
+2. **Ein geschlossener Tab kommt zurück.** Im Harness `tabs.onRemoved` feuern ⇒
+   genau **ein** `tabs.create`. Die Zeit (10 s) und die Logzeile prüft der
+   Betreiber in Kriterium 11 — in Stufe 1 ist das Manifest noch MV2 mit
+   `persistent: true`, eine Eventpage gibt es dort nicht.
 3. **Ein verworfener Tab kommt zurück.** `browser.tabs.discard(tabId)` im
    Harness ⇒ `tabs.onUpdated` mit `changeInfo.discarded` ⇒ Reload; die Bridge
    loggt `disconnected` und danach `connected`.
@@ -212,9 +214,10 @@ nach **Inhalt**, nicht nach Position.
     Sitzungswiederherstellung plus Koordinator).
 12. **Der Mitschnitt wartet im selben Kontext.** (Betreiber.) Eine Seite mit
     `api/timedtext`-Anfrage laden, **30 s** warten (Hintergrund schläft), dann
-    `browser_transcript` ⇒ die Original-Adresse wird gefunden. Als
-    Negativkontrolle: Adresse **nicht** vorhanden ⇒ die Antwort heißt
-    `no_address` (nicht `no_transcript_panel`).
+    `browser_transcript` ⇒ die Original-Adresse wird gefunden. Das entscheidet
+    das Kriterium. Die Negativkontrolle (Adresse **nicht** vorhanden ⇒
+    `no_address`, nicht `no_transcript_panel`) ist ein Regressionswächter: das
+    Verhalten ist schon heute so, es belegt den Umzug nicht.
 13. **Die 30-Sekunden-Grenze fällt.** (Betreiber.) Nach **5 min** ohne
     jede Interaktion antwortet `browser_status` noch — das war unter MV2 nach
     30 s vorbei.
@@ -233,6 +236,9 @@ Der Tab entsteht, hält den Socket und führt die Werkzeuge aus; der Hintergrund
 legt ihn an und hält ihn. **Stufe 1 und der Seam-Umzug sind ein Commit** — sonst
 ist `npm run test:ci` rot, weil `checkSeams` seine zwei Zeilen nicht mehr findet.
 
+`docs/36` (Kriterium 1 pinnt die Endpunkt-Zeile in `background.js`) und `docs/40`
+(Ankertabelle) ziehen **im selben Commit** mit um — der Seam-Fall liest den Pfad.
+
 Beweis: Kriterien 1, 2, 4, 6, 7, 8.
 
 **Stufe 2 — die Injection-Naht**
@@ -246,8 +252,9 @@ kein `code` mehr. Das ist die Vorbereitung für `docs/43` und **muss** hier
 passieren, weil `--record` der Parität verweigert und ein späterer Umbau sonst
 mit dem Manifest-Umzug zusammenfällt.
 
-Beweis: Kriterium 6 mit den 16 Aufrufern; `grep -c 'code:' extension/background.js`
-⇒ **0** für den Injection-Pfad.
+Beweis: Kriterium 6 mit den 16 Aufrufern; `grep -Fc 'browser.tabs.executeScript'
+extension/background.js` ⇒ **0** (ein `grep 'code:'` zählt 30 Treffer, davon
+Fehlercodes — es wäre ein Beweis, der nie grün wird).
 
 **Stufe 3 — der Mitschnitt zieht mit**
 
@@ -272,7 +279,7 @@ Beweis: Kriterien 9, 10, 11 mit Zeitstempeln aus dem Bridge-Log.
 | `docs/34-spurendatei-beobachten.md` | `## Bekannte Lücken` | der Mitschnitt lebt jetzt im Brücken-Tab; die Lücke „läuft nur, solange der Tab lebt" tritt an ihre Stelle |
 | `docs/36-standard-endpunkt.md` | Kriterium 1 | es pinnt `const DEFAULT_ENDPOINT = …` in `extension/background.js`; nach dem Umzug steht die Zeile in `bridge.js` |
 | `docs/40-ci-ablauf.md` | Ankertabelle | die zwei Anker liegen in `extension/bridge.js`; `test/ci/e2e.test.js` prüft Pfad **und** Inhalt |
-| `INSTALL.md` | §4 Schritt 4.7, §8 „Silence usually means …" | der Endpunkt ist nach dem Umzug derselbe; „silence" heißt künftig **nicht mehr** „Icon nicht geklickt" (das ist `docs/44`) |
+| `INSTALL.md` | §8 „Silence usually means …" | gehört zu `docs/44`: die häufigste Ursache ist dort der ausgeschaltete Schalter |
 
 ## Bekannte Lücken
 
