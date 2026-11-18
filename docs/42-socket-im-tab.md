@@ -111,7 +111,7 @@ in `args` nicht mit. Damit ist `pageSnippetCode` nicht „umgestellt", sondern
 
 - eine **Content-Script-Datei** `page-agent.js` mit den drei Helfern und einem
   Dispatcher,
-- geladen als Datei (`tabs.executeScript({file})` unter MV2, `scripting.executeScript({files})` unter MV3); `func` scheidet aus, weil die drei Helfer sonst wieder als Text mitreisen müssten,
+- geladen als Datei (`tabs.executeScript({file})` unter MV2, `scripting.executeScript({files})` unter MV3); `func` scheidet aus: sonst reisen die drei Helfer wieder als Text mit,
 - der Aufruf übergibt `{op, args}` als Nachricht, die Antwort kommt als
   Rückgabewert des Dispatchers.
 
@@ -183,7 +183,7 @@ nach **Inhalt**, nicht nach Position.
 **Kriterien 1–8 entscheidet der Umsetzer, 9–13 der Betreiber** (`CONTRIBUTING.md`:
 „Where a criterion can only be decided in a real browser, the spec says so").
 
-1. **Genau ein Brücken-Tab, und er ist angepinnt.**
+1. **Genau ein Brücken-Tab, angepinnt.**
    `tabs.query({url: runtime.getURL("bridge.html")})` ⇒ **1** nach zwei Aufrufen
    des Koordinators (Stub-Harness) und ⇒ **1** nach einem gleichzeitigen Paar
    (`bridgeTab_withTwoConcurrentStarts_…`); sein `pinned` ⇒ **true**.
