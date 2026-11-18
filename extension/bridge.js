@@ -80,6 +80,8 @@
   // `BC_PROTOCOL` (which the Rust side mirrors).
   const LEAVE_MESSAGE = "bc:leave";
   const CONNECTION_MESSAGE = "bc:connection";
+  // The coordinator's question after a wake, when its own memory of the socket is gone.
+  const STATE_QUERY_MESSAGE = "bc:state?";
 
   // Only the default container is exposed to the agent: a tab in a
   // multi-account container carries its own cookie jar and is logged in nowhere.
@@ -5130,9 +5132,21 @@
    * matches by `callId` and belongs to the injection seam (spec 45), this one matches
    * by `type`. Returning the promise is how a MV2 listener answers, and that answer is
    * what the coordinator waits for before it closes the tab.
+   *
+   * Two answer styles, because the two questions are different: goodbye is a `close` this
+   * page has to finish, so it answers with its promise; the state question is answered on
+   * the spot, which `sendResponse` can do — `true` keeps the channel open for the one
+   * turn Firefox takes to deliver it.
    */
   function listenForTheCoordinator() {
-    browser.runtime.onMessage.addListener((message) => {
+    browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+      if (message?.type === STATE_QUERY_MESSAGE) {
+        // The coordinator woke up blind: the socket is this page's, so this page is the
+        // only one that can answer. `socket` is set from the first dial on, which is
+        // exactly what the toolbar's third state means: on, and not yet given up.
+        sendResponse({ connected: socket !== null });
+        return true;
+      }
       if (message?.type !== LEAVE_MESSAGE) return undefined;
       return leave();
     });

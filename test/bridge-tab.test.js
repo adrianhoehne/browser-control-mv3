@@ -46,6 +46,8 @@ const PRIVATE_COOKIE_STORE_ID = "firefox-private";
 const FOREIGN_URL = "https://example.org/";
 const FIRST_WINDOW_ID = 101;
 const PRIVATE_WINDOW_ID = 201;
+// The tab a wake finds: it was created by the coordinator that is no longer loaded.
+const RUNNING_TAB_ID = 401;
 const ICON_ON = "icons/bridge.svg";
 const ICON_OFF = "icons/bridge-off.svg";
 const ICON_OFFLINE = "icons/bridge-offline.svg";
@@ -146,6 +148,10 @@ function createFakeBrowser({
   const updatedListeners = [];
   const startupListeners = [];
   const sockets = [];
+  // Held state answers: the coordinator asked, the page answered, and the answer is still
+  // on its way. The only way to prove "a report overtook the query" is to decide when that
+  // answer lands.
+  const stateAnswerGate = { holding: false, waiting: [] };
   let nextTabId = 900;
   let nextWindowId = 500;
 
@@ -233,6 +239,23 @@ function createFakeBrowser({
   }
 
   /**
+   * One listener, one answer — whichever of the two styles it uses.
+   *
+   * `bridge.js` needs both: `bc:leave` returns its promise (the answer the coordinator
+   * awaits before it closes the tab), `bc:state?` answers through `sendResponse` and
+   * returns `true`, which is the only form that survives the end of its own turn.
+   */
+  function askListener(listener, message) {
+    return new Promise((resolve) => {
+      const sendResponse = (response) => resolve(response);
+      const returned = listener(message, { id: EXTENSION_ORIGIN }, sendResponse);
+      // `true` promises an answer on `sendResponse`; one that already came resolved this
+      // promise while the listener was still running.
+      if (returned !== true) resolve(returned);
+    });
+  }
+
+  /**
    * One extension context answering another — the way `runtime.sendMessage` behaves.
    *
    * No receiver means a rejection ("Could not establish connection"), which is the path
@@ -245,10 +268,38 @@ function createFakeBrowser({
       throw new Error("Could not establish connection. Receiving end does not exist.");
     }
     for (const { listener } of receivers) {
-      const answer = await listener(message, { id: EXTENSION_ORIGIN });
+      const answer = await askListener(listener, message);
       if (answer !== undefined) return answer;
     }
     return undefined;
+  }
+
+  /**
+   * `tabs.sendMessage(tabId, message)`: the coordinator asking the tab's page.
+   *
+   * The tab store decides whether there is a tab at all, and the listeners of the other
+   * context decide whether there is a page in it — a tab that was created but whose page
+   * has not loaded yet is a rejection, which is exactly the case the coordinator has to
+   * turn into the bolt.
+   */
+  async function sendMessageToTab(from, tabId, message) {
+    record(from, "tabs.sendMessage", { tabId, message });
+    const receivers = listeners.filter((entry) => entry.side !== from);
+    if (!tabById.has(tabId) || receivers.length === 0) {
+      throw new Error("Could not establish connection. Receiving end does not exist.");
+    }
+    let answer;
+    for (const { listener } of receivers) {
+      const candidate = await askListener(listener, message);
+      if (candidate !== undefined) {
+        answer = candidate;
+        break;
+      }
+    }
+    if (stateAnswerGate.holding) {
+      await new Promise((release) => stateAnswerGate.waiting.push(release));
+    }
+    return answer;
   }
 
   function makeToolbar(name, side) {
@@ -323,8 +374,7 @@ function createFakeBrowser({
           return [...tabById.values()].filter((tab) => tab.url === query.url).map((tab) => ({ ...tab }));
         },
         create: async (properties) => {
-          record(side, "tabs.create", { properties });
-          const window = requireWindow(properties.windowId);
+          record(side, "tabs.create", { properties });          const window = requireWindow(properties.windowId);
           // Firefox refuses to put an extension tab into a private window unless the
           // extension was granted private-browsing access. The bridge never asks.
           if (window.incognito) throw new Error("tabs.create: private window");
@@ -347,6 +397,7 @@ function createFakeBrowser({
           if (tab.reloadFails === true) throw new Error("tabs.reload: discarded");
           tab.discarded = false;
         },
+        sendMessage: (tabId, message) => sendMessageToTab(side, tabId, message),
         onRemoved: {
           addListener: (listener) => {
             removedListeners.push(listener);
@@ -405,6 +456,14 @@ function createFakeBrowser({
     click: () => {
       for (const listener of clickListeners) listener({}, {});
     },
+    /** Holds the next answer to `tabs.sendMessage` until `releaseStateAnswers`. */
+    holdStateAnswers: () => {
+      stateAnswerGate.holding = true;
+    },
+    releaseStateAnswers: () => {
+      stateAnswerGate.holding = false;
+      for (const release of stateAnswerGate.waiting.splice(0)) release();
+    },
     fireStartup: () => {
       for (const listener of startupListeners) listener();
     },
@@ -433,6 +492,17 @@ async function settleAsyncWork(rounds = 3) {
  */
 async function startCoordinator(options = {}) {
   const fake = createFakeBrowser({ ...options, settings: options.settings ?? CONNECTED_SETTINGS });
+  return startCoordinatorRealm(fake);
+}
+
+/**
+ * The coordinator in a fresh realm, on a browser that may already be running.
+ *
+ * That second half is what a wake is: MV3 unloads the background page after idle, and what
+ * comes back has the same windows, the same tab and the same socket — and none of the
+ * memory the old context had.
+ */
+async function startCoordinatorRealm(fake) {
   const consoleLines = [];
   const sandbox = vm.createContext({
     browser: fake.browserFor("coordinator"),
@@ -473,6 +543,35 @@ function startBridgePage(fake, { timers = createTimerStub() } = {}) {
   vm.runInNewContext(PROTOCOL_SOURCE, context, { filename: "extension/protocol.js" });
   vm.runInNewContext(PAGE_SOURCE, context, { filename: "extension/bridge.js" });
   return { sockets, consoleLines, timers };
+}
+
+/**
+ * A browser that is already running: a pinned bridge tab, and no coordinator.
+ *
+ * That is what a wake finds — a browser and a tab that never stopped — and the reason its
+ * `connected` is a default rather than an observation. `page: false` models the tab of the
+ * same name whose page has not loaded yet; `openSocket: false` leaves the socket dialling,
+ * which is a page a case can still take up or down; `gateAnswer: true` holds the answer to
+ * the state question until the case releases it.
+ */
+async function startRunningBridge({ page = true, openSocket = true, gateAnswer = false } = {}) {
+  const fake = createFakeBrowser({
+    windows: [{ id: FIRST_WINDOW_ID, focused: true }],
+    tabs: [{ id: RUNNING_TAB_ID, url: BRIDGE_URL, windowId: FIRST_WINDOW_ID, pinned: true }],
+    settings: CONNECTED_SETTINGS,
+  });
+  if (!page) {
+    if (gateAnswer) fake.holdStateAnswers();
+    return { fake };
+  }
+  const started = startBridgePage(fake);
+  await settleAsyncWork(4);
+  // A socket that opens here opens while nobody is listening: the report goes nowhere,
+  // which is the defect these cases are about.
+  if (openSocket) started.sockets[0].open();
+  await settleAsyncWork(4);
+  if (gateAnswer) fake.holdStateAnswers();
+  return { fake, page: started };
 }
 
 /** The index of the first call recorded under `method`, or `-1`. */
@@ -879,6 +978,90 @@ test("switch_whenOff_shouldNotReconnect", async () => {
   assert.deepEqual(page.timers.pendingDelays(), []);
   assert.equal(page.sockets.length, 1);
   assert.equal(start.fake.storage().bridgeEnabled, false);
+});
+
+/* ------------------------------------------------- the icon after a wake */
+
+test("icon_whenTheCoordinatorWakes_shouldAskThePageForTheState", async () => {
+  // GIVEN a running bridge: a pinned tab whose page opened its socket while no
+  // coordinator was listening — the report of that went nowhere, and the old context took
+  // its `connected` with it when MV3 unloaded it,
+  const { fake } = await startRunningBridge();
+
+  // WHEN the coordinator wakes,
+  const { consoleLines } = await startCoordinatorRealm(fake);
+
+  // THEN it asked the tab's page for the state: the page only ever reports *changes*, so
+  // a wake that did not ask would never hear about this socket at all,
+  const queries = fake.callsTo("tabs.sendMessage");
+  assert.equal(queries.length, 1, "a wake must ask exactly once");
+  assert.equal(queries[0].tabId, RUNNING_TAB_ID);
+  assert.equal(queries[0].message.type, "bc:state?");
+
+  // AND the question is not a failure: nothing is logged about a page that answered.
+  assert.deepEqual(consoleLines, []);
+});
+
+test("icon_whenThePageReportsConnectedAfterAWake_shouldShowTheBridge", async () => {
+  // GIVEN a running bridge whose page holds an open socket, and a coordinator that was
+  // woken into it — the state exists, but only in the tab,
+  const { fake } = await startRunningBridge();
+
+  // WHEN the coordinator wakes,
+  await startCoordinatorRealm(fake);
+
+  // THEN the toolbar shows the bridge — the state the page reports, taken over from the
+  // page — and not the bolt an empty `connected` would paint,
+  assert.equal(lastIcon(fake), ICON_ON);
+  assert.match(lastTitle(fake), /verbunden/);
+
+  // AND it painted exactly once: asking before painting is what keeps the bolt off the
+  // toolbar in the first place instead of correcting it a moment later.
+  assert.deepEqual(
+    fake.callsTo("setIcon").map((call) => call.details.path),
+    [ICON_ON],
+  );
+});
+
+test("icon_whenThePageDoesNotAnswer_shouldShowTheBolt", async () => {
+  // GIVEN a bridge tab whose page has not loaded yet — no listener, so no answer,
+  const { fake } = await startRunningBridge({ page: false });
+
+  // WHEN the coordinator wakes,
+  const { consoleLines } = await startCoordinatorRealm(fake);
+
+  // THEN the bolt: an on extension without a connection is a normal state on every wake,
+  // not a failure worth a line in the console,
+  assert.equal(lastIcon(fake), ICON_OFFLINE);
+  assert.deepEqual(consoleLines, []);
+
+  // AND the unanswered question cost exactly one paint, so nothing flickered.
+  assert.equal(fake.callsTo("setIcon").length, 1);
+});
+
+test("icon_whenAKnownStateArrives_shouldNotBeOverwrittenByTheQuery", async () => {
+  // GIVEN a coordinator that woke and whose question is still on its way — the page has
+  // answered "connected", but that answer has not landed yet,
+  const { fake, page } = await startRunningBridge({ openSocket: false, gateAnswer: true });
+  await startCoordinatorRealm(fake);
+  assert.equal(fake.callsTo("setIcon").length, 0, "the wake must wait for the state");
+
+  // ... and the socket opens and dies while the answer is in flight, and the page reports
+  // both — two reports, both newer than the answer from before them,
+  page.sockets[0].open();
+  await settleAsyncWork(4);
+  assert.equal(lastIcon(fake), ICON_ON);
+  page.sockets[0].dropConnection();
+  await settleAsyncWork(4);
+  assert.equal(lastIcon(fake), ICON_OFFLINE);
+
+  // WHEN the stale "connected" answer finally arrives,
+  fake.releaseStateAnswers();
+  await settleAsyncWork(4);
+
+  // THEN it is ignored: a state that came from a report is never overwritten by a question
+  // that was asked before the report. The toolbar keeps the bolt.
+  assert.equal(lastIcon(fake), ICON_OFFLINE);
 });
 
 test("action_namespace_shouldFollowTheManifestVersion", async () => {

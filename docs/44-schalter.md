@@ -258,6 +258,27 @@ Bezeichner `HubRequestError::unavailable`; Kriteriengrenze 1–4 und 9 / 5–8;
 
 ## Log
 
+- **2026-11-18, Defekt gegen Kriterium 6 behoben — der Blitz log, obwohl die
+  Verbindung stand:** Live-Befund bei `0.6.0` auf `main`, die Bridge loggte
+  fortlaufend `extension connected` und jedes Werkzeug antwortete, das Icon
+  zeigte aber `icons/bridge-offline.svg`. **Ursache:** der Koordinator ist unter
+  MV3 eine Eventpage und wird nach Leerlauf entladen; sein `connected` ist
+  reiner Speicherzustand, also nach jedem Aufwachen wieder `false`. Die Seite
+  meldet ihren Zustand nur **bei Änderung** (`reportConnection`), und eine
+  Meldung an einen schlafenden Koordinator ist verloren. **Behebung:** der
+  Koordinator fragt beim Start/Aufwachen nach (`browser.tabs.sendMessage`,
+  `{type: "bc:state?"}`) und übernimmt die Antwort `{connected}` — erst dann
+  setzt er Icon und Titel, damit nichts flackert; ein Zustand aus einer Meldung
+  wird **nicht** überschrieben, und Tab ohne Antwort ⇒ `false` ohne Logzeile.
+  Die Seite beantwortet die Frage in `listenForTheCoordinator`. Fälle:
+  `icon_whenTheCoordinatorWakes_shouldAskThePageForTheState`,
+  `icon_whenThePageReportsConnectedAfterAWake_shouldShowTheBridge`,
+  `icon_whenThePageDoesNotAnswer_shouldShowTheBolt`,
+  `icon_whenAKnownStateArrives_shouldNotBeOverwrittenByTheQuery` und
+  `state_whenAskedByTheCoordinator_shouldAnswerWithTheSocketState`.
+  **Mutationsprobe:** die Nachfrage beim Aufwachen entfernt ⇒ die beiden
+  `…Wakes…`/`…ReportsConnectedAfterAWake…`-Fälle rot; zurückgebaut.
+
 - **2026-11-18, Stufen 1–4 gebaut** (nicht committet):
   `extension/icons/{bridge,bridge-off,bridge-offline}.svg` (32 × 32,
   `context-fill`, rotes Kreuz, gelber Blitz), `browser_action` mit

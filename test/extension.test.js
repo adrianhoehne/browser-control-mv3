@@ -594,12 +594,35 @@ function createPageAgentChannel(config = null) {
     if (config?.advanceClocks !== false) await letPageClocksRun(indexes);
   }
 
+  /**
+   * The coordinator's side of `runtime.onMessage`: one extension-internal message into the
+   * page's listeners, its answer back.
+   *
+   * Both answer styles are modelled, because `bridge.js` uses both: the returned promise of
+   * `bc:leave`, and `sendResponse` plus `true` of `bc:state?` — the form a listener has to
+   * use when it answers before its own turn ends.
+   */
+  async function askTheBridge(message) {
+    for (const listener of bridgeListeners) {
+      const answer = await new Promise((resolve) => {
+        const sendResponse = (response) => resolve(response);
+        const returned = listener(JSON.parse(JSON.stringify(message)), { id: "coordinator" }, sendResponse);
+        // `true` announces the answer on `sendResponse`; one that already came resolved
+        // this promise while the listener was still running.
+        if (returned !== true) resolve(returned);
+      });
+      if (answer !== undefined) return answer;
+    }
+    return undefined;
+  }
+
   return {
     answers,
     calls,
     realms,
     inject,
     deliver,
+    askTheBridge,
     addBridgeListener: (listener) => bridgeListeners.add(listener),
     /** The ops the bridge asked for, in the order it asked — settle before read, say. */
     ops: () => calls.map((call) => call.message.op),
@@ -2618,6 +2641,24 @@ test("switch_afterTheSocketOpens_shouldReportTheConnection", async () => {
     type: "bc:connection",
     connected: false,
   });
+});
+
+test("state_whenAskedByTheCoordinator_shouldAnswerWithTheSocketState", async () => {
+  // GIVEN a switched-on extension with an open socket,
+  const tabs = createTabsStub();
+  await startBackground({ settings: { endpoint: ENDPOINT, token: TOKEN }, tabs });
+  const socket = await openSocket();
+
+  // WHEN the coordinator wakes up blind and asks the page — the coordinator is an MV3
+  // event page and forgets everything, the socket is the page's —
+  // THEN the answer is `true`: the state the page reports, not a default,
+  assert.equal(inThisRealm(await tabs.channel.askTheBridge({ type: "bc:state?" })).connected, true);
+
+  // ... and WHEN the socket goes away again, the same question answers `false`. A page
+  // that kept answering `true` would leave the bridge icon hanging over a dead socket.
+  socket.fail();
+  await settleAsyncWork();
+  assert.equal(inThisRealm(await tabs.channel.askTheBridge({ type: "bc:state?" })).connected, false);
 });
 
 test("connect_withUnparseableEndpoint_shouldReportOnceAndScheduleReconnect", async () => {

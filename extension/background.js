@@ -39,6 +39,9 @@
   // frame ever reaches the bridge.
   const LEAVE_MESSAGE = "bc:leave";
   const CONNECTION_MESSAGE = "bc:connection";
+  // The question this page has to ask after every wake, because the page only ever
+  // reports *changes* (see `learnConnectionState`).
+  const STATE_QUERY_MESSAGE = "bc:state?";
   // Firefox's default container. The bridge tab must not live in a container: it
   // would disappear from `isDefaultContainerTab` in the status answer, and the
   // operator's container selection is theirs, not ours.
@@ -75,6 +78,16 @@
   // flags exist for the icon; the truth about the socket stays in the tab.
   let enabled = DEFAULT_BRIDGE_ENABLED;
   let connected = false;
+  // Whether `connected` means anything. Under MV3 this page is unloaded after idle, and
+  // what comes back starts at `false` by accident, not by observation — an extension that
+  // painted the bolt from that would show "no connection" next to a perfectly healthy one
+  // (spec 44: the icon shows the state). A report or the answer to `STATE_QUERY_MESSAGE`
+  // is what makes the flag mean something.
+  let connectionKnown = false;
+  // One question at a time: `runtime.onStartup` and the start at the bottom of this file
+  // both arrive on a wake, and two queries for one answer are two chances to be overtaken
+  // by a report.
+  let stateQuery = null;
   // One switch at a time: two clicks in the same turn would otherwise both read the
   // state from before the first one and repeat its transition.
   let switchTail = Promise.resolve();
@@ -207,11 +220,59 @@
     }
   }
 
+  /**
+   * The socket state as the page last told it, asked once per wake.
+   *
+   * Cheap when a report already arrived: a `bc:connection` message is newer news than any
+   * question, so a known state is neither asked about nor overwritten.
+   */
+  function learnConnectionState() {
+    if (connectionKnown) return Promise.resolve();
+    if (stateQuery === null) {
+      stateQuery = adoptConnectionState().finally(() => {
+        stateQuery = null;
+      });
+    }
+    return stateQuery;
+  }
+
+  async function adoptConnectionState() {
+    const answered = await askThePageForTheState();
+    // A report that landed while the question was in flight is newer than the answer it
+    // set out to replace. Letting the answer win would paint the bolt over a connection
+    // that came up during the question.
+    if (connectionKnown) return;
+    connected = answered;
+    connectionKnown = true;
+  }
+
+  /**
+   * The one question this page asks the tab: does your socket stand?
+   *
+   * Every way of failing answers `false`: a tab that is not there has no socket, and a page
+   * that did not answer is no evidence of one. Silent on purpose — a tab that is still
+   * loading answers this question on every wake, and a warning per wake would be noise
+   * next to a bridge that is fine.
+   */
+  async function askThePageForTheState() {
+    if (bridgeTabId === null) return false;
+    try {
+      const answer = await browser.tabs.sendMessage(bridgeTabId, { type: STATE_QUERY_MESSAGE });
+      return answer?.connected === true;
+    } catch {
+      return false;
+    }
+  }
+
   /** The state on startup: read, then either build the tab or make sure there is none. */
   async function start() {
     enabled = (await readEnabled()) === true;
     if (enabled) {
       await ensureBridgeTab();
+      // Before the icon, always: the tab holds the only truth about the socket and a wake
+      // has forgotten it. Asking first means one paint — not a bolt that gets corrected a
+      // moment later.
+      await learnConnectionState();
     } else {
       // A tab can outlive the switch that opened it (an extension reload while the
       // store was reset). Off means off, so it goes.
@@ -472,6 +533,9 @@
    */
   browser.runtime.onMessage.addListener((message) => {
     if (message?.type !== CONNECTION_MESSAGE) return undefined;
+    // A report settles the question, including when it repeats the value this page
+    // already had: from here on, `connected` is observed and not a default.
+    connectionKnown = true;
     const next = message.connected === true;
     if (next === connected) return undefined;
     connected = next;
