@@ -245,13 +245,17 @@ Die Injection-Naht folgt als `docs/45`.
 
 Beweis: Kriterien 1, 2, 4, 6, 7, 8.
 
-**Stufe 2 — der Mitschnitt zieht mit**
+**Stufe 2 — der Mitschnitt zieht mit** *(gebaut 2026-11-17)*
 
 Dateien: `extension/bridge.js` (Listener und Wartender), `extension/background.js`
 (Listener raus), `test/extension.test.js` (`transcript_captureAndWaiter_…`),
 `docs/34` (`## Bekannte Lücken`), `docs/02` (Verweis).
 
-Beweis: Kriterien 12, 13; und die bestehenden Transkript-Fälle bleiben grün.
+Beweis: Kriterium 12 im Harness (`transcript_captureAndWaiter_shouldLiveInTheSameContext`,
+`transcript_capture_whenTheTabGoesAway_shouldNotResolveWithAGhostEntry`) — **gebaut**:
+`background.js` hat 0 `webRequest`-Vorkommen, `bridge.js` genau einen Listener, und
+die Mutationsprobe (Listener stillgelegt bzw. das Wecken der Wartenden
+auskommentiert) macht den Fall rot. 504 Node-Fälle grün.
 
 **Stufe 3 — die Messung**
 

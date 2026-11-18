@@ -567,7 +567,8 @@ zuerst, Videowechsel danach).
 
 ## Bekannte Lücken
 
-Stand 2026-11-12, vor der Umsetzung:
+Stand 2026-11-12, vor der Umsetzung; der Ortswechsel vom 2026-11-17 steht im
+nächsten Abschnitt.
 
 - **Der Kern war unbelegt und ist jetzt belegt:** `webRequest` sieht die
   `timedtext`-Anfrage (Kriterium 8 und 9 am 2026-11-12), obwohl `performance`
@@ -583,6 +584,34 @@ Stand 2026-11-12, vor der Umsetzung:
   ohne dass der Agent etwas falsch gemacht hat.
 - **Die Berechtigung ist sichtbar.** Firefox zeigt sie im Profil; der Agent
   schaltet sie nie selbst, sie steht im Manifest.
+
+## Bekannte Lücken: Nach dem Umzug in den Brücken-Tab (2026-11-17)
+
+`docs/42`, Stufe 2 hat den Mitschnitt aus der Hintergrundseite geholt. Die Lücke
+ist damit eine andere geworden, nicht kleiner.
+
+- **Der Mitschnitt lebt im Brücken-Tab, nicht mehr im Hintergrund.** Listener
+  (`browser.webRequest.onBeforeRequest.addListener`) und Wartender
+  (`transcriptCaptionWaitFor`) liegen im **selben** Kontext; es gibt kein
+  Promise über einen Kontext, der verschwinden kann. Beweis:
+  `transcript_captureAndWaiter_shouldLiveInTheSameContext` in
+  `test/extension.test.js`; `background.js` hat keinen `webRequest`-Aufruf mehr
+  (`grep -Fc 'webRequest' extension/background.js` ⇒ 0).
+- **Die Lücke heißt jetzt „läuft nur, solange der Tab lebt“.** Wird der
+  Brücken-Tab verworfen, neu geladen oder geschlossen, ist die Liste des
+  Mitschnitts weg — sie war nie irgendwo gespeichert. Ein laufendes Warten
+  stirbt mit dem Tab, statt aus einem zweiten Kontext weiterzuholen. Der Preis
+  ist bezahlbar, weil der Weg den Mitschnitt selbst neu erzwingt: nach einem
+  Sprung fragt der Player erneut, und der Wartende sieht diese Anfrage. Der
+  Fehlerfall bleibt benannt (`transcript_failed`, „Spurendatei … nicht
+  gefunden“), es gibt keinen stillen Rückfall.
+- **Ein Eintrag für einen toten Tab ist keine Antwort.** Die Liste ist nach
+  Tab-Kennung geschlüsselt und wird beim Schließen eines Tabs nicht
+  aufgeräumt; gelesen wird sie deshalb erst, nachdem der Agenten-Tab aufgelöst
+  wurde. Beweis:
+  `transcript_capture_whenTheTabGoesAway_shouldNotResolveWithAGhostEntry`.
+- **Der Deckel bleibt der alte.** `TRANSCRIPT_CAPTION_WIRE_TAB_LIMIT` gilt
+  unverändert, und der Verdrängungsfall von oben bleibt damit bestehen.
 
 ## Open questions
 

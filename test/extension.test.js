@@ -21,6 +21,12 @@ import vm from "node:vm";
 
 const PROTOCOL_SOURCE = await readFile(new URL("../extension/protocol.js", import.meta.url), "utf8");
 const BACKGROUND_SOURCE = await readFile(new URL("../extension/bridge.js", import.meta.url), "utf8");
+// The coordinator, for the one case that has to prove what it does *not* touch: the
+// request capture belongs to the bridge page, not to the page that keeps it alive.
+const COORDINATOR_SOURCE = await readFile(
+  new URL("../extension/background.js", import.meta.url),
+  "utf8",
+);
 // The options page has no DOM harness (spec 36, `## Bekannte Lücken`), so its half of
 // the endpoint default is read as source text. Read once, at load: neither file changes
 // while the suite runs.
@@ -1520,6 +1526,14 @@ function createTabsStub({
       for (const listener of [...listeners]) listener(tabId, changeInfo, tab ?? store.get(tabId));
     },
     listenerCount: () => listeners.size,
+    /**
+     * How many request observers are registered right now.
+     *
+     * The count, not a flag: "the capture lives in this context" is a statement about
+     * exactly one listener, and a second one would be a second answer to the same
+     * question.
+     */
+    wireListenerCount: () => wireListeners.size,
   };
 }
 
@@ -14130,6 +14144,62 @@ async function sendTranscriptAndWaitForTheWire(socket, id, clock, params = {}) {
 }
 
 /**
+ * The coordinator, alone in a context where `webRequest` is not even a key.
+ *
+ * The counting getter is the case, not a decoration: `background.js` only keeps the bridge
+ * tab alive, so one read of that permission means the capture moved back into the page
+ * that must not have it (spec 42, criterion 12). The referee is deliberately loud — it
+ * throws — because a coordinator that reaches for it would otherwise swallow the mistake
+ * in `reconcileAndReport`.
+ *
+ * The stub is as small as `background.js` allows: one normal window, one tab to create.
+ * It answers the shape of every call the coordinator makes and nothing more, so a new
+ * browser API in the coordinator fails here instead of working only in Firefox.
+ */
+async function startCoordinatorWithoutWebRequest() {
+  const created = [];
+  const reads = { webRequest: 0 };
+  const browser = {
+    runtime: {
+      getURL: (path) => `moz-extension://coordinator/${path}`,
+      onStartup: { addListener: () => {} },
+    },
+    windows: {
+      get: async () => {
+        throw new Error("no such window");
+      },
+      getAll: async () => [{ id: 101, type: "normal", incognito: false, focused: true }],
+      create: async () => ({ id: 500, tabs: [] }),
+    },
+    tabs: {
+      query: async () => [],
+      create: async ({ url, pinned, windowId }) => {
+        const tab = { id: 901, url, pinned, windowId, cookieStoreId: DEFAULT_COOKIE_STORE_ID };
+        created.push(tab);
+        return { ...tab };
+      },
+      get: async () => {
+        throw new Error("no such tab");
+      },
+      remove: async () => {},
+      reload: async () => {},
+      onRemoved: { addListener: () => {} },
+      onUpdated: { addListener: () => {} },
+    },
+  };
+  Object.defineProperty(browser, "webRequest", {
+    get() {
+      reads.webRequest += 1;
+      throw new Error("background.js reached for webRequest");
+    },
+  });
+  const sandbox = vm.createContext({ browser, console: captureConsole([]) });
+  vm.runInNewContext(COORDINATOR_SOURCE, sandbox, { filename: "extension/background.js" });
+  await settleAsyncWork();
+  return { reads, created };
+}
+
+/**
  * A watch page whose settings popup lists the tracks but whose player has not fetched the
  * target's file: the shape that needs the menu and the jump (spec 33, M16/M17).
  *
@@ -15275,6 +15345,100 @@ test("transcript_captionWire_readsTheAddress", async () => {
   const injected = tabs.scriptCalls[2].details.code;
   assert.equal(injected.includes(address), true, "the address has to travel as an argument");
   assert.equal(injected.includes("getEntriesByType"), false, "the snippet must not look one up");
+});
+
+/**
+ * The capture and the wait live in one context: the bridge page (spec 42, criterion 12).
+ *
+ * The two halves are one case on purpose, because either half alone is satisfied by a
+ * broken arrangement. A coordinator without a listener proves nothing while the listener
+ * sits in a page the coordinator keeps alive, and a listener in the bridge page proves
+ * nothing while a second one still runs in the coordinator. What decides it is the pair:
+ * the page that holds the tab holds the observation too.
+ *
+ * The proof is a real one — a request is fired into the listener that this context
+ * registered, and the wait this context armed is the thing that resolves. No file is read
+ * as text and no name is assumed: a listener that never resolves a waiting call would make
+ * this case end in the deadline instead of an answer.
+ */
+test("transcript_captureAndWaiter_shouldLiveInTheSameContext", async () => {
+  // GIVEN the coordinator, loaded on its own in a context whose `browser` has no
+  // `webRequest` at all,
+  const coordinator = await startCoordinatorWithoutWebRequest();
+
+  // THEN it never reaches for that permission, and it still did its own job — the second
+  // assertion is what keeps the first from being green on a file that loaded nothing,
+  assert.equal(coordinator.reads.webRequest, 0, "the coordinator must not observe requests");
+  assert.equal(coordinator.created.length, 1);
+  assert.equal(coordinator.created[0].pinned, true);
+
+  // GIVEN a watch page whose player asks for its track file only after the jump,
+  const english = createCaptionTrack({ languageCode: "en", name: "Englisch" });
+  const page = createTranscriptMenuPage({
+    captionTracks: [english],
+    audioTracks: [createOriginalAudioTrack(0)],
+    texts: { en: "This is a 3." },
+    contentName: "Englisch",
+    checkedText: "Englisch",
+  });
+  const { tabs } = createTranscriptTabs(page);
+  // After `createTranscriptTabs`: the silence is only possible once the fixture has its
+  // handle on the wire. A request of its own would hide the wait this case is about.
+  page.emitRequest = () => {};
+  const { socket, clock } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // ... and the bridge page is the one and only context that observes: exactly one
+  // listener, registered by the code that also arms the wait,
+  assert.equal(tabs.wireListenerCount(), 1, "the capture has to have exactly one home");
+
+  // WHEN the call waits for the wire and the player's request arrives on that listener,
+  await sendTranscriptAndWaitForTheWire(socket, 2, clock);
+  tabs.emitRequest({ tabId: TRANSCRIPT_TAB_ID, url: transcriptResourceOf(english, 100) });
+  await awaitTranscriptAnswer(socket, 2);
+
+  // THEN the wait of this context was settled by the listener of this context: the answer
+  // carries the arriving address, the deadline never had to end it, and no second look
+  // found it anywhere else,
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.deliveredLanguage, "en");
+  assert.equal(page.fetched.length, 1);
+  assert.equal(page.fetched[0].includes("expire=100"), true, page.fetched[0]);
+  assert.equal(clock.pendingDelays().includes(TRANSCRIPT_CAPTION_DEADLINE_MS), false);
+});
+
+/**
+ * A tab that is gone is no address, not even for an entry the wire still holds (spec 42,
+ * criterion 12).
+ *
+ * The ghost is the whole point: the wire keeps what it heard per tab id, and nothing prunes
+ * it when a tab closes. Answering from that entry would be a success for a page that no
+ * longer exists — and in the new arrangement it is the one failure mode the move could
+ * introduce, because the entry is recorded by the context that owns the tab.
+ */
+test("transcript_capture_whenTheTabGoesAway_shouldNotResolveWithAGhostEntry", async () => {
+  // GIVEN a watch page whose English request the wire already recorded, and whose tab the
+  // operator closes before the call,
+  const page = createTranscriptCuePage();
+  const ghostAddress = page.wire[0].url;
+  // One entry, and it is the one the wire replays when the observer registers: the case is
+  // only worth something while the ghost really is on the wire,
+  assert.equal(page.wire.length, 1);
+  const { tabs } = createTranscriptTabs(page);
+  tabs.remove(TRANSCRIPT_TAB_ID);
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the tool is called,
+  await sendTranscript(socket, 2);
+
+  // THEN the entry is not an answer: the named failure of a call without a tab, no
+  // injection into a dead tab, nothing fetched, and no address in the answer,
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "no_agent_tab");
+  assert.equal(tabs.scriptCalls.length, 0);
+  assert.deepStrictEqual(page.fetched, []);
+  assert.equal(JSON.stringify(answer).includes(ghostAddress), false);
 });
 
 test("transcript_cues_parseJson3", async () => {
