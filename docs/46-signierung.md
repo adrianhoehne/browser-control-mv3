@@ -219,5 +219,10 @@ erfüllt".
 ## Log
 
 - **2026-11-18, Betreiberentscheid:** Einreichungsart **`unlisted`**.
+- **2026-11-18, Betreiberentscheid: verschoben.** Die Signierung wartet, bis der
+  Betrieb wieder vollständig funktioniert — `browser_eval` ist unter MV3 tot
+  (`docs/47`), und das Icon zeigt falsche Zustände. Signiert wird erst, wenn
+  beides behoben und gemessen ist; eine signierte Version mit kaputtem Werkzeug
+  wäre die falsche Unterschrift.
 - **2026-11-18, Vorgeschichte:** `docs/42`–`docs/45` liefern MV3 als
   Voraussetzung; `INSTALL.md` nennt die Signierung bisher als offenen Punkt.
