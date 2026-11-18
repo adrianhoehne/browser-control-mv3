@@ -136,6 +136,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `43-manifest-mv3.md` | Das Manifest auf MV3 (Roadmap 27+28): `scripting`, `host_permissions`, `docs/02` bewusst umgestellt — gebaut und im Browser belegt; die 8-h-Messung (Kriterium 7) bleibt auf Betreiberentscheid offen | `active` |
 | `44-schalter.md` | Der Schalter in der Symbolleiste: drei Icons (Brücke, gelber Blitz, überkreuzt), Vorgabe aus, `goodbye` an die Bridge vor dem Schließen (Roadmap 32) | `proposed` |
 | `45-injection-naht.md` | Die Injection-Naht (abgespalten von `docs/42`): Quelltext raus, `page-agent.js` plus `callId`-Nachrichten; die Frame-Inventur entsteht aus Selbstmeldungen, mit Frist und definiertem Verhalten für stumme und abgelehnte Frames | `active` |
+| `46-signierung.md` | Die Signierung (AMO, `unlisted`): Daten-Erklärung im Manifest, Reichweiten-Tabelle für `<all_urls>` und `scripting`, Schlüssel außerhalb des Repos — damit die XPI per Doppelklick installiert und behalten wird | `proposed` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.

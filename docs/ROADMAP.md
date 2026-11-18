@@ -85,8 +85,8 @@ Sicherheit und Betrieb (unten) und die Nachträge (oben).
 | # | Vorhaben | Warum | Größe |
 |---|---|---|---|
 | 18 | ~~**Log-Hygiene** — Whitelist statt Sperrliste für den Debug-Block~~ — **erledigt durch `docs/28`** (alle vier Stufen, beide Code-Reviews `✅`, Amendments nachgezogen, live gemessen am 2026-11-18) | ~~Heute ersetzt die Redaktion nur `text`; ein neues Feld landet sonst ungefiltert auf stderr.~~ Ein neues Ergebnisfeld erscheint jetzt als `"<unlisted field>"`, bis jemand es einträgt | — |
-| 23 | **Signierung/XPI, Teil 1** — die Erweiterung signieren und als XPI bauen | Sie ist temporär und nach jedem Firefox-Neustart weg | mittel |
-| 24 | **Signierung/XPI, Teil 2** — Berechtigungsseite und Dokumentation der `<all_urls>`-Reichweite | Teilstück zwei; ohne sie ist eine signierte Auslieferung nicht ehrlich | klein |
+| 23 | **Signierung/XPI, Teil 1** — die Erweiterung signieren und als XPI bauen | Sie ist temporär und nach jedem Firefox-Neustart weg. Spec: `docs/46-signierung.md` (AMO `unlisted`, Betreiberentscheid 2026-11-18) | mittel |
+| 24 | **Signierung/XPI, Teil 2** — Berechtigungsseite und Dokumentation der `<all_urls>`-Reichweite | Teilstück zwei; ohne sie ist eine signierte Auslieferung nicht ehrlich. In `docs/46` als Reichweiten-Tabelle | klein |
 | 25 | **Reichweite verkleinern (optional)** — Positivliste statt `<all_urls>` | Nur falls der Betreiber das später will; die Entscheidung von 2026-10-23 gilt bis dahin | mittel |
 | 26 | **MV3-Migration, Teil 1** — den Socket in einen dauerhaft offenen Tab verlagern | Wenn Mozilla MV2 abschaltet; Teilstück eins. Spec: `docs/42-socket-im-tab.md` | mittel |
 | 27 | **MV3-Migration, Teil 2** — Manifest auf MV3, Test aus Spec 02 bewusst umstellen | Teilstück zwei, setzt 26 voraus. Spec: `docs/43-manifest-mv3.md` | klein |
