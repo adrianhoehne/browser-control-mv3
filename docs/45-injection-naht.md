@@ -68,13 +68,34 @@ beim Empfänger in `sender.frameId`.
    `{op: "inventory"}` ohne `frameId` an den Tab; jeder Frame antwortet, die
    Liste entsteht aus den Antworten. `framesOf` darf **kein** Array aus der
    Injection erwarten, sonst wirft es sofort `frames_failed`.
-2. **Die Frist ist `PROTOCOL.CALL_TIMEOUT_MS`**, dieselbe wie für den
-   Werkzeugaufruf. Ein stummer Frame hängt sonst bis zum Bridge-Timeout, und der
-   Agent sieht `ExtensionTimeout` statt einer Antwort.
+2. **Die Frist ist ein eigenes Budget: `INJECTION_REPLY_TIMEOUT_MS = 5000`.**
+   **Nicht** `PROTOCOL.CALL_TIMEOUT_MS` (20 000): die wäre genauso lang wie der
+   Bridge-Timeout, und der Agent sähe `ExtensionTimeout`, statt die Antwort des
+   Werkzeugs zu bekommen. 5 000 liegt unter allen lokalen Budgets
+   (`SETTLE_GUARD_MS` 4 s, `NAVIGATE_TIMEOUT_MS` 8 s) und über einem normalen
+   frame-übergreifenden Antwortweg.
 3. **Ein abgelehntes `tabs.sendMessage`** („Could not establish connection.
    Receiving end does not exist") trifft nach jeder Navigation einen Frame. Es
    ist **kein** Fehler, sondern wird wie ein stummer Frame behandelt: Werkzeug ⇒
    `not_readable`, Inventur ⇒ `frames_failed`.
+
+**Wie eine Sammlung endet** (Betreiber- und Umsetzerfrage aus dem Bauversuch am
+2026-11-18): `tabs.executeScript({file, allFrames: true})` liefert **ein Element
+je injiziertem Frame** (bei `{file}` jeweils `undefined`) — die **Länge ist die
+Frame-Zahl**. Gesammelt wird also, bis **genau diese Zahl** Antworten mit der
+passenden `callId` da ist; danach wird nicht weiter gewartet. Ein stummer Frame
+wird durch die Frist beendet, nicht durch eine Idle-Heuristik.
+
+Drei Regeln hängen daran:
+
+- **Kein Auflösen beim ersten Treffer.** `frame_ambiguous` (und der Frame-Filter
+  aus `docs/24`) braucht **alle** Antworten; ein früher Abbruch würde den Fall
+  still entwerten.
+- **Späte Antworten werden über `callId` verworfen.** Trifft eine Antwort nach
+  der Frist ein, gehört sie zu einem abgeschlossenen Aufruf und darf nicht dem
+  nächsten zugeschlagen werden.
+- **`callId` ist je Aufruf eindeutig**, auch bei zwei Aufrufen auf demselben
+  Tab: ein Zähler, kein Zeitstempel, kein Zufall.
 
 ## Risiken
 
@@ -89,7 +110,7 @@ beim Empfänger in `sender.frameId`.
 3. **`about:`, `view-source:`, AMO und der PDF-Viewer** lassen keine Injection
    zu. Heute fängt `injectPageCode` den Fehler und übersetzt ihn in
    `not_readable`/`frames_failed`; das muss unverändert bleiben.
-4. **Der Harness.** `test/extension.test.js` (16 343 Zeilen) stubbt
+4. **Der Harness.** `test/extension.test.js` (16 512 Zeilen) stubbt
    `tabs.executeScript` mit `{code}`; nach dem Umbau braucht er `{file}` plus
    einen Nachrichtenkanal. Das ist der größte Einzelposten dieser Spec.
 5. **Die zwei Kommentare**, die `tabs.executeScript` mit `code` erklären
@@ -112,7 +133,7 @@ für `page-agent.js`), `test/extension.test.js`, `test/bridge-tab.test.js`
 | Datei | Fall | Was er beweist |
 |---|---|---|
 | `test/extension.test.js` | die 16 Aufrufer gegen `{file}` plus Nachrichtenkanal | die Werkzeuge antworten unverändert |
-| `test/extension.test.js` | `injection_whenAFrameStaysSilent_shouldRejectAtTheDeadline` | die Frist ist `PROTOCOL.CALL_TIMEOUT_MS`, kein Hängen bis zum Bridge-Timeout |
+| `test/extension.test.js` | `injection_whenAFrameStaysSilent_shouldRejectAtTheDeadline` | die Frist ist `INJECTION_REPLY_TIMEOUT_MS` (5 000 ms), also **unter** dem Bridge-Timeout — der Agent bekommt die Werkzeugantwort statt `ExtensionTimeout` |
 | `test/extension.test.js` | `injection_whenSendMessageIsRejected_shouldAnswerNotReadable` | ein abgelehnter Kanal ist `not_readable`, kein Absturz |
 | `test/extension.test.js` | `injection_withTwoCallIds_shouldAnswerEachCallerOnce` | Antworten werden über `callId` zugeordnet, nicht über Reihenfolge |
 | `test/extension.test.js` | `frames_inventory_shouldComeFromSelfReports` | die Inventur entsteht aus Antworten mit `sender.frameId` |
@@ -142,18 +163,29 @@ für `page-agent.js`), `test/extension.test.js`, `test/bridge-tab.test.js`
 
 ## Dev plan
 
-**Stufe 1 — `page-agent.js` und der Nachrichtenkanal**
+Der Umbau läuft in zwei Blöcken — er ist zu groß für einen Zug, und
+`pageSnippetCode` darf erst fallen, wenn der letzte der 16 Aufrufer umgestellt
+ist.
 
-Dateien: `extension/page-agent.js` (neu), `extension/bridge.js`
-(`injectPageCode`, `callId`-Zuordnung), `extension/manifest.json`
+**Stufe 1a — `page-agent.js`, der Kanal und die Sammlung**
+
+Dateien: `extension/page-agent.js` (neu: Helfer, idempotenter Dispatcher),
+`extension/bridge.js` (`injectPageCode`, `callId`-Zähler, Sammler mit
+`INJECTION_REPLY_TIMEOUT_MS`, `frameTargetOf`), `extension/manifest.json`
 (`web_accessible_resources`), `test/extension.test.js` (Stub: `{file}` plus
 Kanal).
 
-`page-agent.js` trägt die drei Helfer und den Dispatcher; die Seite schickt
-`{callId, op, args}` und wartet auf `{callId, ok, value}` mit
-`PROTOCOL.CALL_TIMEOUT_MS`.
+Beweis: Kriterien 2, 3, 4 und die drei `injection_*`-Fälle. `pageSnippetCode`
+steht danach noch — das ist der Zwischenstand, nicht das Ziel.
 
-Beweis: Kriterien 1, 2, 3, 4, 5.
+**Stufe 1b — die 16 Aufrufer, in zwei Blöcken**
+
+Erster Block: `read`, `click`, `type` — sie antworten auf `sender.frameId` und
+brauchen den Frame-Filter. Zweiter Block: `inspect`, `eval`, `frames`,
+`transcript`. Erst wenn der letzte umgestellt ist, fallen `pageSnippetCode` und
+`PAGE_HELPERS_CODE`.
+
+Beweis: Kriterien 1, 5, 6; `grep -Fc 'pageSnippetCode('` ⇒ 0.
 
 **Stufe 2 — die Frame-Inventur auf Selbstmeldungen**
 
@@ -190,3 +222,13 @@ Beweis: Kriterium 6 und die Sichtprüfung in Kriterium 7.
 - **2026-11-17, Abspaltung:** war Stufe 2 von `docs/42`; nach dem dritten
   Review-Block geteilt (Betreiberentscheid „B"). Die Naht ist ein eigener
   Umbau: 16 Aufrufstellen, drei Helfer, ein Nachrichtenkanal mit Frist.
+- **2026-11-18, Frist und Sammlung entschieden** (aus dem gestoppten
+  Bauversuch): eigenes Budget `INJECTION_REPLY_TIMEOUT_MS = 5000` statt des
+  Bridge-Timeouts (20 000), weil sonst beide gleichzeitig feuern und der Agent
+  `ExtensionTimeout` statt der Werkzeugantwort sieht. Gesammelt wird bis zur
+  Frame-Zahl, die `tabs.executeScript({file, allFrames})` liefert — kein
+  Auflösen beim ersten Treffer (`frame_ambiguous` braucht alle Antworten),
+  späte Antworten werden über `callId` verworfen.
+- **2026-11-18, Umbau in zwei Blöcke geteilt:** 1a (Dispatcher, Kanal,
+  Sammlung) und 1b (die 16 Aufrufer). `pageSnippetCode` fällt erst mit dem
+  letzten Aufrufer; der Zwischenstand ist kein Ziel.
