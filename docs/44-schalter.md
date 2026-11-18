@@ -23,8 +23,8 @@ es unter MV2 genauso. Diese Spec läuft deshalb **nach `docs/42`** (sie ändert
   | Zustand | Icon | Tab | Socket |
   |---|---|---|---|
   | `off` (**Vorgabe**) | Brücke, rot überkreuzt | keiner | keiner |
-  | `on` | Brücke | einer | verbunden |
-  | `on`, Bridge nicht erreichbar | **gelber Blitz** | einer | keiner, Backoff im Tab |
+  | `on` | Brücke | einer, **angepinnt** | verbunden |
+  | `on`, Bridge nicht erreichbar | **gelber Blitz** | einer, angepinnt | keiner, Backoff im Tab |
 
 - **Ein Klick schaltet.** Kein Popup — mit Popup feuert `onClicked` nicht, der
   Klick wäre wirkungslos.
@@ -213,8 +213,9 @@ Beweis: Kriterium 9.
 - **Der Icon-Klick lässt sich nicht automatisieren.** `web-ext` klickt nichts;
   die Schaltlogik wird im Stub-Harness geprüft, das echte Klicken bleibt eine
   Betreiber-Messung (Kriterien 5–8).
-- **Die SVGs sind Handarbeit.** Ob sie in 16 px lesbar sind, entscheidet das
-  Auge, kein Test.
+- **Die SVGs sind Handarbeit und werden ohne Entwurf eingebaut**
+  (Betreiberentscheid 2026-11-17). Ob sie in 16 px lesbar sind, entscheidet das
+  Auge in Firefox, kein Test.
 - **`about:addons`-Disable räumt niemand auf.** Steht als Satz in der Anleitung.
 
 ## Open questions
@@ -249,7 +250,8 @@ Bezeichner `HubRequestError::unavailable`; Kriteriengrenze 1–4 und 9 / 5–8;
 ## Log
 
 - **2026-11-17, Betreiberentscheid:** Icon in der Symbolleiste, drei Zustände
-  über drei Icons, Vorgabe `aus`.
+  über drei Icons, Vorgabe `aus`, Brücken-Tab **angepinnt** und die Icons werden
+  ohne Entwurf direkt eingebaut.
 - **2026-11-17, Betreiberentscheid:** Beim Ausschalten sendet die Erweiterung
   `goodbye`; die Bridge empfängt und ignoriert es. Behandlung später (Roadmap 32).
 - **2026-11-17, Betreiberentscheid:** wer über `about:addons` deaktiviert, räumt

@@ -82,6 +82,11 @@ Host-Berechtigung hat — deshalb braucht der Mitschnitt keinen zweiten Kontext.
 existiert, und öffnet ihn wieder, wenn er verschwindet. Er hält **keine**
 Sitzung und **keinen** Zustand, der einen Tab überlebt.
 
+**Der Tab ist angepinnt** (`tabs.update(tabId, {pinned: true})` direkt nach dem
+Anlegen, Betreiberentscheid 2026-11-17). Angepinnt ist er dauerhaft sichtbar und
+wird seltener verworfen — beides ist gewollt: der Betreiber soll sehen, dass die
+Brücke läuft.
+
 **Identität des Tabs:** `browser.tabs.query({url: browser.runtime.getURL("bridge.html")})`.
 Weil `query` und `create` nicht atomar sind, braucht der Koordinator einen
 **Single-Flight-Guard**: ein laufendes Anlegen blockiert ein zweites, auch wenn
@@ -175,9 +180,10 @@ nach **Inhalt**, nicht nach Position.
 **Kriterien 1–8 entscheidet der Umsetzer, 9–13 der Betreiber** (`CONTRIBUTING.md`:
 „Where a criterion can only be decided in a real browser, the spec says so").
 
-1. **Genau ein Brücken-Tab.** `tabs.query({url: runtime.getURL("bridge.html")})`
-   ⇒ **1** nach zwei Aufrufen des Koordinators (Stub-Harness), und ⇒ **1** nach
-   einem gleichzeitigen Paar (`bridgeTab_withTwoConcurrentStarts_…`).
+1. **Genau ein Brücken-Tab, und er ist angepinnt.**
+   `tabs.query({url: runtime.getURL("bridge.html")})` ⇒ **1** nach zwei Aufrufen
+   des Koordinators (Stub-Harness) und ⇒ **1** nach einem gleichzeitigen Paar
+   (`bridgeTab_withTwoConcurrentStarts_…`); sein `pinned` ⇒ **true**.
 2. **Ein geschlossener Tab kommt zurück.** Im Harness `tabs.onRemoved` feuern ⇒
    genau **ein** `tabs.create`. Die Zeit (10 s) und die Logzeile prüft der
    Betreiber in Kriterium 11 — in Stufe 1 ist das Manifest noch MV2 mit
@@ -285,9 +291,10 @@ Beweis: Kriterien 9, 10, 11 mit Zeitstempeln aus dem Bridge-Log.
 
 - **Nichts davon ist gemessen.** Es gibt keine Tab-Variante im Baum; die 30,0 s
   stammen aus `docs/02`, die 16 Aufrufstellen aus dem Code.
-- **Tab-Discard ist eine Vermutung mit Vorsicht.** Ob ein angepinnter Tab
-  seltener verworfen wird, ist nicht belegt; Kriterium 3 erzwingt das Verwerfen
-  über `tabs.discard`.
+- **Tab-Discard ist eine Vermutung mit Vorsicht.** Dass ein angepinnter Tab
+  seltener verworfen wird, ist **nicht belegt** — die Spec pinnt ihn trotzdem
+  (Sichtbarkeit, Betreiberentscheid), und Kriterium 3 erzwingt das Verwerfen
+  über `tabs.discard`, statt auf die Vermutung zu bauen.
 - **Die Injection-Naht ist ein Umbau, keine Umbenennung.** 16 Aufrufstellen und
   drei Helfer, die bisher als Text mitreisen.
 
@@ -313,6 +320,11 @@ neu.
 ## Log
 
 - **2026-11-17, Betreiberentscheid:** Branch `mv3`, Spec zuerst.
+- **2026-11-17, Betreiberentscheid:** der Brücken-Tab ist **angepinnt**.
+- **2026-11-17, Betreiberentscheid (Merge):** alle drei Inkremente
+  (`docs/42`, `docs/43`, `docs/44`) landen **gemeinsam** auf `main` — der
+  Manifest-Wechsel ist ein Bruch, einzeln gemergt wäre `main` zwischendurch eine
+  Variante, die niemand ausliefern will. Committet wird hier trotzdem je Stufe.
 - **2026-11-17, Teilung:** nach dem Review-Block in drei Specs; der Schalter ist
   nicht MV3-abhängig (`browser_action`, `setIcon`, `storage.local` gibt es unter
   MV2 genauso) und `goodbye` gehört zu Roadmap 32.
