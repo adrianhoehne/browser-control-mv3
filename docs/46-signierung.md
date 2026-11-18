@@ -41,7 +41,7 @@ nicht in der AMO-Suche; der Betreiber verteilt die Datei selbst.
 |---|---|---|
 | feste Add-on-ID | `browser-control@bergkaese.dev` | vorhanden |
 | `manifest_version` 3 | seit `docs/43` | vorhanden |
-| Version | `0.6.0` (nach dem Merge) | muss je Release steigen |
+| Version | **`0.6.1`** — `0.6.0` ist der Merge-Release und bleibt unsigniert; die Signatur kommt mit `0.6.1` (Betreiberentscheid 2026-11-18) | muss je Release steigen |
 | **Daten-Erklärung** | **fehlt** | siehe `## Die Daten-Erklärung` |
 | Lizenz | `LICENSE`/`MIT` im Repo | im Einreichungsformular angeben |
 | Zusammenfassung, Kategorie | — | im Formular, englisch |

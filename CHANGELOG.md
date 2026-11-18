@@ -5,6 +5,36 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+Nichts offen.
+
+## [0.6.0] — 2026-11-18
+
+**Die Erweiterung läuft auf MV3, und der Socket wohnt in einem eigenen Tab.**
+Firefox entlädt eine MV3-Eventpage nach 30 Sekunden Leerlauf und zählt eine
+offene WebSocket nicht als Aktivität (`docs/02`, gemessen 2026-10-23). Deshalb
+hält jetzt ein **angepinnter Brücken-Tab** die Verbindung; der Hintergrund ist
+nur noch Koordinator und darf sterben.
+
+- **Gemessen:** 33 Minuten Leerlauf ohne ein einziges Verbindungsereignis, ein
+  offener Socket; ein geschlossener Brücken-Tab ist nach **168 ms** und **147 ms**
+  zurück; nach einem Dienst-Neustart ist die Verbindung in **1 453 ms** wieder da,
+  ohne neuen Tab.
+- **Injection-Naht:** kein Quelltext mehr auf der Leitung. Die Seitenfunktionen
+  liegen als `page-agent.js` im Tab, die Antworten laufen als `{callId, ok, value}`
+  zurück; die Frame-Inventur entsteht aus Selbstmeldungen, die Sammlung endet bei
+  der Frame-Zahl oder nach 5 000 ms. `bridge.js` schrumpft von 7 036 auf 4 973
+  Zeilen.
+- **Schalter in der Symbolleiste:** drei Icons (Brücke, gelber Blitz bei
+  unerreichbarer Bridge, rot überkreuzt), Vorgabe **aus**. Ausschalten sagt
+  `goodbye` auf der Leitung, schließt den Socket mit `1000`, schließt den Tab.
+- **`ws://` gilt nur noch für Loopback** — der Fernfall braucht `wss://` oder
+  einen SSH-Tunnel (`INSTALL.md` §9). Die Meldung nennt beide Wege.
+- **MV3-Preis, ehrlich:** die Vorgabe-CSP hebt `ws://` auf `wss://` an (Socket
+  schloss mit `1015`); der Manifest setzt jetzt
+  `content_security_policy.extension_pages` mit `connect-src 'self' ws: wss:`.
+- **522 → 530 Node-Fälle**, 283 Rust-Fälle, Parität **7/7** unverändert. Der
+  Windows-Blackbox-E2E läuft gegen MV3.
+
 **`ws://` gilt nur noch für Loopback** — der Fernfall braucht `wss://` oder einen
 SSH-Tunnel (Betreiberentscheid 2026-11-18).
 
