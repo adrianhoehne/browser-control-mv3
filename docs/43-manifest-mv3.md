@@ -50,9 +50,28 @@ von „funktioniert" auf „funktioniert nicht".
 |---|---|---|
 | `permissions: ["tabs","storage","<all_urls>","webRequest"]` | `permissions: ["tabs","storage","webRequest","scripting"]` + `host_permissions: ["<all_urls>"]` | `scripting.executeScript` braucht `scripting`; Host-Rechte sind in MV3 ein eigener Schlüssel |
 
-**`scripting` ist eine neue Berechtigung** — die einzige in diesem Inkrement. Die
-Roadmap-Regel verlangt dafür eine Betreiberentscheidung; sie steht unter
-`## Open questions` und blockiert `active`.
+**`scripting` ist eine neue Berechtigung** — die einzige in diesem Inkrement. Sie
+ist **entschieden** (2026-11-17): der Betreiber nimmt sie, weil ohne sie sieben
+von dreizehn Werkzeugen wegfallen. Die verworfene Alternative steht in
+`## Verworfene Alternative`.
+
+## Verworfene Alternative: ein deklariertes Content-Script
+
+Statt `scripting` könnte `page-agent.js` als `content_scripts`-Eintrag mit
+`<all_urls>`, `all_frames` und `match_about_blank` im Manifest stehen. Das
+braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
+`tabs.sendMessage(tabId, msg, {frameId})` (die Antwort trägt `sender.frameId`).
+
+**Verworfen am 2026-11-17, mit Gründen:**
+
+- Das Script liegt dann **auf jeder Seite ab dem Laden**, auch wenn der Agent
+  nichts tut — sichtbar im Add-on-Dialog als „läuft auf allen Seiten".
+- Bereits offene Tabs kennen es erst nach einem Reload.
+- Aus „injiziere jetzt" wird „frage, ob jemand zuhört": ein Fehlerfall mehr in
+  jedem der 16 Aufrufer.
+- **Der Datengewinn ist null:** `scripting` öffnet keine Daten, die `<all_urls>`
+  nicht schon öffnet. Es ist eine zweite Berechtigungszeile für eine Fähigkeit,
+  die MV2 über `tabs` gegeben hat.
 
 ## Was die Umstellung im Code bedeutet
 
@@ -180,10 +199,8 @@ Beweis: Kriterien 6, 7, 8, 9 mit Zeitstempeln.
 
 ## Open questions
 
-1. **Darf `scripting` als Berechtigung dazukommen?** Sie ist neu, sie ist
-   notwendig für `scripting.executeScript`, und sie erweitert die
-   Rechte-Anzeige im Add-on-Dialog. Ohne Betreiberantwort bleibt diese Spec
-   `proposed`.
+**Keine.** Am 2026-11-17 entschieden: `scripting` kommt dazu, das deklarierte
+Content-Script ist verworfen (Gründe im Abschnitt oben).
 
 ## Review
 
@@ -191,5 +208,9 @@ Beweis: Kriterien 6, 7, 8, 9 mit Zeitstempeln.
 
 ## Log
 
+- **2026-11-17, Betreiberentscheid:** `scripting` wird genommen. Ohne sie fielen
+  `read`, `click`, `type`, `inspect`, `eval`, `frames` und `transcript` weg, dazu
+  das `settle` von `navigate` und `open_tab`. „Ich will auf Features nicht
+  verzichten."
 - **2026-11-17, Abspaltung:** war Stufe 2 der gemeinsamen MV3-Spec; nach dem
   Review-Block geteilt (Roadmap 27+28).
