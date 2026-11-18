@@ -42,6 +42,14 @@ Ein Tab wird nicht nach 30 Sekunden Leerlauf entladen.
 - **Das Wire-Protokoll bleibt unverändert.** Bridge, Hub und die dreizehn
   Werkzeuge merken von der Migration nichts; die Parität (`7/7`) bleibt der
   Maßstab.
+- **Der Betreiber hat einen Schalter in der Symbolleiste.** Drei Zustände, an
+  drei Icons erkennbar: **an und verbunden** (Brücke), **an, aber nicht
+  erreichbar** (gelber Blitz), **aus** (rot überkreuzt). Ein Klick schaltet.
+  **Vorgabe ist `aus`** — eine frisch installierte Erweiterung verbindet nichts,
+  bevor der Betreiber es will.
+- **Ausschalten sagt Servus.** Der Klick sendet `goodbye`, schließt den Socket
+  mit `1000`, schließt den Tab und speichert `off`. Die Bridge **empfängt und
+  ignoriert** die Nachricht (Roadmap: „Handle Good Bye").
 - **Gemessen, nicht behauptet:** die Verbindung hält über Stunden, überlebt
   einen Tab-Neustart und einen Browser-Neustart, und der Betreiber sieht den
   Brücken-Tab.
@@ -154,7 +162,31 @@ Einzelaufträge; der Brücken-Tab ist der einzige, der den Socket kennt.
    --self-check --source extension` ⇒ Exit 0, `seams {endpoint:1, token:1}`;
    `E2E_BEACON_MODE=broken node scripts/e2e/run.mjs` ⇒ Exit 1 (der Test ist
    weiterhin in der Lage, rot zu werden).
-9. **Der `webRequest`-Mitschnitt überlebt den Worker.** Betreiber-Messung: eine
+9. **Die Vorgabe ist `aus`.** Frisches Profil, keine gespeicherte Einstellung ⇒
+   das Icon zeigt die überkreuzte Brücke, es gibt **keinen** Brücken-Tab
+   (`tabs.query({url: runtime.getURL("bridge.html")})` ⇒ **0**) und die Bridge
+   loggt keine Verbindung.
+10. **Ein Klick schaltet an, ein Klick schaltet aus.** Klick bei `off` ⇒ Tab
+    entsteht, Bridge loggt `extension connected`, Icon ist die Brücke. Klick bei
+    `on` ⇒ Bridge loggt `extension disconnected`, der Tab ist weg, Icon ist
+    überkreuzt, `storage.local` trägt `off`.
+11. **Beim Ausschalten kommt `goodbye` an.** Die Bridge **protokolliert es
+    nicht** (sie ignoriert es), aber der Socket schließt mit `1000` — Beleg ist
+    die `extension disconnected reason=1000`-Zeile.
+12. **Der Blitz erscheint, wenn die Bridge fehlt.** Bridge stoppen, bei `on` ⇒
+    das Icon wechselt auf den gelben Blitz; Bridge starten ⇒ zurück auf die
+    Brücke, ohne Zutun des Nutzers.
+13. **Ein fehlendes Fenster bekommt ein neues.** Brücken-Tab und sein Fenster
+    schließen, während `on` gilt ⇒ der Tab entsteht in einem **neuen** Fenster
+    und verbindet sich.
+14. **Der Brücken-Tab bleibt unsichtbar und unantastbar.** `browser_status`
+    listet ihn nicht (`grep -c 'bridge.html'` auf die Antwort ⇒ **0**), und ein
+    `browser_read` mit seiner Tab-Id antwortet `no_agent_tab`.
+15. **Der Typ steht auf beiden Seiten.** `cargo test --manifest-path
+    bridge-rs/Cargo.toml --test protocol` ⇒ grün (die Konstantenlisten sind
+    gleich), und `grep -c GOODBYE extension/protocol.js
+    bridge-rs/src/protocol.rs` ⇒ je **1**.
+16. **Der `webRequest`-Mitschnitt überlebt den Worker.** Betreiber-Messung: eine
    Seite mit `api/timedtext`-Anfrage laden, **nachdem** der Hintergrund
    eingeschlafen ist (30 s warten), dann `browser_transcript` ⇒ die
    Original-Adresse wird gefunden, nicht `no_transcript_panel`.
@@ -186,12 +218,66 @@ Dateien: `extension/manifest.json` (`manifest_version: 3`, `scripting`,
 
 Beweis: Kriterien 1, 6, 7, 8.
 
+**Stufe 4 — der Schalter**
+
+Dateien: `extension/icons/{bridge,bridge-off,bridge-offline}.svg` (neu),
+`extension/manifest.json` (`browser_action` beziehungsweise `action` mit
+`default_icon`, `default_title`, ohne `default_popup`), `extension/bridge.js`
+(Zustandsmaschine, `setIcon`, `goodbye`, Fenster-Gedächtnis),
+`extension/background.js` (Koordinator: `tabs.onRemoved`, Anlegen im gemerkten
+Fenster), `extension/protocol.js` und `bridge-rs/src/protocol.rs` (Konstante),
+`test/bridge-tab.test.js` (Schaltfälle), `scripts/e2e/build-test-extension.mjs`
+(dritter Anker: Zustand `on`), `docs/40` (Ankertabelle).
+
+Beweis: Kriterien 10 bis 14.
+
 **Stufe 3 — die Messung**
 
 Dateien: keine Produktdateien; `docs/42` bekommt die Messwerte, `docs/PROJECT-STATE.md`
 den Stand.
 
 Beweis: Kriterien 3, 5, 9 mit Zeitstempeln aus dem Bridge-Log.
+
+## Der Schalter: drei Zustände, drei Icons
+
+| Zustand | Icon | Tab | Socket | Auslöser |
+|---|---|---|---|---|
+| `off` **Vorgabe** | Brücke, rot überkreuzt | keiner | keiner | Icon-Klick |
+| `on` | Brücke | einer, im zuletzt benutzten Fenster | verbunden | Icon-Klick, `tabs.onRemoved` |
+| `on`, Bridge nicht erreichbar | **gelber Blitz** | einer | keiner, Backoff läuft | Bridge weg, Verbindungsabbruch |
+
+- **Das Icon zeigt den Willen des Nutzers, der Blitz zeigt den Zustand.** `on`
+  ohne Verbindung ist keine Absicht, sondern ein Fehler — deshalb der Blitz und
+  nicht das Kreuz.
+- **Angeordnet wird im zuletzt benutzten Fenster.** Der Koordinator merkt sich
+  die `windowId` des Brücken-Tabs. Ist das Fenster weg, öffnet er ein **neues**
+  (Betreiberentscheid).
+- **`off` liegt in `storage.local`** und überlebt Browser-Neustarts. Ohne
+  gespeicherten Wert gilt `off`.
+- **Kein Popup am Icon.** Mit Popup feuert `onClicked` nicht, der Klick wäre
+  wirkungslos.
+- **Beim Ausschalten, in dieser Reihenfolge:** `goodbye` senden, Socket mit
+  `1000` schließen, Tab schließen, `off` speichern. Ist kein Socket offen,
+  entfällt `goodbye`; der Rest läuft.
+- **`about:addons` → Disable kann niemand aufräumen.** Firefox entlädt die
+  Erweiterung, bevor ihr Code laufen kann; der Brücken-Tab bleibt als tote
+  Erweiterungsseite stehen. Die Anleitung sagt das, der Icon-Klick ist der
+  saubere Weg.
+- **Der Brücken-Tab erscheint nicht in `browser_status`.** Die Statusliste
+  filtert jede URL, die mit `browser.runtime.getURL("bridge.html")` beginnt.
+  Filtern ist **paritätssicher** (das eingefrorene Artefakt enthält keinen
+  solchen Tab); ein neues Feld wäre es nicht.
+
+## `goodbye` auf der Leitung
+
+`{"type":"goodbye"}` — gesendet, bevor die Erweiterung den Socket schließt.
+**Die Bridge ändert dafür kein Verhalten:** `hub.rs` verwirft jede Nachricht,
+die nicht `type: "response"` ist, ohne Logzeile und ohne Close.
+
+**Eine Zeile muss trotzdem geschrieben werden:** `protocol_constants_matchTheExtension`
+vergleicht die **komplette** Konstantenliste von `extension/protocol.js` und
+`bridge-rs/src/protocol.rs` („a constant that exists on one side only is a
+difference too"). Ohne den Typ auf beiden Seiten wird CI rot.
 
 ## Amendments to previous spec docs
 
@@ -200,7 +286,8 @@ Beweis: Kriterien 3, 5, 9 mit Zeitstempeln aus dem Bridge-Log.
 | `docs/02-persistenter-background.md` | `## Non-goals` („Kein Socket im Tab") | **überholt**: der Socket im Tab ist jetzt das Design. Der Satz wird zu „erledigt durch `docs/42`" |
 | `docs/02-persistenter-background.md` | `## Ziel`, `## Testing`, Kriterien | der persistente MV2-Hintergrund ist **nicht mehr** die Lösung; die Kriterien werden auf „der Brücken-Tab hält die Verbindung" umgeschrieben |
 | `docs/34-spurendatei-beobachten.md` | `## Bekannte Lücken` | die Mitschrift lebt jetzt im Eventpage-Hintergrund und kann mit ihm einschlafen — offener Punkt, gemessen in Stufe 3 |
-| `docs/40-ci-ablauf.md` | `## Der E2E-Ablauf`, Ankertabelle | die zwei Anker liegen nach der Migration in `extension/bridge.js`, nicht in `background.js` |
+| `docs/40-ci-ablauf.md` | `## Der E2E-Ablauf`, Ankertabelle | die zwei Anker liegen nach der Migration in `extension/bridge.js`, nicht in `background.js`. **Ein dritter Anker kommt dazu:** die Vorgabe ist `off`, der E2E muss den Zustand auf `on` setzen — sonst verbindet die Test-Kopie nie |
+| `docs/39-portables-paket.md`, `docs/41-anleitungen.md` | `FIREFOX.md` | die Anleitung bekommt einen Schritt: **Icon anklicken**, sonst ist die Erweiterung nach der Installation bewusst aus; der Anleitungstext zählt danach einen Schritt mehr |
 
 ## Bekannte Lücken
 
@@ -213,17 +300,9 @@ Beweis: Kriterien 3, 5, 9 mit Zeitstempeln aus dem Bridge-Log.
 
 ## Open questions
 
-1. **Wie sichtbar soll der Brücken-Tab sein?** Drei Formen stehen zur Wahl:
-   angepinnt (überlebt eher, kostet Platz in der Leiste), normal, oder in einem
-   eigenen Fenster. Der Betreiber sieht ihn dauerhaft.
-2. **Wann öffnet er sich?** Beim Browser-Start automatisch, oder erst wenn die
-   Bridge ihn braucht (erster Auftrag)?
-3. **Was passiert, wenn der Betreiber ihn bewusst schließt?** Sofort wieder
-   öffnen, oder erst beim nächsten Auftrag — und mit welchem Hinweis?
-
-Diese drei entscheidet der Betreiber; sie ändern das Verhalten, nicht die
-Mechanik. Bis zur Antwort gilt: anpinnen, beim Start öffnen, sofort wieder
-öffnen.
+**Keine.** Am 2026-11-17 entschieden: drei Icons (Brücke, gelber Blitz,
+überkreuzt), Vorgabe `aus`, Tab im zuletzt benutzten Fenster, bei fehlendem
+Fenster ein neues, `goodbye` vor dem Schließen, `off` in `storage.local`.
 
 ## Review
 
@@ -232,6 +311,15 @@ Mechanik. Bis zur Antwort gilt: anpinnen, beim Start öffnen, sofort wieder
 ## Log
 
 - **2026-11-17, Betreiberentscheid:** Branch `mv3`, Spec zuerst.
+- **2026-11-17, Betreiberentscheid (Schalter):** Icon in der Symbolleiste, drei
+  Zustände über drei Icons (an = Brücke, nicht erreichbar = gelber Blitz, aus =
+  rot überkreuzt), Vorgabe `aus`, Tab im zuletzt benutzten Fenster, bei
+  fehlendem Fenster ein neues.
+- **2026-11-17, Betreiberentscheid (Abschied):** Beim Ausschalten sendet die
+  Erweiterung `goodbye`; die Bridge empfängt und ignoriert es. Auf die Roadmap
+  kommt „Handle Good Bye", weil die Behandlung noch offen ist.
+- **2026-11-17, Betreiberentscheid (about:addons):** wer dort deaktiviert, räumt
+  den Tab selbst auf — das kann die Erweiterung nicht.
 - **2026-11-17, Vorgeschichte:** `docs/02` hat MV2 gewählt und den Socket im Tab
   ausdrücklich als Kandidaten für eine eigene Spec benannt. Diese Spec löst das
   ein.
