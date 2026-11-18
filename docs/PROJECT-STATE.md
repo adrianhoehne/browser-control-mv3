@@ -8,6 +8,38 @@ Log oder einer Spec widerspricht, gilt der Beleg und diese Datei ist falsch.
 
 **Eine Übergabe-Datei gibt es nicht mehr.** Bis 2026-11-12 lag hier `docs/HANDOVER.md` (Stand, Entscheidungen, Betrieb); für die Veröffentlichung ist sie entfallen, weil sie Betriebsdaten trug. Der Stand steht in dieser Datei, das Verfahren in `CONTRIBUTING.md`, die Einrichtung in `INSTALL.md`.
 
+## Stand (2026-11-18): Spec 28 (Log-Hygiene) ist `active`
+
+**Die Whitelist für den Debug-Block ist abgeschlossen** — Code seit 2026-10-30
+(alle vier Stufen, beide Code-Reviews `✅`), jetzt auch Amendments, Lückenprüfung
+und Live-Messung. Im Rust-Port heißt die Tabelle `DEBUG_WHITELIST`
+(`bridge-rs/src/hub.rs`), die Projektion `project`, der Eintritt
+`debug_block_of`; die Node-Fassung `bridge/hub.mjs` ist mit `docs/38` gelöscht.
+
+- **Die Amendments sind nachgezogen** in `docs/05` (Hub-Absatz, `## Bekannte
+  Lücken`, `#logDebugResult`), `docs/08` (Hub und Testing-Zeile), `docs/09`
+  (Inspect-Block, Dev-Plan-Stufe 3) und `docs/07` (`title`-Falle): der
+  Debug-Block ist eine Whitelist, `title` erscheint dort als Länge.
+- **Von fünf Lücken bleiben zwei** (`docs/28`, `## Bekannte Lücken`): ein
+  Ergebnis, das kein Objekt ist, druckt weiter JSON im Klartext (gepinnt, nicht
+  zugesagt), und `title` als Länge ist in `click`/`type` nicht gepinnt. Der
+  Tabellen-Tippfehler, das flache `Object.freeze` und `__proto__` sind mit dem
+  Port entfallen — `__proto__` ist in Rust ein gewöhnlicher Schlüssel und trägt
+  den Marker (am 2026-11-18 gemessen).
+- **Live gemessen am 2026-11-18, ohne Browser:** gegen einen zweiten eigenen
+  Prozess (Ports 18810/18811, `BC_LOG=debug`) mit einer nachgebauten Extension
+  zeigt der `read`-Block `"text": "<19 chars>"`, `"title": "<14 chars>"` und
+  für ein erfundenes Feld `"<unlisted field>"`; `grep -c GEHEIMER-SEITENTEXT` im
+  stderr ⇒ 0. Die zwei Treffer auf `GEHEIMER-TITEL` sind die `status`-Blöcke, in
+  denen `title` absichtlich voll steht (Byte-Pin in `bridge-rs/tests/hub.rs`,
+  `hub_withDebugLogging_shouldLogTheStatusLineAndTheIndentedResult`, und
+  Paritätsvergleich 7) — offen als Folgeinkrement.
+- **Weiter beim Betreiber:** der Haken an Kriterium 5 für den echten Firefox
+  (`browser_read`/`browser_inspect` an einer echten Seite).
+
+**Nicht mehr offen** ist damit der Grund, aus dem `docs/28` als einzige Spec mit
+fertigem Code `proposed` stand (`docs/ROADMAP.md`, Zeile 18 ⇒ erledigt).
+
 ## Stand (2026-11-18): der Schalter in der Symbolleiste
 
 **`docs/44` ist `proposed`, Stufen 1–4 sind gebaut** (nicht committet). Die
@@ -239,7 +271,8 @@ eingearbeitet, gebaut ist dort noch nichts. — **Überholt:** Teil 2 ist seit
 (`scripts/install.sh`), `v0.3.0` (Standard-Endpunkt), `v0.4.0`.
 Die Specs 35 und 36 sind `active`; `docs/28` ist die einzige Spec, deren
 Code fertig ist, die aber noch `proposed` steht (Amendments und
-Live-Messung fehlen).
+Live-Messung fehlen). — **Überholt:** `docs/28` ist seit 2026-11-18 `active`
+(Amendments nachgezogen, live gemessen; Abschnitt oben).
 
 **Sprache der Optionsseite (2026-11-15):** die sichtbaren Texte der
 Erweiterungs-Einstellungen sind **englisch** (Betreiberentscheid, das Projekt ist
@@ -411,6 +444,9 @@ einer dreifach geblockten Spec; die Blocker (N1, N2) sind dort eingearbeitet.
 **Spec 28 (Log-Hygiene) ist weiterhin `proposed`** — Code fertig, beide
 Code-Reviews `✅`, offen: Amendments in `docs/05`, `docs/07`, `docs/08`, `docs/09`,
 die veralteten Verweise auf die gelöschten Redaktionshelfer und die Live-Messung.
+**Überholt 2026-11-18:** alles davon ist erledigt, `docs/28` ist `active`
+(Abschnitt oben); die veralteten Helfer-Verweise in `docs/06`, `docs/16`,
+`docs/19` und `docs/20` stehen noch, sie liegen außerhalb der damaligen Boundary.
 
 Offen im Betriebsteil: der Windows-Rechner für die Messungen aus Spec 30, und die
 90-Sekunden-Frist der Abnahme (`test/mcp.test.js` lief am 2026-11-06 in 61,4 s von
@@ -425,7 +461,10 @@ Offen im Betriebsteil: der Windows-Rechner für die Messungen aus Spec 30, und d
 aber noch `proposed`: es fehlen die Amendments in `docs/05`, `docs/07`, `docs/08`,
 `docs/09` und die veralteten Verweise auf die gelöschten Redaktionshelfer
 (`docs/05:422`, `docs/06:297`, `docs/16:284`, `docs/19`, `docs/20:562`), dazu die
-Live-Messung.
+Live-Messung. — **Überholt 2026-11-18:** Amendments und Messung sind erledigt,
+`docs/28` ist `active`; `docs/05:422` ist nachgezogen, die Fundstellen in
+`docs/06`, `docs/16`, `docs/19` und `docs/20` stehen noch (außerhalb der
+Boundary dieses Inkrements).
 
 Was der Agent heute kann: navigieren, lesen (mit `offset`/`maxChars`, Artikelmodus),
 klicken, tippen, fokussieren, inspizieren, Tabs öffnen/schließen, `eval` hinter

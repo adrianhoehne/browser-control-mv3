@@ -91,8 +91,10 @@ Antwort:
 
 Keine strukturelle Änderung. Logzeile `focus tab=<id> window=<id>` — kein
 Seitentext, kein `url` (es gibt nichts zu zeigen, was nicht schon in der Antwort
-steht); Debug-Block wie bei `status`/`navigate`: das ganze Ergebnis, denn es
-enthält keine Seiteninhalte.
+steht). Der Debug-Block ist die Whitelist aus `DEBUG_WHITELIST`
+(`bridge-rs/src/hub.rs`, seit Spec 28): `tabId`, `windowId`, `url`, `active` und
+`focused` voll, `title` als Länge. „Das ganze Ergebnis" stand hier bis
+2026-11-18 und gilt nicht mehr.
 
 ## Extension
 
@@ -120,7 +122,7 @@ enthält keine Seiteninhalte.
 | dito — fremder Parameter | `invalid_params`, keine Aktualisierung |
 | dito — `focus` während einer laufenden Navigation | Beide laufen durch: der `focus`-Aufruf antwortet `ok:true`, die Navigation danach mit ihrem eigenen Ergebnis (kein `superseded`, keine zweite Injektion) |
 | dito — keine Injektion | `browser.tabs.executeScript` wird **nicht** aufgerufen |
-| `test/hub.test.js` — `hub.request(PROTOCOL.METHODS.FOCUS, {})` | Logzeile `focus tab=42 window=1`, Debug-Block mit dem Ergebnis |
+| `test/hub.test.js` — `hub.request(PROTOCOL.METHODS.FOCUS, {})` | Logzeile `focus tab=42 window=1`, Debug-Block mit den Whitelist-Feldern (`url` voll, `title` als `<n chars>`) |
 | `test/mcp.test.js` — `tools/list` | Sechs Werkzeuge, `browser_focus` ohne Eigenschaften, `additionalProperties:false` |
 | dito — Erfolg, Argument übergeben, `no_agent_tab`, `focus_failed` | je der Satz aus `## MCP-Werkzeug`; abgelehnte Aufrufe erreichen die Extension nicht (Fixture-Zähler) |
 

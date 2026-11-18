@@ -118,7 +118,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `25-frame-handeln.md` | `frame` für `inspect` und `eval` — zweiter Teil von Spec 24 | `active` |
 | `26-frame-click-type.md` | `frame` für `click`/`type` und die Ruhe-Erkennung nach einem Klick im adressierten Rahmen — dritter Teil der Frame-Reihe | `active` |
 | `27-shadow-dom.md` | `>>>` in `browser_inspect` durchdringt offene Schattenbäume (Piercing-Selektor) | `active` |
-| `28-log-hygiene.md` | Whitelist statt Sperrliste für den Debug-Block auf stderr | `proposed` |
+| `28-log-hygiene.md` | Whitelist statt Sperrliste für den Debug-Block auf stderr | `active` |
 | `29-windows-betrieb.md` | `npm run check` prüft die Syntax mit einem Node-Skript statt mit `find`/`xargs` — die Abnahme läuft damit auch dort, wo keine GNU-Werkzeuge installiert sind; Teil 1a der Windows-Reihe | `active` |
 | `30-prozess-und-konsole.md` | Der Bridge-Prozess läuft auf Windows ohne systemd und ohne `/proc`, startet aus einer Konsole und endet dort geordnet; Teil 1b, setzt 29 voraus | `proposed` |
 | `31-youtube-recherche.md` | Recherche zu Roadmap-Zeile 17: was der Agent von einem YouTube-Video heute bekommt (Transkript, Zeitbezug, Bild), welche Wege tragen und welche nicht; mit den Entscheidungen Q1–Q5 und der benannten Folge-Spec `browser_transcript` | `active` |

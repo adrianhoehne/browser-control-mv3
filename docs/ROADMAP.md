@@ -45,7 +45,7 @@ werden nicht neu vergeben.
 | `25-frame-handeln.md` | 15 | Handeln im Frame: `read`/`inspect` über `frame` |
 | `26-frame-click-type.md` | 15 | `click` und `type` im Frame |
 | `27-shadow-dom.md` | 16 | offene Schattenbäume durchdringen (`>>>`) |
-| `28-log-hygiene.md` | 18 | Debug-Block per Whitelist — **Code fertig, Spec noch `proposed`** (Amendments und Live-Messung offen) |
+| `28-log-hygiene.md` | 18 | Debug-Block per Whitelist statt Sperrliste — `active`: Amendments nachgezogen, live gemessen am 2026-11-18 |
 | `29-windows-betrieb.md` | 29 | `npm run check` ohne Shell-Werkzeuge — `scripts/check.mjs` prüft 28 Dateien, `checked 28 files` |
 | `31-youtube-recherche.md` | 17 | Recherche: das Transkript ist lesbar, Werkzeug entschieden |
 | `32-transkript-werkzeug.md` | 17 | `browser_transcript` (Teil 1) — Segmente mit Zeitstempeln |
@@ -84,7 +84,7 @@ Sicherheit und Betrieb (unten) und die Nachträge (oben).
 
 | # | Vorhaben | Warum | Größe |
 |---|---|---|---|
-| 18 | **Log-Hygiene** — Whitelist statt Sperrliste für den Debug-Block | ~~Heute ersetzt die Redaktion nur `text`; ein neues Feld landet sonst ungefiltert auf stderr.~~ **Im Code erledigt durch Spec 28** (alle vier Stufen, beide Code-Reviews `✅`); offen: Amendments, Doku-Verweise, Live-Messung | klein |
+| 18 | ~~**Log-Hygiene** — Whitelist statt Sperrliste für den Debug-Block~~ — **erledigt durch `docs/28`** (alle vier Stufen, beide Code-Reviews `✅`, Amendments nachgezogen, live gemessen am 2026-11-18) | ~~Heute ersetzt die Redaktion nur `text`; ein neues Feld landet sonst ungefiltert auf stderr.~~ Ein neues Ergebnisfeld erscheint jetzt als `"<unlisted field>"`, bis jemand es einträgt | — |
 | 23 | **Signierung/XPI, Teil 1** — die Erweiterung signieren und als XPI bauen | Sie ist temporär und nach jedem Firefox-Neustart weg | mittel |
 | 24 | **Signierung/XPI, Teil 2** — Berechtigungsseite und Dokumentation der `<all_urls>`-Reichweite | Teilstück zwei; ohne sie ist eine signierte Auslieferung nicht ehrlich | klein |
 | 25 | **Reichweite verkleinern (optional)** — Positivliste statt `<all_urls>` | Nur falls der Betreiber das später will; die Entscheidung von 2026-10-23 gilt bis dahin | mittel |

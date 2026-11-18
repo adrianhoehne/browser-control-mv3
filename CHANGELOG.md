@@ -5,6 +5,29 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+**Spec 28 (Log-Hygiene) ist abgeschlossen und `active`** — kein Code, eine
+Dokumentation: die Whitelist für den Debug-Block war seit 2026-10-30 gebaut,
+jetzt sind die Amendments nachgezogen, die bekannten Lücken gegen den Rust-Port
+geprüft und das Live-Kriterium gemessen.
+
+- **Amendments nachgezogen** in `docs/05` (Hub-Absatz, `## Bekannte Lücken`,
+  `#logDebugResult`), `docs/08` (Hub und Testing-Zeile), `docs/09`
+  (Inspect-Block, Dev-Plan-Stufe 3) und `docs/07` (`title`-Falle): der
+  Debug-Block ist eine Whitelist (`DEBUG_WHITELIST` in `bridge-rs/src/hub.rs`),
+  `title` erscheint dort als Länge — außer in `status`, wo der Block byte-genau
+  gepinnt ist.
+- **Lücken:** von fünf bleiben zwei (`docs/28`). Ein Ergebnis, das kein Objekt
+  ist, druckt weiter JSON im Klartext (gepinnt, nicht zugesagt); `title` als
+  Länge ist in `click`/`type` nicht gepinnt. Der Tabellen-Tippfehler, das flache
+  `Object.freeze` und `__proto__` sind mit dem Rust-Port entfallen.
+- **Live gemessen ohne Browser** (zweiter Prozess auf 18810/18811, `BC_LOG=debug`,
+  nachgebaute Extension): der `read`-Block zeigt `"text": "<19 chars>"`,
+  `"title": "<14 chars>"` und `"surpriseField": "<unlisted field>"`; kein
+  Seiteninhalt im stderr, bei `log=info` gar kein Block. Kriterium 5 am echten
+  Firefox bleibt beim Betreiber.
+- **Belege:** Parität 7/7, `cargo test` 283 Fälle 0 failed, `npm test` 522 Fälle
+  `# fail 0`/`# cancelled 0`, `npm run check` 0.
+
 **Der Schalter in der Symbolleiste (`docs/44`, Stufen 1–4)** — die Erweiterung
 hat ein Symbol und ist nach der Installation **aus**. Ein Klick öffnet den
 Brücken-Tab und den Socket, ein zweiter schließt beides wieder, und dabei sagt

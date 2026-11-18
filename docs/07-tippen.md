@@ -541,6 +541,10 @@ Stand 2026-10-23, vor der Messung:
   `chars`, aber `url=` darf sie nicht verschweigen — die Antwort muss die
   Adresse zeigen. Wer wirklich nichts preisgeben will, tippt nicht in
   Suchfelder; ein Filter für Query-Parameter wäre eine eigene Entscheidung.
+  **Der `title`-Teil ist seit 2026-11-18 geschlossen** (Spec 28): der Debug-Block
+  zeigt `title` als `<n chars>` (`DEBUG_WHITELIST` in `bridge-rs/src/hub.rs`), der
+  Seitentitel des Suchergebnisses steht also nicht mehr im Log. Die `url` bleibt
+  voll — das ist die bewusste Grenze dieser Zeile.
 - **`submit: null` gilt als „kein Boolean"** ⇒ `invalid_params`; nur fehlend
   oder `undefined` heißt `false`.
 - **`requestSubmit` bleibt eine Beobachtung:** ein Seitenhandler, der selbst
