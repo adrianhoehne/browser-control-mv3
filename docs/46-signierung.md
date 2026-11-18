@@ -35,6 +35,19 @@ nicht in der AMO-Suche; der Betreiber verteilt die Datei selbst.
 - **Kein Auto-Update-Kanal.** Eine `unlisted`-XPI aktualisiert sich nicht selbst;
   eine neue Version installiert der Betreiber wieder per Doppelklick.
 
+## Additional dependencies
+
+| Abhängigkeit | Version | Lizenz | Wo |
+|---|---|---|---|
+| `web-ext` | **8.9.0** (gepinnt, dieselbe Version wie im E2E aus `docs/40`) | MPL-2.0 | nur zum Signieren, nicht im Produkt und nicht zur Laufzeit |
+
+`scripts/package.sh` wirbt heute mit „No web-ext, no dependencies" — das bleibt
+für den **Bau** richtig; das Signieren ist ein eigener Schritt und braucht das
+Werkzeug. Der Kommentar in `package.sh` wird präzisiert.
+
+**Der Betreiber muss dieses Werkzeug freigeben** (`CONTRIBUTING.md`); bis dahin
+steht es unter `## Open questions`.
+
 ## Was AMO verlangt
 
 | Was | Stand heute | nötig |
@@ -45,7 +58,7 @@ nicht in der AMO-Suche; der Betreiber verteilt die Datei selbst.
 | **Daten-Erklärung** | **fehlt** | siehe `## Die Daten-Erklärung` |
 | Lizenz | `LICENSE`/`MIT` im Repo | im Einreichungsformular angeben |
 | Zusammenfassung, Kategorie | — | im Formular, englisch |
-| Begründung der Berechtigungen | teilweise in `README.md` | vollständig, siehe `## Die Reichweite` |
+| Begründung der Berechtigungen | in `INSTALL.md` §4/§8, nicht in `README.md` (`grep -c -i permission README.md` ⇒ 0) | eine Tabelle in `README.md`, siehe `## Die Reichweite` |
 
 ## Die Daten-Erklärung
 
@@ -61,11 +74,10 @@ Zwei mögliche Orte für diese Aussage:
 2. **Im Einreichungsformular** von AMO, wenn der Manifest-Schlüssel in der
    Zielversion nicht greift oder anders heißt.
 
-**Welcher Ort gilt, wird gemessen, nicht geraten:** Manifest-Schlüssel setzen,
-XPI in Firefox 152 laden, `about:addons` → Berechtigungen prüfen; danach
-einreichen und die AMO-Rückmeldung abwarten. Die exakte Form des Schlüssels
-(`required`/`optional`, erlaubte Werte) wird zum Zeitpunkt der Umsetzung aus der
-MDN-Dokumentation übernommen und in dieser Spec nachgetragen.
+**Welcher Ort gilt, wird gemessen, nicht geraten** — in **Stufe 0**, vor jedem
+anderen Schritt: Manifest-Schlüssel in der dokumentierten Form setzen, XPI bauen,
+in Firefox 152 laden, `about:addons` → Berechtigungen prüfen. Die gemessene Form
+wird in Kriterium 1 als **Literal** eingetragen.
 
 ## Die Reichweite (Roadmap 24)
 
@@ -104,48 +116,64 @@ web-ext sign --channel=unlisted \
 ```
 
 Das signierte Artefakt heißt `browser_control-<v>-an+fx.xpi` (AMO vergibt den
-Namen) und wird **nicht** ins Repo gelegt — es hängt am GitHub-Release, wie die
-portablen Zips.
+Namen) und kommt **nicht** ins Repo.
 
 ## Testing
 
 | Datei | Fall | Was er beweist |
 |---|---|---|
 | `test/manifest.test.js` | `manifest_shouldDeclareNoDataCollection` | die Daten-Erklärung steht im Manifest (Schlüssel und Form nach der Messung) |
-| `test/manifest.test.js` | `manifest_shouldKeepTheFixedAddonId` | ohne feste ID keine Signatur über Versionen hinweg |
-| `test/package.test.js` | `package_shouldRefuseAVersionThatIsNotNewer` | eine bereits signierte Version wird nicht erneut gebaut (AMO lehnt sie ab) |
-| `scripts/sign.sh --check` | ohne Schlüssel: Exit 1 mit Hinweis auf `amo.env` | die Signatur scheitert laut, nicht still |
+| `test/manifest.test.js` | **`browserSpecificSettings_shouldKeepTheExtensionId`** (existiert schon, `test/manifest.test.js:158`) | ohne feste ID keine Signatur über Versionen hinweg |
+| `scripts/sign.sh` | `sign_withoutAmoEnv_shouldExitOneAndNameThePath` | die Signatur scheitert laut, nicht still |
 
 ## Acceptance criteria
 
 1. **Das Manifest trägt die Daten-Erklärung.** `node -e "const m=require('./extension/manifest.json');
    console.log(JSON.stringify(m.browser_specific_settings.gecko.data_collection_permissions))"`
-   ⇒ ein Objekt, das „keine Datensammlung" aussagt (exakte Form nach der Messung).
+   ⇒ **das Literal, das Stufe 0 gemessen hat** (es wird hier eingetragen, sobald
+   es vorliegt; bis dahin ist dieses Kriterium nicht entscheidbar und die Spec
+   bleibt `proposed`).
 2. **Die Reichweite steht in `README.md`.** `grep -c 'host_permissions\|<all_urls>'
    README.md` ⇒ **≥ 1**, mit der Tabelle aus `## Die Reichweite`.
-3. **Die Schlüssel sind nicht im Repo.** `git grep -nE 'AMO_JWT|api-secret'
-   -- . ':(exclude)docs/**'` ⇒ **keine Ausgabe**, und
+3. **Die Schlüssel sind nicht im Repo — nur ihre Namen.** Erlaubt ist, dass
+   `scripts/sign.sh` die **Variablennamen** liest; verboten sind Werte.
+   `git grep -nE '[0-9a-f]{32,}' -- . ':(exclude)bridge-rs/Cargo.lock'` ⇒ keine
+   Ausgabe (dieselbe Prüfung wie in `CONTRIBUTING.md`), und
    `grep -c 'amo.env' .gitignore` ⇒ **1**.
-4. **Die Signatur läuft durch.** (Betreiber.) `scripts/sign.sh` ⇒ Exit 0, ein
-   `*.xpi` in `dist/signed/`, und `web-ext sign` meldet eine signierte Version.
+4. **Die Signatur läuft durch.** (Betreiber.) `scripts/sign.sh` ⇒ Exit 0 und
+   `ls -1 dist/signed/*.xpi | wc -l` ⇒ **1**.
 5. **Die Installation hält.** (Betreiber.) Frisches Firefox-Profil, XPI
    doppelklicken, installieren, Firefox beenden und starten ⇒ die Erweiterung ist
    **noch da**, der Brücken-Tab erscheint, die Bridge loggt `extension
    connected`. Damit ist Kriterium 11 aus `docs/42` erstmals messbar.
-6. **Die Anleitung nennt den Doppelklick.** `docs/portable/FIREFOX.md` nennt den
-   Doppelklick und **nicht** mehr `about:debugging`;
-   `grep -c 'about:debugging' docs/portable/FIREFOX.md` ⇒ **0** (oder nur in
-   einem Absatz „wenn du keine signierte Datei hast").
-7. **Der Rest bleibt grün.** `npm test` ⇒ `# fail 0`; `npm run check` ⇒ 0;
-   `scripts/parity.sh --impl rust --check` ⇒ 7/7 (die Bridge ist unberührt).
+6. **Die Anleitung nennt den Doppelklick.** `grep -c 'about:debugging'
+   docs/portable/FIREFOX.md` ⇒ **0**. Ein Rückfall-Absatz für unsignierte Dateien
+   wäre ein eigenes Kriterium mit eigener Zahl — heute steht die Zeichenkette
+   dreimal drin (`:12`, `:16`, `:26`), und `test/bundle/bundle.test.js` pinnt
+   die Zahl der numerierten Schritte (≥ 9), also wird der Text mitgeprüft.
+7. **Der Rest bleibt grün.** `npm test` ⇒ `# fail 0`; `npm run test:bundle` ⇒
+   `# fail 0` (der Fall pinnt `FIREFOX.md` auf mindestens neun Schritte);
+   `npm run check` ⇒ 0; `scripts/parity.sh --impl rust --check` ⇒ 7/7 (die
+   Bridge ist unberührt).
 
 ## Dev plan
 
-**Stufe 1 — Manifest und Doku**
+**Stufe 0 — die Form der Daten-Erklärung messen**
 
-Dateien: `extension/manifest.json` (Daten-Erklärung), `test/manifest.test.js`,
-`README.md` (Reichweiten-Tabelle), `INSTALL.md` (Verweis), `docs/24`…`docs/34`
-nur falls sie die Reichweite falsch darstellen.
+Dateien: keine. Manifest-Schlüssel in der dokumentierten Form setzen, XPI bauen,
+in Firefox 152 laden, `about:addons` → Berechtigungen prüfen. Das Ergebnis wird
+in Kriterium 1 als Literal eingetragen.
+
+Beweis: Kriterium 1 mit dem gemessenen Literal; `about:addons` zeigt die
+Erklärung.
+
+**Stufe 1 — Manifest, Version und Doku**
+
+Dateien: `extension/manifest.json` (Daten-Erklärung, **Version `0.6.1`**),
+`package.json` (Version), `test/extension.test.js` (`MANIFEST_VERSION`, heute
+`0.6.0`), `test/manifest.test.js`, `README.md` (Reichweiten-Tabelle),
+`INSTALL.md` (Verweis), `docs/24`…`docs/34` nur falls sie die Reichweite falsch
+darstellen.
 
 Beweis: Kriterien 1, 2, 6.
 
@@ -179,11 +207,10 @@ erfüllt".
 
 ## Open questions
 
-1. **Wo entstehen die API-Schlüssel, und wer bewahrt sie?** Der Betreiber. Ohne
-   sie ist Stufe 3 nicht ausführbar; die Spec bleibt bis dahin `proposed`.
-2. **Soll die signierte XPI am GitHub-Release hängen** (wie die portablen Zips,
-   `docs/40`) oder nur lokal verteilt werden? Empfehlung: am Release, dann ist
-   sie versioniert und auffindbar.
+1. **Darf `web-ext` als Signierwerkzeug dazukommen** (8.9.0, MPL-2.0, nur zum
+   Signieren)? Ohne die Freigabe bleibt diese Spec `proposed`.
+2. **Wo entstehen die API-Schlüssel, und wer bewahrt sie?** Der Betreiber. Ohne
+   sie ist Stufe 3 nicht ausführbar.
 
 ## Review
 

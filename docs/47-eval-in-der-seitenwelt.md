@@ -23,7 +23,9 @@ Manifest ab.
 **Der Betreiber hat die Verwendung benannt** (2026-11-18): Hotels suchen, Preise
 vergleichen, Artikel in den Warenkorb legen, als Nächstes YouTube-Transkripte.
 Das ist freier Code, keine Wertabfrage. Eine Ausdrucks-Teilmenge hilft nicht:
-auch `document.title` braucht einen `Function`-Aufruf.
+**jeder** ausgewertete Ausdruck braucht `Function`, auch `document.title`. (Den
+Titel liefert `read` ohne Auswertung — das ist der Unterschied zwischen „lesen"
+und „auswerten".)
 
 ## Ziel
 
@@ -71,10 +73,11 @@ Seitenvariablen. Das steht so in der Optionsseite und in `README.md`.
 
 ## Der Weg in die Seitenwelt
 
-**Erste Wahl:** `browser.scripting.executeScript({ target: { tabId }, world: "MAIN", func, args: [code] })`.
-Der Code wird als Argument übergeben und im Seitenkontext ausgewertet
-(`eval` beziehungsweise `Function` dort). Firefox kennt den `world`-Parameter
-seit Version 128; die Zielversion ist 152.
+**Erste Wahl:** `browser.scripting.executeScript({ target: { tabId }, world: "MAIN", func, args: [code, limits] })`.
+Der Code wird als Argument übergeben und im Seitenkontext ausgewertet.
+**In die Seitenwelt geht nur diese eine Nutzlast** — `page-agent.js` bleibt in
+der isolierten Welt, denn es spricht `browser.runtime` an, und `browser` gibt es
+in der Seitenwelt nicht. Die Zielversion ist 152 (gemessen in `docs/02`).
 
 **Ob das trägt, wird gemessen, nicht angenommen** (Stufe 0 unten): ein Aufruf auf
 einer Seite ohne CSP muss ein Ergebnis liefern, und ein Aufruf auf einer Seite mit
@@ -88,6 +91,15 @@ blockieren es, also dieselbe Grenze wie bei `eval` in der Seitenwelt auch.
 **Was in keinem Fall geht:** die Auswertung in der isolierten Welt. Dort bleibt
 `Function` gesperrt.
 
+**Der Antwortvertrag bleibt derselbe, und er bekommt einen Besitzer:** das
+`func` serialisiert sein Ergebnis **im Seitenkontext** mit denselben Regeln und
+Grenzen, die heute in `page-agent.js` gelten (`EVAL_RESULT_LIMIT` = 10 000
+Zeichen, `undefined` ⇒ `null`, BigInt ⇒ String, Funktion ⇒ `"[function]"`,
+nicht serialisierbar ⇒ `eval_result_unserializable`). Es gibt genau **eine**
+Zeile zurück (einen String), und die Brücke prüft ihre Grenzen wie bisher. Was
+die Seitenwelt nicht kann, ist ein Wert, den der Structured Clone nicht trägt —
+deshalb reist ein String, kein Objekt.
+
 ## Fehlerpfade
 
 | Fall | Antwort |
@@ -96,7 +108,9 @@ blockieren es, also dieselbe Grenze wie bei `eval` in der Seitenwelt auch.
 | Seite verbietet Skript (CSP) | „Die Seite verbietet eigenes Skript (CSP) — Werte lassen sich mit `read` oder `inspect` holen." |
 | Code wirft | `eval_failed` mit dem Fehlertext der Seite |
 | Code liefert nichts | `undefined`, kein Fehler |
-| Frist | wie heute (`BC_CALL_TIMEOUT_MS` der Bridge) |
+| Frist | `EVAL_TIMEOUT_MS` (2 000 ms, `extension/bridge.js:385`), Wächter `EVAL_GUARD_MS` (2 500 ms); Antwort `eval_timeout` |
+| Ergebnis zu groß | `eval_result_too_large` (Grenze `EVAL_RESULT_LIMIT` = 10 000) |
+| Ergebnis nicht serialisierbar | `eval_result_unserializable` |
 
 ## Testing
 
@@ -114,16 +128,25 @@ blockieren es, also dieselbe Grenze wie bei `eval` in der Seitenwelt auch.
 **Kriterien 1–4 entscheidet der Umsetzer, 5–6 der Betreiber.**
 
 1. **`eval` liefert wieder Werte.** Über MCP auf `https://example.com/`:
-   `browser_eval` mit `document.querySelectorAll("p").length` ⇒ **6** (die
-   mehrsprachige IANA-Seite), kein `eval_failed`.
-2. **Seitenvariablen sind sichtbar.** Auf einer Seite mit gesetztem
-   `window.__bcProbe` liefert `browser_eval` mit `window.__bcProbe` den Wert —
-   das ist der Unterschied zur isolierten Welt.
+   `browser_eval` mit `document.querySelectorAll("p").length` ⇒ **1**
+   (gemessen am 2026-11-18: die Seite hat genau einen Absatz), kein
+   `eval_failed`.
+2. **Seitenvariablen sind sichtbar.** Zwei Aufrufe hintereinander:
+   `browser_eval` mit `window.__bcProbe = 42` setzt die Variable, ein zweiter
+   Aufruf mit `window.__bcProbe` liest **42** zurück. Dass sie den zweiten
+   Aufruf überlebt, ist der Beweis für die Seitenwelt — in der isolierten Welt
+   wäre sie weg.
 3. **Der Schalter wirkt.** Mit ausgeschaltetem `allowEval` antwortet dasselbe
    Kommando mit der Erlaubnis-Aufforderung, nicht mit einem CSP-Fehler.
 4. **Die CSP bleibt clean.** `node -e "const m=require('./extension/manifest.json');
    console.log(m.content_security_policy.extension_pages.includes('unsafe-eval'))"`
    ⇒ `false`.
+
+4b. **Alles andere bleibt isoliert.** Auf derselben Seite, auf der `eval`
+    `window.__bcProbe` sieht: `browser_inspect` mit `selector: "html"` liefert
+    ein Element ohne `__bcProbe`, und `browser_read` liefert Text — keiner der
+    beiden Wege sieht Seitenvariablen (`injection_`-Fall im Harness: der
+    `page-agent.js`-Kontext bekommt sie nicht).
 5. **Der CSP-Fall kommt erklärt.** (Betreiber.) Auf einer Seite mit strenger CSP
    (z. B. `https://github.com/`) ⇒ Meldung, die „CSP" und die Alternative nennt;
    `read` auf derselben Seite funktioniert weiter.
@@ -135,10 +158,16 @@ blockieren es, also dieselbe Grenze wie bei `eval` in der Seitenwelt auch.
 
 **Stufe 0 — messen, ob `world: "MAIN"` trägt**
 
-Dateien: keine. Ein Aufruf gegen den laufenden Dienst auf einer Seite ohne CSP
-und einer mit CSP; notieren, was zurückkommt. Wenn `world` nicht akzeptiert wird
-(Fehler „unknown property" oder ähnlich), ist die zweite Wahl aus
-`## Der Weg in die Seitenwelt` dran — und diese Spec bekommt das Ergebnis.
+Dateien: keine im Baum. Das Messinstrument ist eine **Kopie außerhalb des
+Repos** (`/tmp`): extension/ kopieren, `bridge.js` dort um den `world`-Parameter
+ergänzen, Test-Kopie über `web-ext` starten, gegen einen eigenen
+Bridge-Prozess auf freien Ports. Wer misst: der Umsetzer; der Betreiber sieht
+das Ergebnis.
+
+Gemessen wird auf einer Seite **ohne** CSP (`example.com`) und einer **mit**
+strenger CSP (`github.com`): ersteres muss einen Wert liefern, letzteres den
+CSP-Fehler der Seite. Wird `world` gar nicht akzeptiert, ist die zweite Wahl aus
+`## Der Weg in die Seitenwelt` dran; das Ergebnis wird in diese Spec eingetragen.
 
 Beweis: zwei Ausgaben, eine mit Wert, eine mit dem CSP-Fehler der Seite.
 
@@ -151,8 +180,11 @@ Beweis: Kriterien 1, 2, 3, 4 und die sechs Testfälle.
 
 **Stufe 2 — Doku**
 
-Dateien: `docs/25` (Amendment: `eval` ist nicht mehr isoliert, Begründung),
-`README.md` (Rechtetabelle: was `allowEval` jetzt erlaubt), `CHANGELOG.md`,
+Dateien: `extension/options.html` und `extension/options.js` (der Hinweis am
+`allowEval`-Schalter sagt künftig, dass der Code auch Seitenvariablen sieht;
+`test/manifest.test.js` pinnt diesen Text auf das Wort „Passwortfelder" — es
+bleibt im neuen Text stehen), `docs/25`, `docs/19`, `docs/45` (Amendments),
+`README.md` (nur falls `docs/46` die Tabelle schon angelegt hat), `CHANGELOG.md`,
 `docs/PROJECT-STATE.md`, `docs/47` auf `active`.
 
 Beweis: Kriterien 5, 6.
@@ -162,7 +194,9 @@ Beweis: Kriterien 5, 6.
 | Dokument | Abschnitt | was gilt |
 |---|---|---|
 | `docs/25-frame-handeln.md` (führt `browser_eval` mit `frame` ein) | `## Ziel`, `## Bekannte Lücken` | „läuft in der isolierten Welt" ist **überholt**. Neu: es läuft in der Seitenwelt, weil MV3 es anders nicht zulässt; der Schalter ist die Zustimmung |
-| `README.md` | Rechtetabelle | der Satz zu `scripting` bekommt „im Seitenkontext" dazu |
+| `docs/19-*.md` (führt die `eval`-Fehlercodes) | Fehlertabelle | `eval_timeout`, `eval_result_too_large`, `eval_result_unserializable` bekommen den neuen Weg; die Sätze bleiben |
+| `docs/45-injection-naht.md` | `## Ziel` („kein Quelltext mehr") | gilt weiter für alle Werkzeuge **außer** `eval`: dort reist die Nutzlast als `func`, und der Grund steht hier |
+| `README.md` | Rechtetabelle | entsteht in `docs/46`; der Satz zu `scripting` bekommt „im Seitenkontext" dazu |
 
 ## Bekannte Lücken
 
@@ -182,7 +216,23 @@ Spec läuft.
 
 ## Review
 
-### Runde 1 — steht aus
+### Runde 1 — 2026-11-18, `grizzled-senior-dev`: 🤔, Zuschnitt falsch
+
+Acht Blocker: die Zahl 6 war falsch (die Seite hat einen Absatz); das
+Seitenwelt-Kriterium war ein Zirkelschluss; Stufe 0 hatte kein Messinstrument;
+zwei Fahrzeuge widersprachen sich (`func` umgeht `page-agent.js`, und
+`page-agent.js` kann wegen `browser.runtime` nicht in die Seitenwelt); der
+Antwortvertrag hatte keinen Besitzer; die Fristen nannten den falschen Eigner
+und ließen zwei Codes weg; „die alten `eval_`-Fälle bleiben grün" war unmöglich,
+weil der Harness die Injektion auf `{target, files}` pinnt; und für „alles
+andere bleibt isoliert" gab es keinen Fall.
+
+**Übernommen:** Zahl auf 1 mit Messdatum; Kriterium 2 setzt und liest in zwei
+Aufrufen; Stufe 0 nennt Instrument und Messseiten; **nur die Nutzlast** geht in
+die Seitenwelt, `page-agent.js` bleibt isoliert; der Antwortvertrag reist als
+String mit den bestehenden Grenzen und hat seinen Besitzer; Fristen und Codes
+korrigiert; Kriterium 4b prüft die Isolation von `read`/`inspect`; Amendments um
+`docs/19` und `docs/45` ergänzt; `options.html`/`options.js` in Stufe 2.
 
 ## Log
 
@@ -191,3 +241,6 @@ Spec läuft.
   reproduziert auf `https://example.com/`.
 - **2026-11-18, Betreiberentscheid:** `eval` bleibt ein Werkzeug; die Spec
   beschreibt den Umzug in die Seitenwelt.
+- **2026-11-18, Runde 1:** das Review hat den Zuschnitt blockiert (`🤔`); die
+  zwei Wege sind jetzt einer — Nutzlast als `func` in die Seitenwelt, alles
+  andere bleibt isoliert.
