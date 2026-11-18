@@ -1,5 +1,5 @@
 ---
-description: browser_eval zieht in die Seitenwelt — die MV3-CSP erlaubt in der isolierten Welt keinen Function-Aufruf; allowEval bleibt der Schalter.
+description: browser_eval zieht in die Seitenwelt, weil die MV3-CSP keinen Function-Aufruf in der isolierten Welt erlaubt; allowEval bleibt der Schalter.
 status: proposed
 ---
 
