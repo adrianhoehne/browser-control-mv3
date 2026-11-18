@@ -171,14 +171,17 @@ deshalb reist ein String, kein Objekt.
     `page-agent.js`-Kontext bekommt sie nicht).
 5. **Der CSP-Fall kommt erklärt.** (Betreiber.) Auf einer Seite mit strenger CSP
    (z. B. `https://github.com/`) ⇒ Meldung, die „CSP" und die Alternative nennt;
-   `read` auf derselben Seite funktioniert weiter.
+   `read` auf derselben Seite funktioniert weiter. Der Fehlertext der Seite ist
+   **`call to eval() blocked by CSP`** (gemessen) — die Erkennung prüft auf
+   „CSP", nicht auf das Wort `Function`.
 6. **Die alten Fälle bleiben grün.** `npm test` ⇒ `# fail 0`; die
    `eval_`-Fälle von vor dem Umbau sind unverändert grün, `read`/`inspect`/
    `click`/`type` unberührt.
 
 ## Dev plan
 
-**Stufe 0 — messen, ob `world: "MAIN"` trägt**
+**Stufe 0 — messen, ob `world: "MAIN"` trägt** *(erledigt 2026-11-18, Ergebnis
+oben: der Parameter trägt)*
 
 Dateien: keine im Baum. Das Messinstrument ist eine **Kopie außerhalb des
 Repos** (`/tmp`): extension/ kopieren, `bridge.js` dort um den `world`-Parameter
