@@ -504,6 +504,13 @@ function createPageAgentChannel(config = null) {
     // `{ silent: true }` is the frame that took the message and never answered — the
     // shape only an op-level switch can produce (a whole frame is `silent` instead).
     if (canned.silent === true) return true;
+    // `{ error }` is the other refusal an op can produce: a page function that threw.
+    // The dispatcher would answer `ok: false`, and a shape case needs that answer
+    // without a page that really throws.
+    if (canned.error !== undefined) {
+      emit(index, { callId: message.callId, ok: false, error: canned.error });
+      return true;
+    }
     emit(index, { callId: message.callId, ok: true, value: canned.value });
     return true;
   }
@@ -522,7 +529,13 @@ function createPageAgentChannel(config = null) {
   async function letPageClocksRun(indexes) {
     for (let round = 0; round < 3; round += 1) {
       for (const index of indexes) {
-        realms.get(index)?.clock.advanceToQuiescence();
+        const clock = realms.get(index)?.clock;
+        if (clock === undefined) continue;
+        // `advanceMs` is the opt-out for a case that has to see a timer the op was
+        // supposed to clear: draining the clock would make "cleared" and "fired"
+        // indistinguishable.
+        if (config?.advanceMs === undefined) clock.advanceToQuiescence();
+        else clock.advance(config.advanceMs);
       }
       await Promise.resolve();
       await Promise.resolve();
@@ -1035,82 +1048,6 @@ function createMutationObserverStub(clock) {
 }
 
 /**
- * Runs a page snippet that *waits*, on a virtual clock the harness drives itself.
- *
- * The clock has to be driven, and by the harness: a snippet whose promise never
- * resolves makes the test end as `cancelled` — and `# fail 0` stays green for a
- * cancelled test. So this function arms the mutation plan of the fixture, hands the
- * realm a clock, runs the snippet, and lets time pass until nothing is left to run.
- *
- * `page.scheduleMutations(clock, mutationObserver)` is the plan: it is called before
- * the snippet starts, which is what makes "a mutation 100 ms after the wait began" a
- * statement about the same timeline the snippet watches.
- *
- * `advanceMs` decides how far the clock runs after the snippet returned: `null`
- * drains it to the end, an explicit number stops at exactly that instant. The
- * difference is the difference between "nothing is left" and "nothing is left *yet*":
- * `advanceToQuiescence()` only returns once the timer map is empty, so no assertion
- * made after it can ever see a timer that the snippet forgot to clear. A case that
- * wants to prove a `clearTimeout` has to stop at the instant the answer arrived.
- */
-async function runWaitingPageCode(code, page, { advanceMs = null, clock = null } = {}) {
-  const pageClock = clock ?? createPageClock();
-  const mutationObserver = createMutationObserverStub(pageClock);
-  page.scheduleMutations?.(pageClock, mutationObserver);
-  const { context } = pageContextOf(page, { clock: pageClock, mutationObserver });
-  const returned = vm.runInNewContext(code, context, { filename: "injected:page" });
-  // The snippet resolves during this call; the `await` below only lets the page
-  // realm's promise chain finish, it does not wait for time.
-  if (advanceMs === null) pageClock.advanceToQuiescence();
-  else pageClock.advance(advanceMs);
-  const outcome = JSON.parse(JSON.stringify(await returned));
-  return { outcome, clock: pageClock, mutationObserver };
-}
-
-/**
- * Runs a page snippet whose wait re-arms itself, on a virtual clock this harness steps.
- *
- * `runWaitingPageCode` is not enough for a *polling* snippet: its
- * `advanceToQuiescence()` is synchronous, so it runs the first poll's timer and then
- * finds the map empty — the continuation that arms the next timer is a microtask, and
- * a synchronous drain cannot see it. The promise would stay pending and the test would
- * end as `cancelled`, which leaves `# fail 0` green over a snippet that never answered.
- *
- * So this driver yields to the microtask queue between ticks (`setImmediate` is one
- * full turn), then advances to the earliest due timer. It stops when the snippet
- * answered, when no timer is left, or at the round limit — and a snippet that never
- * answered fails loudly instead of hanging the suite.
- */
-async function runPollingPageCode(code, page, { clock = createPageClock() } = {}) {
-  const mutationObserver = createMutationObserverStub(clock);
-  page.scheduleMutations?.(clock, mutationObserver);
-  const { context } = pageContextOf(page, { clock, mutationObserver });
-  let answer = null;
-  // A rejection is not swallowed: the caller must see a snippet that threw, not a
-  // cancelled test. `answer` stays `null` and the `assert` below would hide the reason,
-  // so the error travels in the same slot.
-  Promise.resolve(vm.runInNewContext(code, context, { filename: "injected:page" })).then(
-    (value) => {
-      answer = value === undefined ? {} : value;
-    },
-    (error) => {
-      answer = { error };
-    },
-  );
-  for (let round = 0; round < PAGE_CLOCK_ROUND_LIMIT && answer === null; round += 1) {
-    await new Promise((resolve) => setImmediate(resolve));
-    if (answer !== null) break;
-    const pending = clock.pendingDelays();
-    if (pending.length === 0) break;
-    clock.advance(Math.min(...pending));
-  }
-  await new Promise((resolve) => setImmediate(resolve));
-  assert.notEqual(answer, null, "the page snippet never answered");
-  if (answer.error !== undefined) throw answer.error;
-  return { outcome: JSON.parse(JSON.stringify(answer)), clock };
-}
-
-/**
  * `Event` and `KeyboardEvent` of the invented page.
  *
  * Only what the injected snippets use: `type`, `key`, and the `defaultPrevented`
@@ -1387,12 +1324,15 @@ function remainingText(entries) {
 }
 
 /**
- * The default `executeScript`: the passed string really runs, against the invented
- * page above. Returning an echo of the code would prove nothing about it.
+ * The default `executeScript`: a `{code}` injection is refused loudly.
+ *
+ * Since spec 45 the only way into a page is the file plus the message channel, and every
+ * tool takes it. A stub that still ran source text would let a leftover caller stay green
+ * in this suite while the real extension injected nothing usable — so the default is the
+ * loud failure, not a convenience.
  */
-function runsOnDefaultPage(tabId, details) {
-  // The tab id is recorded by the stub itself; the code does not need it.
-  return [runPageCode(details.code, DEFAULT_READ_PAGE)];
+function refuseSnippetInjection(tabId, details) {
+  throw new Error(`a {code} injection is no longer part of the seam: ${String(details?.code).slice(0, 40)}`);
 }
 
 /* ------------------------------------------------- screenshot fixtures */
@@ -1666,7 +1606,7 @@ function createTabsStub({
   updateThrowsFor = [],
   updateKeepsStatusCompleteFor = [],
   updateReportsAboutBlankFor = [],
-  executeScript = runsOnDefaultPage,
+  executeScript = refuseSnippetInjection,
   captureDataUrl = ONE_BY_ONE_PNG_DATA_URL,
   captureThrowsTimes = 0,
   captureCalls = [],
@@ -1920,7 +1860,6 @@ function createSandbox({
   storageWriteFailsFor = [],
   headFetch = createHeadFetchStub(),
   encoder = createEncoderStub(),
-  injectionProbe = false,
 } = {}) {
   const clock = new FakeTimerClock();
   const consoleLines = [];
@@ -1966,9 +1905,6 @@ function createSandbox({
   // Before anything of the extension runs: the slot map has to be visible from `set`
   // on, and `Map.prototype` is per realm.
   vm.runInContext(MAP_PROBE_SOURCE, sandbox, { filename: "test/map-probe.js" });
-  // The harness's door into the injection channel (spec 45). Set *before* `bridge.js`
-  // loads, because that is when the hook is read; without it a real page carries none.
-  if (injectionProbe) sandbox.__bcInjectionProbe = true;
   return { browser, sandbox, clock, consoleLines, headFetch, encoder };
 }
 
@@ -3903,32 +3839,20 @@ function createSettlingReadTabs(page) {
  * of the real browser — a case that wants to prove selection by content passes the
  * frames in the other order.
  */
-function executeOnFrames(frames) {
-  return async (tabId, details) => {
-    assert.equal(details.allFrames, true, "a frames injection must address every frame");
-    assert.equal(details.frameId, undefined, "`allFrames` and `frameId` exclude each other");
-    assert.equal(
-      details.matchAboutBlank,
-      true,
-      "without `matchAboutBlank` an about:blank frame cannot be injected into at all",
-    );
-    return frames.map((frame) => runPageCode(details.code, framePageOf(frame)));
-  };
-}
-
 /** One invented frame (`{href, top}`) as the page realm its snippet runs in. */
-function framePageOf(frame) {
-  return { url: frame.href, inFrame: frame.top !== true };
-}
-
 /**
- * The tabs stub whose only injection is the `allFrames` one.
+ * The tabs stub whose frames answer the inventory themselves.
  *
- * The tab is `complete`: a `frames` call takes an inventory and waits for nothing, so
- * a `loading` tab is a case of its own and names that status itself.
+ * Every frame is a realm of its own and reports its address and `top` by itself — the
+ * list is built from those self-reports, not from an array an injection handed back.
+ * The tab is `complete`: a `frames` call takes an inventory and waits for nothing, so a
+ * `loading` tab is a case of its own and names that status itself.
  */
-function createFramesTabs(frames, { tabs = [createAgentTabFixture({ status: "complete" })] } = {}) {
-  return createTabsStub({ tabs, executeScript: executeOnFrames(frames) });
+function createFramesTabs(
+  frames,
+  { tabs = [createAgentTabFixture({ status: "complete" })], answer, refuseInjection } = {},
+) {
+  return createTabsStub({ tabs, pageAgent: { frames, answer, refuseInjection } });
 }
 
 /**
@@ -3945,42 +3869,6 @@ function readPageOfFrame(frame) {
     innerText: frame.text ?? "",
     inFrame: frame.top !== true,
   };
-}
-
-/**
- * A page that answers in several frames: `pages` are the invented realms, main frame
- * first, in the order the browser hands its answers back.
- *
- * The answer count is derived from `details.allFrames` and never from `pages.length`.
- * That is the whole point of the fixture: a tool that forgot `allFrames: want !== null`
- * gets the main frame's single answer, whose own `location.href` says `not_the_frame` —
- * the call then ends at `frame_not_found` instead of quietly answering the main frame and
- * looking green.
- *
- * `run(code, page)` turns one realm into the entry the browser would bring back. A runner
- * built on `runWaitingPageCode` answers the pair `{outcome, clock}` and has to collect
- * that clock itself — `assertNoTimerLeft` can only see the frames whose timers the case
- * was handed.
- */
-function createFramedTabs(pages, { run = runPageCode, tabs = [createAgentTabFixture({ status: "complete" })] } = {}) {
-  return createTabsStub({
-    tabs,
-    executeScript: async (tabId, details) => {
-      // One frame, and it is the main one — what `injectPageCode` sends without the
-      // switch. Asserted here so a missing `frameId: 0` is not read as "all frames".
-      if (details.allFrames !== true) {
-        assert.equal(details.frameId, 0, "without `allFrames` the injection addresses the main frame");
-        return [await run(details.code, pages[0])];
-      }
-      assert.equal(details.frameId, undefined, "`allFrames` and `frameId` exclude each other");
-      assert.equal(
-        details.matchAboutBlank,
-        true,
-        "without `matchAboutBlank` an about:blank frame cannot be injected into at all",
-      );
-      return Promise.all(pages.map((page) => run(details.code, page)));
-    },
-  });
 }
 
 /**
@@ -9803,15 +9691,23 @@ function matchesArticleSelector(element, selector) {
 const INSPECT_CANDIDATE_LIMIT = 5000;
 const INSPECT_TEXT_LIMIT = 200;
 
-/** The inspect path with an injection that runs the real snippets against `page`. */
+/**
+ * The inspect path with an injection that runs the real op against `page`.
+ *
+ * The realm is the page realm of that fixture (`pageContextOf`), reached through the
+ * message channel of spec 45 — the same road every production caller takes. `answer`
+ * is for the cases whose value is a *shape* instead of a behaviour, and
+ * `refuseInjection` for the page the browser will not load the file into.
+ */
 function createInspectTabs({
   page = createInspectFixture().page,
   tabs = [createAgentTabFixture()],
-  executeScript,
+  answer,
+  refuseInjection,
 } = {}) {
   return createTabsStub({
     tabs,
-    executeScript: executeScript ?? ((tabId, details) => [runPageCode(details.code, page)]),
+    pageAgent: { frames: [{ href: page.url, page }], answer, refuseInjection },
   });
 }
 
@@ -10121,150 +10017,6 @@ test("inspect_withAnEmptySelector_shouldAnswerInvalidSelector", async () => {
 
 /* ------------------------------------------------- inspect: `>>>` jumps */
 
-/**
- * `inspectPageSource` word for word — the snippet every `inspect` without a `>>>` carries.
- *
- * The sibling of `PAGE_HELPERS_PIN`, and pinned for the same reason: spec 27 promises
- * that nothing changes without a jump, and the `toString()` of this function *is* that
- * promise. A second branch inside it would have changed every earlier payload without a
- * single case going red on its own; this pin is what notices. A deliberate change to the
- * plain snippet has to show up here.
- */
-const INSPECT_PAGE_SOURCE_PIN = `function inspectPageSource(request, want) {
-    // The frame filter of spec 25, and the first statement on purpose: a frame that is
-    // not meant answers the marker and does nothing else — no query, no text search, no
-    // selector built. \`href\` is what \`frameTargetOf\`'s candidates are made of, and this
-    // realm is the only one that knows it.
-    if (!isAddressedFrame(want)) {
-      return { outcome: "not_the_frame", href: String(location.href) };
-    }
-    // Nested on purpose: only what this function closes over travels to the page.
-    function cappedString(raw, limit) {
-      if (typeof raw !== "string") return null;
-      // Newlines become spaces *before* the cut: an element's text is a line in the
-      // answer, not a paragraph.
-      return raw.replace(/\\r\\n?|\\n/g, " ").slice(0, limit);
-    }
-
-    /** \`innerText\` of a real element is a string; a stub may be less polite. */
-    function textOf(element) {
-      const raw = element.innerText;
-      return typeof raw === "string" ? raw : "";
-    }
-
-    // \`getAttribute\`, never \`className\`: an SVG element carries an object there and
-    // the field would be \`{}\`.
-    function classesOf(element) {
-      const className = element.getAttribute("class");
-      if (typeof className !== "string") return [];
-      return className
-        .split(/\\s+/)
-        .filter((name) => name !== "")
-        .slice(0, request.classLimit);
-    }
-
-    // \`Math.round\` per value, pixels, origin in the top left corner of the viewport:
-    // where the element is *now*, not where the document thinks it is.
-    function rectOf(element) {
-      const rect = element.getBoundingClientRect();
-      return {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      };
-    }
-
-    /**
-     * An identity hook as the contract wants it: the string, or \`null\` when absent.
-     *
-     * Both \`Element.id\` and \`HTMLAnchorElement.href\` answer \`""\` when the markup has
-     * none — never \`null\` — so a bare type check would hand out an empty string and
-     * make "has an id" true for every element on the page. \`describeElement\` reads an
-     * empty id as absent for exactly this reason.
-     */
-    function identityOf(value) {
-      return typeof value === "string" && value !== "" ? value : null;
-    }
-
-    /** One delivered element: the eleven documented fields, and nothing else. */
-    function described(candidate, index) {
-      // An id and a link are properties, not attributes: \`getAttribute("href")\`
-      // answers the raw markup, while the property is what a caller wants to open.
-      const id = identityOf(candidate.id);
-      const href = identityOf(candidate.href);
-      return {
-        // The position in *this* array — not a handle. \`selector\` is the handle, and
-        // the one \`click\` and \`type\` accept.
-        index,
-        selector: selectorForElement(candidate, request.textLimit, request.classLimit),
-        tag: String(candidate.tagName).toLowerCase(),
-        id: cappedString(id, request.textLimit),
-        classes: classesOf(candidate),
-        text: cappedString(textOf(candidate), request.textLimit),
-        href: cappedString(href, request.textLimit),
-        ariaLabel: cappedString(candidate.getAttribute("aria-label"), request.textLimit),
-        visible: isVisible(candidate),
-        // \`=== true\`, not truthiness: an attribute or a stub may say \`"true"\`.
-        disabled: candidate.disabled === true,
-        rect: rectOf(candidate),
-      };
-    }
-
-    const body = document.body;
-    let candidates;
-    try {
-      // A selector means "these elements", a text search means "every element" — and
-      // only the selector path can fail here, because \`querySelectorAll\` throws a
-      // \`SyntaxError\` for anything it cannot parse, the empty string included.
-      candidates =
-        request.selector !== null
-          ? Array.from(document.querySelectorAll(request.selector))
-          : body === null
-            ? []
-            : Array.from(body.querySelectorAll("*"));
-    } catch (error) {
-      return { outcome: "invalid_selector" };
-    }
-
-    // The cap is reached when there were more candidates than it allows to examine.
-    // \`count\` then stops being the truth and becomes a lower bound.
-    let truncated = candidates.length > request.candidateLimit;
-    const examined = Math.min(candidates.length, request.candidateLimit);
-    const needle = request.text === null ? null : request.text.toLowerCase();
-    const elements = [];
-    let count = 0;
-
-    for (let position = 0; position < examined; position += 1) {
-      const candidate = candidates[position];
-      // Visibility before the text filter: \`count\` is the number of hits after the
-      // visibility filter, so an invisible element must not even be counted.
-      if (!request.includeHidden && !isVisible(candidate)) continue;
-      // \`innerText\` is the authoritative comparison, and no \`textContent\` prefilter
-      // sits in front of it: \`innerText\` folds whitespace and skips what is invisible,
-      // so a substring test on the tree text would silently drop hits. It would also
-      // break \`text: ""\`, which matches everything on purpose.
-      if (needle !== null && textOf(candidate).toLowerCase().indexOf(needle) === -1) continue;
-      count += 1;
-      // The expensive part runs only for what is delivered: \`count\` may be 5000 while
-      // \`limit\` asks for two.
-      if (elements.length < request.limit) elements.push(described(candidate, elements.length));
-    }
-
-    return {
-      outcome: "ok",
-      // From the DOM, not from the tab object: after a script-driven redirect the tab
-      // is the less accurate source of both.
-      url: String(location.href),
-      title: String(document.title),
-      count,
-      truncated: truncated || count > elements.length,
-      elements,
-      // The hit's own address, for the \`frame_ambiguous\` candidates of the extension.
-      // Dropped by \`inspectResultOf\` — the wire result is a contract of its own.
-      href: String(location.href),
-    };
-  }`;
 
 test("inspect_withAPiercingSelectorInAnAttributeValue_shouldNotSplit", async () => {
   // GIVEN the invented page and a selector whose only `>>>` sits inside an attribute
@@ -10361,15 +10113,18 @@ test("inspect_withACombinatorRightOfTheJump_shouldAnswerInvalidSelector", async 
 
 test("inspect_withAPiercingSelectorAndAFrame_shouldAnswerNotTheFrame", async () => {
   // GIVEN the two frames of spec 25 and a selector that jumps,
-  const { tabs, answers } = createFramedInspectTabs(createFramedInspectPages());
+  const { tabs } = createFramedInspectTabs(createFramedInspectPages());
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN the bridge inspects the widget through that selector,
   await sendInspect(socket, 2, { selector: "my-card >>> button", frame: "widget" });
 
   // THEN the frame nobody addressed answers the marker and asks nothing — the frame gate
-  // is the first statement of the *jumping* snippet too, not only of the plain one,
-  assert.deepStrictEqual(inThisRealm(answers[0]), { outcome: "not_the_frame", href: AGENT_URL });
+  // is the first statement of the *jumping* op too, not only of the plain one,
+  assert.deepStrictEqual(inThisRealm(tabs.channel.answers[0].message.value), {
+    outcome: "not_the_frame",
+    href: AGENT_URL,
+  });
 
   // ... and the answer is the addressed frame's own, not the tab's.
   const answer = responsesById(socket).get(2);
@@ -10379,36 +10134,6 @@ test("inspect_withAPiercingSelectorAndAFrame_shouldAnswerNotTheFrame", async () 
   assert.deepStrictEqual(inThisRealm(answer.result.elements), []);
 });
 
-test("inspectPageCode_forAPlainInspect_shouldShipTheSamePayloadAsToday", async () => {
-  // GIVEN the invented page and a selector that jumps nowhere:
-  const { page } = createInspectFixture();
-  const tabs = createInspectTabs({ page });
-  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
-
-  // WHEN the bridge inspects that selector,
-  await sendInspect(socket, 2, { selector: "a#warenkorb-link" });
-  assert.equal(responsesById(socket).get(2).ok, true);
-
-  // THEN the payload is the one every earlier increment sent: the three shared helpers,
-  // the plain snippet word for word, the selector builder — and nothing else,
-  const code = tabs.scriptCalls[0].details.code;
-  assert.ok(
-    code.startsWith(`(() => {\n${PAGE_HELPERS_PIN}\n`),
-    `the shared helpers or the wrapping changed:\n${code.slice(0, 300)}`,
-  );
-  // The pin sits where the call is: the snippet is the `return (` part of the IIFE.
-  assert.ok(
-    code.includes(`\nreturn (${INSPECT_PAGE_SOURCE_PIN})(`),
-    "the plain snippet is no longer the pinned one, or it is no longer the one that runs",
-  );
-  assert.ok(code.includes("function selectorForElement(element, valueLimit, classLimit) {"));
-
-  // ... and no trace of the shadow path travels with it — neither the syntax nor one of
-  // the new helpers. That is criterion 1 of spec 27, in its only checkable form.
-  for (const absent of [">>>", "shadowRoot", "splitPiercingSelector", "isSimpleSelector", "inspectShadowPageSource"]) {
-    assert.equal(code.includes(absent), false, `the plain payload must not carry ${absent}`);
-  }
-});
 
 /* ----------------------------------- inspect: the walk through shadow trees */
 
@@ -10842,7 +10567,7 @@ test("inspect_withAnUnusableResultShape_shouldAnswerInspectFailedWithoutPageCont
     [{ outcome: "ok", url: AGENT_URL, title: "Erfundene Abfrageseite", count: 0, elements: "keine Liste" }],
   ];
   let injection = 0;
-  const tabs = createInspectTabs({ executeScript: async () => shapes[injection++] });
+  const tabs = createInspectTabs({ answer: () => ({ value: shapes[injection++] }) });
   const { socket, consoleLines } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN each of them comes back,
@@ -10895,9 +10620,7 @@ test("inspect_whenTheTabIsStillLoading_shouldAnswerPageBusy", async () => {
   // moment:
   const tabs = createInspectTabs({
     tabs: [createAgentTabFixture({ status: "loading" })],
-    executeScript: async () => {
-      throw new Error("Missing host permission for the tab");
-    },
+    refuseInjection: true,
   });
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
@@ -10919,9 +10642,7 @@ test("inspect_whenTheInjectionIsRefusedByTheBrowser_shouldAnswerNotReadable", as
   // GIVEN a page Firefox will not inject into — `about:`, a PDF viewer, AMO:
   const tabs = createInspectTabs({
     tabs: [createAgentTabFixture({ status: "complete" })],
-    executeScript: async () => {
-      throw new Error("Missing host permission for the tab");
-    },
+    refuseInjection: true,
   });
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
@@ -10937,9 +10658,7 @@ test("inspect_whenTheInjectionIsRefusedByTheBrowser_shouldCarryTheAddressAndKind
   // GIVEN a page nobody can inject into, in a tab whose address names a PDF:
   const tabs = createTabsStub({
     tabs: [createAgentTabFixture({ url: "https://example.org/agb.pdf", status: "complete" })],
-    executeScript: async () => {
-      throw new Error("Missing host permission for the tab");
-    },
+    pageAgent: { frames: [{ href: "https://example.org/agb.pdf" }], refuseInjection: true },
   });
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
@@ -10998,40 +10717,6 @@ test("inspect_onANormalPage_shouldInjectExactlyOnceAndStartNoTimer", async () =>
   assert.deepStrictEqual(clock.pendingDelays(), []);
   assert.equal(tabs.listenerCount(), 0);
 });
-
-/**
- * The helper block `pageSnippetCode` puts in front of every snippet, word for word.
- *
- * Pinned as text, not as a promise: stage 2b gave `pageSnippetCode` a third parameter
- * (the selector builder for `inspect`), and `click`/`type` must send exactly the bytes
- * they sent before — otherwise every click pays for a different payload and nobody
- * notices. A deliberate change to one of the helpers has to show up here.
- */
-const PAGE_HELPERS_PIN = `function describeElement(element) {
-    const tag = String(element.tagName).toLowerCase();
-    const id = typeof element.id === "string" ? element.id : "";
-    if (id !== "") return \`\${tag}#\${id}\`.slice(0, 120);
-    const className = typeof element.className === "string" ? element.className.trim() : "";
-    const firstClass = className.split(/\\s+/)[0];
-    if (firstClass !== "") return \`\${tag}.\${firstClass}\`.slice(0, 120);
-    const href = element.getAttribute("href");
-    if (typeof href === "string" && href !== "") return \`\${tag}[href="\${href}"]\`.slice(0, 120);
-    const label = element.getAttribute("aria-label");
-    if (typeof label === "string" && label !== "") return \`\${tag}[aria-label="\${label}"]\`.slice(0, 120);
-    return tag.slice(0, 120);
-  }
-function isVisible(element) {
-    const rect = element.getBoundingClientRect();
-    if (!(rect.width > 0 && rect.height > 0)) return false;
-    const style = getComputedStyle(element);
-    if (style.visibility === "hidden") return false;
-    if (style.display === "none") return false;
-    return true;
-  }
-function isAddressedFrame(want) {
-    if (want === null) return true;
-    return String(location.href).toLowerCase().includes(want);
-  }`;
 
 test("click_andType_travelAsOpsAndCarryNoCode", async () => {
   // GIVEN one click and one typing, each against its invented page:
@@ -11936,32 +11621,30 @@ const EVAL_MESSAGE_LIMIT = 500;
 const EVAL_TWO_AGENT_TABS_SETTINGS = { ...TWO_AGENT_TABS_SETTINGS, allowEval: true };
 
 /**
- * The injection of an `eval` case, plus the page clocks it handed out.
+ * The `eval` path, with the page realm of `page` behind the message channel.
  *
- * A factory and not a `page`, because `eval` is the one tool whose snippet *waits*:
- * every call gets a fresh page clock (`runWaitingPageCode`) and the case can state
- * afterwards that none of them kept a timer.
+ * A factory and not a `page`, because `eval` is the one tool whose op *waits*: the frame
+ * gets a virtual clock of its own, and the case can state afterwards that none of them
+ * kept a timer.
  *
- * `runPageCode` is the wrong road here and would be a silent one — it stringifies the
- * snippet's return value *synchronously*, so a promise arrives in this realm as `{}`
- * and every promise case would be green while proving nothing.
- *
- * `advanceMs` reaches the page clock: `null` drains it, a number stops it at that
- * instant — the only way a case can still see a timer the snippet had to clear.
+ * `advanceMs` reaches that clock: omitted drains it, a number stops it at that instant
+ * on every round the harness runs — the only way a case can still see a timer the op had
+ * to clear. `refuseInjection` is for the page the browser will not load the file into.
  *
  * `agentTabs` replaces the single fixture when the case needs more than one candidate:
  * "the last used one" is a claim that needs a second tab to be *not* it.
  */
-function evaluatingTabs(page = DEFAULT_READ_PAGE, { advanceMs = null, agentTabs } = {}) {
-  const pageClocks = [];
+function evaluatingTabs(page = DEFAULT_READ_PAGE, { advanceMs = null, agentTabs, refuseInjection } = {}) {
+  const pageClock = createPageClock();
+  const pageClocks = [pageClock];
   const tabs = createTabsStub({
     // `complete`, because an eval case is about the code and not about a tab that is
     // still loading — the three cases about a refused injection name theirs.
     tabs: agentTabs ?? [createAgentTabFixture({ status: "complete" })],
-    executeScript: async (tabId, details) => {
-      const waited = await runWaitingPageCode(details.code, page, { advanceMs });
-      pageClocks.push(waited.clock);
-      return [waited.outcome];
+    pageAgent: {
+      frames: [{ href: page.url, page, clock: pageClock }],
+      advanceMs: advanceMs === null ? undefined : advanceMs,
+      refuseInjection,
     },
   });
   return { tabs, pageClocks };
@@ -12172,11 +11855,13 @@ test("eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout", async () => {
 });
 
 test("eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard", async () => {
-  // GIVEN an injection that never comes back — the shape a throttled page timer leaves
-  // behind in a window nobody focuses,
+  // GIVEN a frame that takes the file but never answers — the shape a throttled page
+  // timer leaves behind in a window nobody focuses,
   const tabs = createTabsStub({
     tabs: [createAgentTabFixture({ status: "complete" })],
-    executeScript: () => new Promise(() => {}),
+    pageAgent: {
+      frames: [{ href: DEFAULT_READ_PAGE.url, silent: true }, { href: "https://widget.example.net/kalender", silent: true }],
+    },
   });
   const { socket, clock } = await connectedBackground({ tabs, settings: EVAL_ENABLED_SETTINGS });
 
@@ -12200,8 +11885,20 @@ test("eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard", asyn
   await settleAsyncWork();
   assert.equal(responsesById(socket).get(3).error.code, "eval_timeout");
 
-  // ... and the guard took its timer with it, the way every call of this project does.
+  // ... and the guard took its own timer with it. Two reply budgets stay armed — the
+  // collection waits for a frame that never spoke, and its own deadline is the thing
+  // that ends it (5 000, deliberately under the bridge's 20 000). They fire into a call
+  // that is already answered and are dropped; nothing else survives them.
+  assert.deepStrictEqual(clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS, INJECTION_REPLY_TIMEOUT_MS]);
+  // Two rounds: the second budget was armed after the first guard fired, so it falls due
+  // a little later than the first.
+  for (let round = 0; round < 2; round += 1) {
+    clock.runByDelay(INJECTION_REPLY_TIMEOUT_MS);
+    await settleAsyncWork();
+  }
   assert.deepStrictEqual(clock.pendingDelays(), []);
+  assert.equal(responsesById(socket).has(2), true, "a late frame must not answer a call twice");
+  assert.equal(responsesById(socket).has(3), true);
 });
 
 test("eval_inParallelInTheSameTab_shouldAnswerBoth", async () => {
@@ -13075,19 +12772,19 @@ test("frames_withThreeFrames_shouldListEveryAddressAndMarkTheMainFrame", async (
 
   // ... and that one injection has the shape the whole tool depends on: every frame,
   // `about:blank` included, and *no* `frameId` — the two exclude each other in
-  // `tabs.executeScript`. Pinned as a whole object minus the code, so a mutation run
+  // `tabs.executeScript`. Pinned as a whole object minus the file name, so a mutation run
   // without one of the three options fails with a readable diff instead of a list of
-  // "the snippet saw only the main frame".
-  const { code, ...injectionShape } = tabs.scriptCalls[0].details;
+  // "the page saw only the main frame".
+  const { file, ...injectionShape } = tabs.scriptCalls[0].details;
+  assert.equal(file, "page-agent.js");
   assert.deepStrictEqual(injectionShape, {
     runAt: "document_idle",
     allFrames: true,
     matchAboutBlank: true,
   });
-  assert.ok(code.includes("window.top === window"), "the main frame is decided inside the frame");
 });
 
-test("frames_withAnEntryWithoutAUsableHref_shouldLeaveItOutOfTheListAndTheCount", async () => {
+test("frames_withAnEmptyEntry_shouldNotShiftTheFilter", async () => {
   // GIVEN a frame list whose middle entry hands back no address — a frame the browser
   // reported without a usable `href`, so the caller could not address it either:
   const tabs = createFramesTabs([
@@ -13130,11 +12827,9 @@ test("frames_withoutAStoredAgentTab_shouldAnswerNoAgentTabAndInjectNothing", asy
 test("frames_whenTheTabIsStillLoading_shouldAnswerPageBusyLikeRead", async () => {
   // GIVEN a tab that reports `loading`, so the injection is refused before there is a
   // page to inventory:
-  const tabs = createTabsStub({
+  const tabs = createFramesTabs([{ href: AGENT_URL, top: true }], {
     tabs: [createAgentTabFixture({ status: "loading" })],
-    executeScript: async () => {
-      throw new Error("Missing host permission for the tab");
-    },
+    refuseInjection: true,
   });
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
@@ -13152,9 +12847,7 @@ test("frames_whenThePageRefusesInjection_shouldAnswerNotReadableWithTheReadFrame
   // GIVEN a page the extension may not inject into — the browser's own settings page:
   const tabs = createTabsStub({
     tabs: [createAgentTabFixture({ url: "about:preferences", status: "complete" })],
-    executeScript: async () => {
-      throw new Error("Missing host permission for the tab");
-    },
+    pageAgent: { frames: [{ href: "about:preferences" }], refuseInjection: true },
   });
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
@@ -13171,13 +12864,11 @@ test("frames_whenThePageRefusesInjection_shouldAnswerNotReadableWithTheReadFrame
   assert.equal(answer.error.kind, "internal");
 });
 
-test("frames_whenTheInjectionAnswersNoArray_shouldAnswerFramesFailedInsteadOfAnEmptyList", async () => {
-  // GIVEN an injection that answers an object instead of the one-entry-per-frame list
-  // `executeScript` promises — a browser quirk or our own bug, never a page without
-  // frames:
-  const tabs = createTabsStub({
-    tabs: [createAgentTabFixture({ status: "complete" })],
-    executeScript: async () => ({ count: 0, frames: [] }),
+test("frames_whenASelfReportIsUnusable_shouldAnswerFramesFailedInsteadOfAnEmptyList", async () => {
+  // GIVEN a frame whose report cannot be read — a value that is not an object, which is
+  // our own bug and never a page without frames:
+  const tabs = createFramesTabs([{ href: AGENT_URL, top: true }], {
+    answer: () => ({ value: "kein Bericht" }),
   });
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
@@ -13191,6 +12882,37 @@ test("frames_whenTheInjectionAnswersNoArray_shouldAnswerFramesFailedInsteadOfAnE
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "frames_failed");
   assert.equal(answer.result, undefined);
+});
+
+test("frames_inventory_shouldComeFromSelfReports", async () => {
+  // GIVEN two frames with addresses of their own — the main frame and a widget:
+  const tabs = createFramesTabs([
+    { href: AGENT_URL, top: true },
+    { href: "https://widget.example.net/kalender", top: false },
+  ]);
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the bridge asks for the list,
+  await sendFrames(socket, 2);
+
+  // THEN the call was a broadcast of one `inventory` op — no payload, because a frame
+  // answers about itself and the bridge only collects:
+  assert.deepStrictEqual(tabs.channel.ops(), ["inventory"]);
+  assert.deepStrictEqual(tabs.channel.calls[0].message.args, {});
+  assert.deepStrictEqual(tabs.channel.calls[0].frameIds, [0, 1]);
+
+  // ... and the list is the frames' own words, each answer carrying the frame id the
+  // sender added — the extension never asked a frame for its id:
+  assert.deepStrictEqual(
+    tabs.channel.answers.map((answer) => answer.frameId),
+    [0, 1],
+  );
+  const result = inThisRealm(responsesById(socket).get(2).result);
+  assert.equal(result.count, 2);
+  assert.deepStrictEqual(result.frames, [
+    { href: AGENT_URL, top: true },
+    { href: "https://widget.example.net/kalender", top: false },
+  ]);
 });
 
 /* ------------------------------------------------------- read: frame (spec 24) */
@@ -13439,21 +13161,14 @@ function createFramedInspectPages() {
 }
 
 /**
- * The framed inspect path, with every frame's answer kept.
+ * The framed inspect path through the message channel: every frame answers for itself.
  *
- * The answers are what proves "the filter is the first statement": the frame nobody
- * addressed answers the marker, the addressed one answers its query.
+ * `tabs.channel.answers` is the wire record — `{frameId, message}` in arrival order —
+ * and it is what proves "the filter is the first statement": the frame nobody addressed
+ * answers the marker, the addressed one answers its query.
  */
 function createFramedInspectTabs(pages) {
-  const answers = [];
-  const tabs = createFramedTabs(pages, {
-    run: (code, page) => {
-      const answer = runPageCode(code, page);
-      answers.push(answer);
-      return answer;
-    },
-  });
-  return { tabs, answers };
+  return { tabs: createFramedPageAgentTabs(pages) };
 }
 
 test("inspect_withFrame_shouldAnswerTheElementsOfTheAddressedFrame", async () => {
@@ -13479,15 +13194,16 @@ test("inspect_withFrame_shouldAnswerTheElementsOfTheAddressedFrame", async () =>
   // ... and the single injection really addressed every frame: without the switch the
   // widget would never have answered at all,
   assert.equal(tabs.scriptCalls.length, 1);
-  const { code, ...injectionShape } = tabs.scriptCalls[0].details;
+  const { file, ...injectionShape } = tabs.scriptCalls[0].details;
+  assert.equal(file, "page-agent.js");
   assert.deepStrictEqual(injectionShape, {
     runAt: "document_idle",
     allFrames: true,
     matchAboutBlank: true,
   });
 
-  // ... and the substring travelled into the page, where the filter compares it,
-  assert.ok(code.includes(JSON.stringify("widget")), "the snippet must carry the frame filter");
+  // ... and the substring travelled to the page, where the filter compares it,
+  assert.equal(tabs.channel.calls[0].message.args.want, "widget");
 });
 
 test("inspect_withFrameAndTheFramesAnsweringInTheOtherOrder_shouldStillAnswerThatFrame", async () => {
@@ -13517,7 +13233,7 @@ test("inspect_withFrame_shouldLeaveTheUnaddressedFrameUnqueried", async () => {
   createInspectBody(main).querySelectorAll = () => {
     throw new Error("the unaddressed frame must not be queried");
   };
-  const { tabs, answers } = createFramedInspectTabs([main, widget]);
+  const { tabs } = createFramedInspectTabs([main, widget]);
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN the bridge inspects the widget's text,
@@ -13530,7 +13246,10 @@ test("inspect_withFrame_shouldLeaveTheUnaddressedFrameUnqueried", async () => {
 
   // ... and the main frame answered nothing but the marker: no query, no `invalid_selector`
   // from the throwing stub, no count.
-  assert.deepStrictEqual(inThisRealm(answers[0]), { outcome: "not_the_frame", href: AGENT_URL });
+  assert.deepStrictEqual(inThisRealm(tabs.channel.answers[0].message.value), {
+    outcome: "not_the_frame",
+    href: AGENT_URL,
+  });
 });
 
 test("inspect_withoutFrame_shouldInjectIntoTheMainFrameOnly", async () => {
@@ -13555,12 +13274,10 @@ test("inspect_withoutFrame_shouldInjectIntoTheMainFrameOnly", async () => {
   assert.equal(tabs.scriptCalls[0].details.allFrames, undefined, "and asks for exactly one frame");
   assert.equal(tabs.scriptCalls[0].details.matchAboutBlank, undefined, "the main frame needs no about:blank");
 
-  // ... and the payload carries `null` as its filter, the main-frame answer of
-  // `isAddressedFrame` — one shape for both callers instead of two payloads.
-  assert.ok(
-    tabs.scriptCalls[0].details.code.endsWith(", null);\n})()"),
-    "the filter travels as `null` for the main frame",
-  );
+  // ... and the call carries `null` as its filter, the main-frame answer of
+  // `isAddressedFrame` — one shape for both callers instead of two requests.
+  assert.equal(tabs.channel.calls[0].message.args.want, null);
+  assert.equal(tabs.channel.calls[0].frameIds.length, 1, "one frame, and it is the main one");
 });
 
 test("inspect_withAFrameThatMatchesNoFrame_shouldAnswerFrameNotFoundWithTheAnsweredCount", async () => {
@@ -13640,15 +13357,21 @@ test("inspect_withAnInvalidFrame_shouldAnswerInvalidParamsAndInjectNothing", asy
  *
  * The clocks go back to the case because `assertNoTimerLeft` has to see *every* frame: a
  * deadline that stayed armed in a frame nobody addressed is exactly the leak a single
- * clock would hide.
+ * clock would hide. The frames arrive in the order `pages` lists them, which is the order
+ * the harness lets them answer — the browser promises no order, and no case here relies
+ * on one.
  */
-function createFramedEvalTabs(pages, { advanceMs = null } = {}) {
-  const pageClocks = [];
-  const tabs = createFramedTabs(pages, {
-    run: async (code, page) => {
-      const waited = await runWaitingPageCode(code, page, { advanceMs });
-      pageClocks.push(waited.clock);
-      return waited.outcome;
+function createFramedEvalTabs(pages) {
+  const pageClocks = pages.map(() => createPageClock());
+  const tabs = createTabsStub({
+    tabs: [createAgentTabFixture({ status: "complete" })],
+    pageAgent: {
+      frames: pages.map((page, index) => ({
+        href: page.url,
+        page,
+        clock: pageClocks[index],
+        top: page.inFrame !== true,
+      })),
     },
   });
   return { tabs, pageClocks };
@@ -13679,13 +13402,14 @@ test("eval_withFrame_shouldRunTheCodeInTheAddressedFrame", async () => {
 
   // ... the injection really addressed every frame, so both realms were asked,
   assert.equal(tabs.scriptCalls.length, 1);
-  const { code, ...injectionShape } = tabs.scriptCalls[0].details;
+  const { file, ...injectionShape } = tabs.scriptCalls[0].details;
+  assert.equal(file, "page-agent.js");
   assert.deepStrictEqual(injectionShape, {
     runAt: "document_idle",
     allFrames: true,
     matchAboutBlank: true,
   });
-  assert.ok(code.includes(JSON.stringify("widget")), "the snippet must carry the frame filter");
+  assert.equal(tabs.channel.calls[0].message.args.want, "widget", "the filter travels to the page");
 
   // ... both frame clocks were seen and both are empty: the deadline timer of the frame
   // that answered and of the one that only said `not_the_frame`.
@@ -13771,20 +13495,6 @@ test("eval_withTwoFramesThatBothThrow_shouldAnswerFrameAmbiguousWithBothAddresse
 /* ------------------------------------------------------------- transcript */
 
 /** The markers the four transcript snippets carry — the same trick `settle` uses. */
-const TRANSCRIPT_GATE_MARKER = "/*bc:transcript-gate*/";
-const TRANSCRIPT_MODEL_MARKER = "/*bc:transcript-model*/";
-const TRANSCRIPT_CAPTION_MARKER = "/*bc:transcript-caption*/";
-const TRANSCRIPT_MENU_MARKER = "/*bc:transcript-menu*/";
-
-function isTranscriptPageCode(code) {
-  return (
-    code.includes(TRANSCRIPT_GATE_MARKER) ||
-    code.includes(TRANSCRIPT_MODEL_MARKER) ||
-    code.includes(TRANSCRIPT_CAPTION_MARKER) ||
-    code.includes(TRANSCRIPT_MENU_MARKER)
-  );
-}
-
 /**
  * An array-like object with no `map`, no `filter` and no iterator.
  *
@@ -14357,11 +14067,12 @@ function createTranscriptModelPage({
 }
 
 /**
- * The transcript path with an injection that really runs every snippet on one clock.
+ * The transcript path through the message channel, on one clock.
  *
- * Every snippet gets the stepping driver, and the reading one needs it: it is async because
- * of its `fetch`. The clock is shared, so the injections of one call run on one timeline and
- * a case can read that timeline (`clock.now()`) afterwards.
+ * The page realm is the fixture's, and its clock is the one the case gets back: every op
+ * of a call runs in that realm, so the injections of one call share one timeline and a
+ * case can read that timeline (`clock.now()`) afterwards. The caption op is the async one
+ * — its `fetch` resolves in the same realm.
  *
  * The page's `wire` becomes the tab's request wire *before* the bridge page loads
  * (`createTabsStub`), and `page.emitRequest` is the page's handle on it afterwards: the
@@ -14373,11 +14084,7 @@ function createTranscriptTabs(page, { clock = createPageClock() } = {}) {
   const tabs = createTabsStub({
     wire: page.wire,
     tabs: [createAgentTabFixture({ id: TRANSCRIPT_TAB_ID, status: "complete", url: page.url })],
-    executeScript: async (tabId, details) => {
-      assert.equal(isTranscriptPageCode(details.code), true, "unexpected transcript injection");
-      const { outcome } = await runPollingPageCode(details.code, page, { clock });
-      return [outcome];
-    },
+    pageAgent: { frames: [{ href: page.url, page, clock }] },
   });
   page.emitRequest = (event) => tabs.emitRequest(event);
   return { tabs, clock };
@@ -15651,11 +15358,16 @@ test("transcript_captionWire_readsTheAddress", async () => {
   assert.equal(answer.ok, true);
   assert.equal(answer.result.deliveredLanguage, "en");
 
-  // ... and the reading injection carried the observed address as its argument: the page is
+  // ... and the reading call carried the observed address as its argument: the page is
   // never asked for one, and the timeline it used to read is not even part of its realm,
-  const injected = tabs.scriptCalls[2].details.code;
-  assert.equal(injected.includes(address), true, "the address has to travel as an argument");
-  assert.equal(injected.includes("getEntriesByType"), false, "the snippet must not look one up");
+  const reading = tabs.channel.calls[2].message;
+  assert.equal(reading.op, "transcriptCaption");
+  assert.equal(reading.args.request.address, address, "the address has to travel as an argument");
+  assert.equal(
+    JSON.stringify(reading.args).includes("getEntriesByType"),
+    false,
+    "the op must not look one up",
+  );
 });
 
 /**
@@ -16825,161 +16537,120 @@ test("transcript_menuStaysOpenWhenItWasOpen", async () => {
 /* ---------------------------------------------- spec 45: the injection seam */
 
 /**
- * A started extension whose injection channel the case drives itself.
+ * A started extension whose tab carries the agent channel — driven through a tool.
  *
- * No socket, no `read`: the message channel of spec 45 has no production caller until
- * stage 1b converts the sixteen snippets, so the probe of `bridge.js` is the only door —
- * and the four cases below are about that channel alone. The tab is the stored agent tab
- * (`500`, `complete`), because a silent frame's `not_readable` is enriched from it.
+ * The four cases below are about the channel itself. Since stage 1b every tool takes
+ * exactly that road, so none of them needs a hook into `bridge.js`: the single-frame
+ * cases go through `inspect`, and the broadcast case addresses a frame.
  */
-async function injectionProbeStarted(pageAgent) {
+async function injectionStarted(pageAgent) {
   const tabs = createTabsStub({
     tabs: [createAgentTabFixture({ status: "complete" })],
     pageAgent,
   });
-  const started = await startBackground({ tabs, injectionProbe: true });
+  const started = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
   return { tabs, ...started };
-}
-
-/** One `{op, args}` call on tab 500, in the shape stage 1b will pass to `injectPageCode`. */
-function askPageAgent(started, request = { op: "inventory" }, options = {}) {
-  return started.sandbox.__bcInjection.requestPageAnswers(500, request, options);
-}
-
-/**
- * Settles a sandbox promise without awaiting it, so a case can assert "still open".
- *
- * `settled` is the test realm's own variable: the callback is the test's, and only the
- * promise it hangs off belongs to the page.
- */
-function trackPromise(promise) {
-  const state = { settled: false, value: null, error: null };
-  promise.then(
-    (value) => {
-      state.settled = true;
-      state.value = value;
-    },
-    (error) => {
-      state.settled = true;
-      state.error = error;
-    },
-  );
-  return state;
 }
 
 test("injection_whenAFrameStaysSilent_shouldRejectAtTheDeadline", async () => {
   // GIVEN one frame that takes the file but never answers — the frame mid-navigation:
-  const started = await injectionProbeStarted({ frames: [{ href: AGENT_URL, silent: true }] });
+  const { tabs, socket, clock } = await injectionStarted({ frames: [{ href: AGENT_URL, silent: true }] });
 
-  // WHEN the bridge page asks that frame,
-  const call = trackPromise(askPageAgent(started));
-  await settleAsyncWork();
+  // WHEN the bridge inspects that frame,
+  await sendInspect(socket, 2, { text: "eintrag" });
 
   // THEN nothing is decided yet: no answer is silence, and silence is the deadline's job,
-  assert.deepStrictEqual(started.clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS]);
-  assert.equal(call.settled, false, "the call must wait for the deadline, not answer early");
+  assert.deepStrictEqual(clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS]);
+  assert.equal(responsesById(socket).has(2), false, "the call must wait for the deadline, not answer early");
 
   // ... and that deadline is 5 000 ms — its own budget, under the bridge's 20 000, so the
   // agent reads the tool's answer instead of `ExtensionTimeout`:
-  started.clock.runByDelay(INJECTION_REPLY_TIMEOUT_MS);
+  clock.runByDelay(INJECTION_REPLY_TIMEOUT_MS);
   await settleAsyncWork();
-  assert.equal(call.error.code, "not_readable");
-  assert.deepStrictEqual(started.clock.pendingDelays(), [], "the deadline must not survive its call");
+  assert.equal(responsesById(socket).get(2).error.code, "not_readable");
+  assert.deepStrictEqual(clock.pendingDelays(), [], "the deadline must not survive its call");
+
+  // ... and the frame was asked exactly once — a retry would only cost another budget.
+  assert.equal(tabs.channel.calls.length, 1);
 });
 
 test("injection_whenSendMessageIsRejected_shouldAnswerNotReadable", async () => {
   // GIVEN a channel that refuses the message — "Receiving end does not exist", the normal
   // state of every frame right after a navigation:
-  const started = await injectionProbeStarted({
+  const { socket, clock } = await injectionStarted({
     frames: [{ href: AGENT_URL }],
     refuseSendMessage: true,
   });
 
-  // WHEN the bridge page asks that frame,
-  const error = await askPageAgent(started).then(
-    () => null,
-    (caught) => caught,
-  );
+  // WHEN the bridge inspects that frame,
+  await sendInspect(socket, 2, { text: "eintrag" });
 
   // THEN the refusal is neither a crash nor a timeout — it is a page that cannot be read,
-  assert.equal(error.code, "not_readable");
+  assert.equal(responsesById(socket).get(2).error.code, "not_readable");
 
   // ... and nothing waited for an answer nobody could give:
-  assert.deepStrictEqual(started.clock.pendingDelays(), []);
+  assert.deepStrictEqual(clock.pendingDelays(), []);
 });
 
 test("injection_withTwoCallIds_shouldAnswerEachCallerOnce", async () => {
   // GIVEN one frame and two calls opened before either answer exists — the second
   // injection loads the same file into the same frame again (risk 2):
-  const started = await injectionProbeStarted({ frames: [{ href: AGENT_URL }] });
+  const page = createInspectFixture().page;
+  const { tabs, socket } = await injectionStarted({ frames: [{ href: page.url, page }] });
 
   // WHEN both ask at once,
-  const first = askPageAgent(started);
-  const second = askPageAgent(started);
+  socket.receive({ type: "request", id: 2, method: "inspect", params: { selector: "a#warenkorb-link" } });
+  socket.receive({ type: "request", id: 3, method: "inspect", params: { selector: "a#warenkorb-link" } });
   await settleAsyncWork();
-  const collected = inThisRealm(await Promise.all([first, second]));
 
   // THEN each call carries its own id and got its own answer — the assignment is by
   // `callId`, never by the order the answers happen to arrive in,
-  assert.deepStrictEqual(
-    collected.map((entry) => entry.callId),
-    [1, 2],
-  );
-  assert.deepStrictEqual(
-    collected.map((entry) => entry.answers.length),
-    [1, 1],
-  );
-  assert.deepStrictEqual(
-    collected.map((entry) => entry.answers[0].value.href),
-    [AGENT_URL, AGENT_URL],
-  );
+  assert.deepStrictEqual(Object.keys(tabs.channel.answerCounts()), ["1", "2"]);
+  assert.equal(responsesById(socket).get(2).ok, true);
+  assert.equal(responsesById(socket).get(3).ok, true);
 
   // ... and the frame answered exactly once per id. A second dispatcher — the file run
   // twice without the guard — would answer every call twice, and the first caller would
   // read a duplicate it never asked for:
-  assert.deepStrictEqual(started.tabs.channel.answerCounts(), { 1: 1, 2: 1 });
-  assert.equal(started.tabs.channel.listenerCount(), 1, "the guard must keep it at one listener");
+  assert.deepStrictEqual(tabs.channel.answerCounts(), { 1: 1, 2: 1 });
+  assert.equal(tabs.channel.listenerCount(), 1, "the guard must keep it at one listener");
 });
 
 test("injection_withTwoFrames_shouldCollectBothAnswers", async () => {
   // GIVEN a main frame and a child with an address of its own, and a child that answers
   // only when the case lets it answer:
-  const started = await injectionProbeStarted({
-    frames: [{ href: AGENT_URL }, { href: "https://example.org/widget", top: false }],
+  const pages = createFramedInspectPages();
+  const { tabs, socket, clock } = await injectionStarted({
+    frames: pages.map((page, index) => ({ href: page.url, page, top: index === 0 })),
     holdAnswersFrom: [1],
   });
 
-  // WHEN the bridge page broadcasts the call,
-  const pending = askPageAgent(started, { op: "inventory" }, { allFrames: true });
-  const call = trackPromise(pending);
-  await settleAsyncWork();
+  // WHEN the bridge inspects through the child's address,
+  await sendInspect(socket, 2, { text: "termin", frame: "widget" });
 
-  // THEN the first answer does not end the collection: the deadline is still armed and the
-  // call is still open, because `frame_ambiguous` and the frame filter of spec 24 need
-  // every frame's word,
-  assert.deepStrictEqual(started.clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS]);
-  assert.equal(call.settled, false, "one answer out of two must not end the call");
+  // THEN the first answer does not end the collection: the deadline is still armed and
+  // the call is still open, because `frame_ambiguous` and the frame filter of spec 24
+  // need every frame's word,
+  assert.deepStrictEqual(clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS]);
+  assert.equal(responsesById(socket).has(2), false, "one answer out of two must not end the call");
 
   // ... until the second frame speaks too,
-  started.tabs.channel.flushHeldAnswers();
-  const collected = inThisRealm(await pending);
+  tabs.channel.flushHeldAnswers();
+  await settleAsyncWork();
 
-  // THEN both answers are there, each naming the frame that said it and its own address —
-  // the frame count of the injection is what the collection expected, not a guess:
-  assert.equal(collected.answers.length, 2);
+  // THEN both answers are on the wire, each naming the frame that said it and its own
+  // address — the frame count of the injection is what the collection expected, not a
+  // guess:
   assert.deepStrictEqual(
-    collected.answers.map((entry) => entry.frameId),
+    tabs.channel.answers.map((answer) => answer.frameId),
     [0, 1],
   );
   assert.deepStrictEqual(
-    collected.answers.map((entry) => entry.value.href),
-    [AGENT_URL, "https://example.org/widget"],
+    tabs.channel.answers.map((answer) => answer.message.value.href),
+    [AGENT_URL, "https://widget.example.net/kalender"],
   );
-  assert.deepStrictEqual(
-    collected.answers.map((entry) => entry.value.top),
-    [true, false],
-  );
+  assert.equal(responsesById(socket).get(2).ok, true);
 
   // ... and the deadline that guarded the wait is gone with it:
-  assert.deepStrictEqual(started.clock.pendingDelays(), []);
+  assert.deepStrictEqual(clock.pendingDelays(), []);
 });

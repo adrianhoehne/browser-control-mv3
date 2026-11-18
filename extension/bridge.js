@@ -2043,7 +2043,7 @@
     // nothing about the widget, and a read that waited at the wrong address would answer
     // the frame's untouched state (see `settleAgentTab`).
     const settle = tab.status === TAB_STATUS_LOADING ? NO_SETTLE : await settleAgentTab(tab.id, null, want);
-    const { answers } = await injectPageCode(
+    const { answers } = await askPageAgent(
       tab.id,
       readPageRequest(offset, maxChars, mode, ARTICLE_MIN_CHARS, want),
       { allFrames: want !== null },
@@ -2092,7 +2092,7 @@
       // No HEAD from here: this rejection is swallowed by the `catch` below, so a
       // request for it would be a request for the bin — and it would cost up to 1,5 s
       // before the read it belongs to has even started.
-      const injected = injectPageCode(tabId, settlePageRequest(want), {
+      const injected = askPageAgent(tabId, settlePageRequest(want), {
         head: false,
         allFrames: want !== null,
       });
@@ -2320,50 +2320,6 @@
   }
 
   /**
-   * Runs one request in `tabId`: a snippet as source, or a `{op, args}` call to the page
-   * agent.
-   *
-   * Two shapes, one door. `read`, `click`, `type` and the settle wait between them ask by
-   * `{op, args}` and take the file plus the message channel; `inspect`, `eval`, `frames`
-   * and `transcript` still pass source text and keep their path unchanged. The source
-   * form goes away with the last of them (stage 1b, block 2).
-   *
-   * Three modes, and the caller must pick the right one:
-   *
-   * - without `allFrames` the request runs in the main frame, addressed as `frameId: 0`;
-   * - with `allFrames` it runs in every frame of the tab, and `frameId` stays out of the
-   *   details because `tabs.executeScript` refuses the two together. The injection then
-   *   answers one entry per frame, in no promised order — which is why every consumer of
-   *   that mode decides by *content* (`framesOf`, and the frame filter of spec 24) and
-   *   never by position. `matchAboutBlank` is the option that makes an `about:blank`
-   *   frame injectable at all; without it that frame is simply not in the list.
-   *
-   * `head` only concerns the `not_readable` frame of the rejection: `false` keeps the
-   * HEAD request out of a call whose error nobody will read.
-   */
-  async function injectPageCode(tabId, request, { head = true, allFrames = false } = {}) {
-    // A string is source text, an object is a request — `typeof` is the whole branch, and
-    // the two paths share nothing but the refusal handling in `injectScript`.
-    if (typeof request === "string") {
-      return injectScript(tabId, sourceDetails(request, allFrames), { head });
-    }
-    return requestPageAnswers(tabId, request, { head, allFrames });
-  }
-
-  /** The `executeScript` details of a snippet that travels as source text. */
-  function sourceDetails(code, allFrames) {
-    return allFrames
-      ? { code, runAt: "document_idle", allFrames: true, matchAboutBlank: true }
-      : {
-          code,
-          runAt: "document_idle",
-          // Named explicitly instead of relying on a default: the main frame is the
-          // whole page for every caller that does not ask for all of them.
-          frameId: 0,
-        };
-  }
-
-  /**
    * The `executeScript` details of the page agent — the same two modes, one file.
    *
    * `{file}` hands back `undefined` and nothing else: the result of this injection is
@@ -2446,7 +2402,7 @@
    * yet would drop the message, and `executeScript` is what guarantees the listener is in
    * place before anybody speaks.
    */
-  async function requestPageAnswers(tabId, request, { head = true, allFrames = false } = {}) {
+  async function askPageAgent(tabId, request, { head = true, allFrames = false } = {}) {
     const callId = takeCallId();
     const injected = await injectScript(tabId, pageAgentDetails(allFrames), { head });
     const collection = createReplyCollection(Array.isArray(injected) ? injected.length : 0);
@@ -2638,90 +2594,6 @@
     );
   }
 
-  /* ------------------------------------------------- page snippets */
-
-  /**
-   * Tag plus at most one distinguishing detail — never the markup.
-   *
-   * A module function rather than a nested one because two snippets need it:
-   * `click` describes the element it touched, `type` the field it wrote into.
-   * `PAGE_HELPERS_CODE` carries it into the page through `toString()`, so it may
-   * touch nothing but its argument — a closure over this module's scope would not
-   * survive the trip into the other realm.
-   */
-  function describeElement(element) {
-    const tag = String(element.tagName).toLowerCase();
-    const id = typeof element.id === "string" ? element.id : "";
-    if (id !== "") return `${tag}#${id}`.slice(0, 120);
-    const className = typeof element.className === "string" ? element.className.trim() : "";
-    const firstClass = className.split(/\s+/)[0];
-    if (firstClass !== "") return `${tag}.${firstClass}`.slice(0, 120);
-    const href = element.getAttribute("href");
-    if (typeof href === "string" && href !== "") return `${tag}[href="${href}"]`.slice(0, 120);
-    const label = element.getAttribute("aria-label");
-    if (typeof label === "string" && label !== "") return `${tag}[aria-label="${label}"]`.slice(0, 120);
-    return tag.slice(0, 120);
-  }
-
-  /**
-   * Whether the element is rendered at all: an element nobody can see is one
-   * nobody can click or type into, and answering "done" for it would be the
-   * silent lie this project refuses to tell.
-   *
-   * Shared by `click` and `type` for the same reason as `describeElement` — one
-   * rule, one function, one place to change it.
-   */
-  function isVisible(element) {
-    const rect = element.getBoundingClientRect();
-    if (!(rect.width > 0 && rect.height > 0)) return false;
-    const style = getComputedStyle(element);
-    if (style.visibility === "hidden") return false;
-    if (style.display === "none") return false;
-    return true;
-  }
-
-  /**
-   * Whether this realm is the frame the caller addressed by a substring of its address.
-   *
-   * A module function like `describeElement`, and for the same reason: it travels into
-   * the page inside `PAGE_HELPERS_CODE` through `toString()`, so it may close over
-   * nothing of this scope. `want === null` is "the main frame" and always true.
-   *
-   * The comparison is the one `readPageSource` performs inline — that snippet ships
-   * without the shared helpers, so the line exists there a second time; the *form* is
-   * the same (folded `location.href`, `includes`), because one half of the contract may
-   * not answer differently from the other (spec 24, `## Extension`).
-   */
-  function isAddressedFrame(want) {
-    if (want === null) return true;
-    return String(location.href).toLowerCase().includes(want);
-  }
-
-  /** The three helpers above, as source, for the IIFE of `pageSnippetCode`. */
-  const PAGE_HELPERS_CODE = `${describeElement.toString()}\n${isVisible.toString()}\n${isAddressedFrame.toString()}`;
-
-  /**
-   * A page snippet as one expression: the helpers, the extra helpers, then the
-   * snippet itself.
-   *
-   * The IIFE is not decoration. A bare `function describeElement(…)` at the top of
-   * an injected script would land on the operator's `window` — a write access to
-   * *their* globals. Inside the wrapper the helpers are local and still real, and
-   * every argument is JSON-quoted, so a text with quotes and newlines arrives
-   * unchanged.
-   *
-   * `extraHelpers` is for a snippet that needs more than the three shared helpers. It
-   * is empty by default, and the generated code for a snippet without one is
-   * byte-for-byte what it was before the parameter existed: every click and every
-   * typing carries this payload, and nobody should pay for `inspect`'s selector
-   * builder there (a test pins the difference).
-   */
-  function pageSnippetCode(source, args, extraHelpers = "") {
-    const argumentList = args.map((arg) => JSON.stringify(arg)).join(", ");
-    const helpers = extraHelpers === "" ? PAGE_HELPERS_CODE : `${PAGE_HELPERS_CODE}\n${extraHelpers}`;
-    return `(() => {\n${helpers}\nreturn (${source.toString()})(${argumentList});\n})()`;
-  }
-
   /* ------------------------------------------------------------------ click */
 
   /** Same contract as `NavigateError` and `ReadError`: the code rides along. */
@@ -2811,7 +2683,7 @@
     supersedePageSlot(tab.id);
     const click = claimPageSlot(tab.id, () => settleWindow(tab.id, want));
     try {
-      const { answers } = await injectPageCode(tab.id, clickPageRequest(selector, want), {
+      const { answers } = await askPageAgent(tab.id, clickPageRequest(selector, want), {
         allFrames: want !== null,
       });
       const clicked = clickOutcomeOf(frameTargetOf(valuesOf(answers), want));
@@ -2996,7 +2868,7 @@
    * `## Ziel`).
    */
   async function clickResult(tabId, clicked, before, settle, want = null) {
-    const { answers } = await injectPageCode(tabId, pageStateRequest(want), { allFrames: want !== null });
+    const { answers } = await askPageAgent(tabId, pageStateRequest(want), { allFrames: want !== null });
     const page = pageResultOf(tabId, frameTargetOf(valuesOf(answers), want));
     // One field order for both branches, `clicked` after `title` — the same answer
     // in the same shape, whether or not the click ended on an `about:` address.
@@ -3129,7 +3001,7 @@
         submit: request.submit,
         allowPasswordFields,
       };
-      const { answers } = await injectPageCode(tab.id, typePageRequest(pageRequest, want), {
+      const { answers } = await askPageAgent(tab.id, typePageRequest(pageRequest, want), {
         allFrames: want !== null,
       });
       const typed = typeOutcomeOf(frameTargetOf(valuesOf(answers), want));
@@ -3182,7 +3054,7 @@
    * not the frame's — the same documented mismatch `clickResult` carries.
    */
   async function typeResult(tabId, typed, before, want = null) {
-    const { answers } = await injectPageCode(tabId, pageStateRequest(want), { allFrames: want !== null });
+    const { answers } = await askPageAgent(tabId, pageStateRequest(want), { allFrames: want !== null });
     const page = pageResultOf(tabId, frameTargetOf(valuesOf(answers), want));
     const state = isAboutAddress(page.url)
       ? { url: before.url, title: before.title, text: "", truncated: false, via: "innerText" }
@@ -3315,10 +3187,10 @@
     // The answer is one entry per frame, and `frameTargetOf` picks the addressed one: a
     // caller without a `frame` keeps the single main-frame answer every earlier
     // increment injected.
-    const results = await injectPageCode(tab.id, inspectPageCode(pageRequest, want), {
+    const { answers } = await askPageAgent(tab.id, inspectPageRequest(pageRequest, want), {
       allFrames: want !== null,
     });
-    return inspectResultOf(tab.id, frameTargetOf(results, want));
+    return inspectResultOf(tab.id, frameTargetOf(valuesOf(answers), want));
   }
 
   /**
@@ -3368,739 +3240,15 @@
   }
 
   /**
-   * The query itself, inside the page.
-   *
-   * Synchronous, and every limit arrives as an argument (same rule as
-   * `readPageSource`): a closure over this module's constants does not survive the
-   * trip into the other realm. Two costs are split on purpose — `innerText` (layout)
-   * runs once per examined candidate, which the candidate cap bounds, while the
-   * selector builder runs only for what is delivered, which `limit` bounds.
-   */
-  function inspectPageSource(request, want) {
-    // The frame filter of spec 25, and the first statement on purpose: a frame that is
-    // not meant answers the marker and does nothing else — no query, no text search, no
-    // selector built. `href` is what `frameTargetOf`'s candidates are made of, and this
-    // realm is the only one that knows it.
-    if (!isAddressedFrame(want)) {
-      return { outcome: "not_the_frame", href: String(location.href) };
-    }
-    // Nested on purpose: only what this function closes over travels to the page.
-    function cappedString(raw, limit) {
-      if (typeof raw !== "string") return null;
-      // Newlines become spaces *before* the cut: an element's text is a line in the
-      // answer, not a paragraph.
-      return raw.replace(/\r\n?|\n/g, " ").slice(0, limit);
-    }
-
-    /** `innerText` of a real element is a string; a stub may be less polite. */
-    function textOf(element) {
-      const raw = element.innerText;
-      return typeof raw === "string" ? raw : "";
-    }
-
-    // `getAttribute`, never `className`: an SVG element carries an object there and
-    // the field would be `{}`.
-    function classesOf(element) {
-      const className = element.getAttribute("class");
-      if (typeof className !== "string") return [];
-      return className
-        .split(/\s+/)
-        .filter((name) => name !== "")
-        .slice(0, request.classLimit);
-    }
-
-    // `Math.round` per value, pixels, origin in the top left corner of the viewport:
-    // where the element is *now*, not where the document thinks it is.
-    function rectOf(element) {
-      const rect = element.getBoundingClientRect();
-      return {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      };
-    }
-
-    /**
-     * An identity hook as the contract wants it: the string, or `null` when absent.
-     *
-     * Both `Element.id` and `HTMLAnchorElement.href` answer `""` when the markup has
-     * none — never `null` — so a bare type check would hand out an empty string and
-     * make "has an id" true for every element on the page. `describeElement` reads an
-     * empty id as absent for exactly this reason.
-     */
-    function identityOf(value) {
-      return typeof value === "string" && value !== "" ? value : null;
-    }
-
-    /** One delivered element: the eleven documented fields, and nothing else. */
-    function described(candidate, index) {
-      // An id and a link are properties, not attributes: `getAttribute("href")`
-      // answers the raw markup, while the property is what a caller wants to open.
-      const id = identityOf(candidate.id);
-      const href = identityOf(candidate.href);
-      return {
-        // The position in *this* array — not a handle. `selector` is the handle, and
-        // the one `click` and `type` accept.
-        index,
-        selector: selectorForElement(candidate, request.textLimit, request.classLimit),
-        tag: String(candidate.tagName).toLowerCase(),
-        id: cappedString(id, request.textLimit),
-        classes: classesOf(candidate),
-        text: cappedString(textOf(candidate), request.textLimit),
-        href: cappedString(href, request.textLimit),
-        ariaLabel: cappedString(candidate.getAttribute("aria-label"), request.textLimit),
-        visible: isVisible(candidate),
-        // `=== true`, not truthiness: an attribute or a stub may say `"true"`.
-        disabled: candidate.disabled === true,
-        rect: rectOf(candidate),
-      };
-    }
-
-    const body = document.body;
-    let candidates;
-    try {
-      // A selector means "these elements", a text search means "every element" — and
-      // only the selector path can fail here, because `querySelectorAll` throws a
-      // `SyntaxError` for anything it cannot parse, the empty string included.
-      candidates =
-        request.selector !== null
-          ? Array.from(document.querySelectorAll(request.selector))
-          : body === null
-            ? []
-            : Array.from(body.querySelectorAll("*"));
-    } catch (error) {
-      return { outcome: "invalid_selector" };
-    }
-
-    // The cap is reached when there were more candidates than it allows to examine.
-    // `count` then stops being the truth and becomes a lower bound.
-    let truncated = candidates.length > request.candidateLimit;
-    const examined = Math.min(candidates.length, request.candidateLimit);
-    const needle = request.text === null ? null : request.text.toLowerCase();
-    const elements = [];
-    let count = 0;
-
-    for (let position = 0; position < examined; position += 1) {
-      const candidate = candidates[position];
-      // Visibility before the text filter: `count` is the number of hits after the
-      // visibility filter, so an invisible element must not even be counted.
-      if (!request.includeHidden && !isVisible(candidate)) continue;
-      // `innerText` is the authoritative comparison, and no `textContent` prefilter
-      // sits in front of it: `innerText` folds whitespace and skips what is invisible,
-      // so a substring test on the tree text would silently drop hits. It would also
-      // break `text: ""`, which matches everything on purpose.
-      if (needle !== null && textOf(candidate).toLowerCase().indexOf(needle) === -1) continue;
-      count += 1;
-      // The expensive part runs only for what is delivered: `count` may be 5000 while
-      // `limit` asks for two.
-      if (elements.length < request.limit) elements.push(described(candidate, elements.length));
-    }
-
-    return {
-      outcome: "ok",
-      // From the DOM, not from the tab object: after a script-driven redirect the tab
-      // is the less accurate source of both.
-      url: String(location.href),
-      title: String(document.title),
-      count,
-      truncated: truncated || count > elements.length,
-      elements,
-      // The hit's own address, for the `frame_ambiguous` candidates of the extension.
-      // Dropped by `inspectResultOf` — the wire result is a contract of its own.
-      href: String(location.href),
-    };
-  }
-
-  /**
-   * The `>>>` jumps of a selector, or `null` when one of the segments is empty.
-   *
-   * A module function like `describeElement`, and for the same reason: it travels into
-   * the page through `toString()` and may therefore close over nothing.
-   *
-   * Counting quotes is the whole parser. `[title="a>>>b"]` is one selector and
-   * `a >>> b` is two; whether a segment is a *usable* selector is not decided here — the
-   * whitelist `isSimpleSelector` answers that.
-   *
-   * Each segment is trimmed exactly once, because that trimming is what the whitelist
-   * sees: `my-card >>> button`, the spelling of the whole spec, has to pass with its
-   * spaces around the jump. `null` instead of a throw, because a thrown error inside the
-   * snippet would reach the caller as `not_readable` and not as the refusal it is.
-   */
-  function splitPiercingSelector(selector) {
-    const segments = [];
-    let segment = "";
-    let quote = "";
-    for (let index = 0; index < selector.length; index += 1) {
-      const character = selector[index];
-      if (quote !== "") {
-        segment += character;
-        // An escaped character never closes the quote — `[title="a\">>>b"]` stays one
-        // selector, and what the escape means is the page's business, not ours.
-        if (character === "\\" && index + 1 < selector.length) {
-          index += 1;
-          segment += selector[index];
-        } else if (character === quote) {
-          quote = "";
-        }
-        continue;
-      }
-      if (character === "'" || character === '"') {
-        quote = character;
-        segment += character;
-        continue;
-      }
-      if (character === ">" && selector[index + 1] === ">" && selector[index + 2] === ">") {
-        segments.push(segment.trim());
-        segment = "";
-        index += 2;
-        continue;
-      }
-      segment += character;
-    }
-    segments.push(segment.trim());
-    // `>>> b`, `a >>> ` and `a >>> >>> b` are the same mistake: a jump needs a selector on
-    // both of its sides.
-    return segments.indexOf("") === -1 ? segments : null;
-  }
-
-  /**
-   * Whether one segment of a `>>>` chain is a selector the jump may carry.
-   *
-   * The whitelist is the alternative to a second CSS parser (spec 27, `## Ziel`): a type,
-   * `#id`, `.class`, `[attr]`, `[attr="value"]`, `[attr='value']` and `:nth-of-type(n)`,
-   * in any order after an optional type — and nothing else. The loop has to consume the
-   * segment completely, so a descendant combinator, a group, a pseudo-element or a
-   * universal selector is refused instead of being read as a prefix of something valid.
-   *
-   * No closure, like `splitPiercingSelector`: the patterns are built per call, because a
-   * module-level list would not survive the trip through `toString()`.
-   */
-  function isSimpleSelector(segment) {
-    const parts = [
-      /^#[A-Za-z0-9_-]+/,
-      /^\.[A-Za-z0-9_-]+/,
-      /^\[[A-Za-z_][A-Za-z0-9_-]*\]/,
-      /^\[[A-Za-z_][A-Za-z0-9_-]*="[^"]*"\]/,
-      /^\[[A-Za-z_][A-Za-z0-9_-]*='[^']*'\]/,
-      /^:nth-of-type\([0-9]+\)/,
-    ];
-    const type = /^[A-Za-z][A-Za-z0-9_-]*/.exec(segment);
-    let remaining = type === null ? segment : segment.slice(type[0].length);
-    // A type and nothing else is a simple selector; the empty segment is not.
-    if (remaining === "") return type !== null;
-    while (remaining !== "") {
-      const part = parts.map((pattern) => pattern.exec(remaining)).find((match) => match !== null);
-      if (part === undefined) return false;
-      remaining = remaining.slice(part[0].length);
-    }
-    return true;
-  }
-
-  /**
-   * The `>>>` snippet: it decides *inside the page* what a jump means.
-   *
-   * A snippet of its own instead of a second branch in `inspectPageSource`, because that
-   * function's `toString()` *is* the payload of every `inspect` without a jump — a branch
-   * in it would have changed every one of those bytes. Which of the two travels is
-   * `inspectPageCode`'s call, and that call is a payload choice, not a split: the strings
-   * arrive whole and are cut here, where only the page can tell whether a jump lands in a
-   * shadow tree.
-   *
-   * The frame filter comes first, exactly as in the plain snippet: a frame nobody
-   * addressed answers the marker and asks nothing — `frameTargetOf` builds its candidates
-   * from that `href`.
-   */
-  function inspectShadowPageSource(request, want) {
-    if (!isAddressedFrame(want)) {
-      return { outcome: "not_the_frame", href: String(location.href) };
-    }
-    const segments = splitPiercingSelector(request.selector);
-    if (segments === null) return { outcome: "invalid_selector" };
-    // A `>>>` that never left its quotes is one plain selector, and the plain snippet
-    // already knows how to answer it — a copy of that query here would drift from it.
-    if (segments.length === 1) return inspectPageSource(request, want);
-    // Both sides of every jump are one simple selector, and that is decided *before* the
-    // first query: the harness matcher throws for what the whitelist refuses, so a search
-    // first would be red here and green on a real page — and the refusal would name the
-    // wrong reason.
-    if (!segments.every((segment) => isSimpleSelector(segment))) {
-      return { outcome: "invalid_selector" };
-    }
-
-    // The delivery tail of `inspectPageSource`, copied on purpose and not shared: that
-    // snippet's `toString()` is byte-pinned (`INSPECT_PAGE_SOURCE_PIN`), so pulling these
-    // six functions out into a helper would rewrite every plain `inspect` payload. The
-    // two copies are kept honest by a case that compares the delivered field sets of a
-    // shadow hit and a document hit — whoever calls that case superfluous should read
-    // this comment before deleting it.
-    function cappedString(raw, limit) {
-      if (typeof raw !== "string") return null;
-      // Newlines become spaces *before* the cut: an element's text is a line in the
-      // answer, not a paragraph.
-      return raw.replace(/\r\n?|\n/g, " ").slice(0, limit);
-    }
-
-    /** `innerText` of a real element is a string; a stub may be less polite. */
-    function textOf(element) {
-      const raw = element.innerText;
-      return typeof raw === "string" ? raw : "";
-    }
-
-    // `getAttribute`, never `className`: an SVG element carries an object there and
-    // the field would be `{}`.
-    function classesOf(element) {
-      const className = element.getAttribute("class");
-      if (typeof className !== "string") return [];
-      return className
-        .split(/\s+/)
-        .filter((name) => name !== "")
-        .slice(0, request.classLimit);
-    }
-
-    // `Math.round` per value, pixels, origin in the top left corner of the viewport:
-    // where the element is *now*, not where the document thinks it is.
-    function rectOf(element) {
-      const rect = element.getBoundingClientRect();
-      return {
-        x: Math.round(rect.x),
-        y: Math.round(rect.y),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      };
-    }
-
-    /**
-     * An identity hook as the contract wants it: the string, or `null` when absent.
-     *
-     * Both `Element.id` and `HTMLAnchorElement.href` answer `""` when the markup has
-     * none — never `null` — so a bare type check would hand out an empty string and
-     * make "has an id" true for every element on the page.
-     */
-    function identityOf(value) {
-      return typeof value === "string" && value !== "" ? value : null;
-    }
-
-    /**
-     * One delivered element: the eleven documented fields, and nothing else.
-     *
-     * The one field this copy takes as an argument instead of computing it is
-     * `selector`: in a shadow tree the walk knows the host chain, and the builder of the
-     * document tree would hand out a path the document cannot resolve.
-     */
-    function described(candidate, index, selector) {
-      const id = identityOf(candidate.id);
-      const href = identityOf(candidate.href);
-      return {
-        index,
-        selector,
-        tag: String(candidate.tagName).toLowerCase(),
-        id: cappedString(id, request.textLimit),
-        classes: classesOf(candidate),
-        text: cappedString(textOf(candidate), request.textLimit),
-        href: cappedString(href, request.textLimit),
-        ariaLabel: cappedString(candidate.getAttribute("aria-label"), request.textLimit),
-        visible: isVisible(candidate),
-        disabled: candidate.disabled === true,
-        rect: rectOf(candidate),
-      };
-    }
-
-    /** How many hits one stage may hold — endpoints and intermediate steps alike. */
-    const cap = request.candidateLimit;
-
-    /**
-     * The full selector of one endpoint: its own, with its host chain in front of it.
-     *
-     * The document case is `selectorForElement`, untouched — a second builder for the
-     * document tree would be a second answer to a question that already has one. Only
-     * inside a root does the other builder apply, because there the document is the
-     * wrong place to check a candidate against. The host's own prefix came from exactly
-     * this rule, one jump further up.
-     */
-    function selectorOf(endpoint) {
-      if (endpoint.prefix === "") {
-        return selectorForElement(endpoint.element, request.textLimit, request.classLimit);
-      }
-      const local = shadowSelectorForElement(
-        endpoint.element,
-        endpoint.root,
-        request.textLimit,
-        request.classLimit,
-      );
-      return `${endpoint.prefix} >>> ${local}`;
-    }
-
-    let truncated = false;
-    let endpoints;
-    try {
-      // Stage one is the document's own query, exactly as the plain snippet asks it. The
-      // selector passed the whitelist, so this is not expected to throw — the catch is
-      // there for the same reason it is there in the plain snippet, because a page may
-      // refuse a string a whitelist thought was fine (`#1abc`).
-      const hosts = Array.from(document.querySelectorAll(segments[0]));
-      truncated = hosts.length > cap;
-      endpoints = hosts.slice(0, cap).map((element) => ({ element, root: document, prefix: "" }));
-    } catch (error) {
-      return { outcome: "invalid_selector" };
-    }
-
-    // One stage per jump: every endpoint of the previous stage is a host, and its open
-    // root is asked the next segment. The order is the expansion order — the endpoints
-    // of the previous stage in their own order, each root in its own order — which is
-    // deterministic and testable; it is not the order of the shadow-including tree.
-    for (let stage = 1; stage < segments.length; stage += 1) {
-      const level = [];
-      // A stage that had to drop a hit stops the walk: `truncated` is set by then, and
-      // the hosts nobody reached would only cost a query whose answer is not read.
-      let overflowed = false;
-      for (const endpoint of endpoints) {
-        // A closed root and an element that was never upgraded answer `null` alike: the
-        // page cannot see in, this path ends without a hit *and* without an error, and
-        // the difference between the two is not ours to invent.
-        const shadowRoot = endpoint.element.shadowRoot;
-        if (shadowRoot === null || shadowRoot === undefined) continue;
-        const prefix = selectorOf(endpoint);
-        let found;
-        try {
-          found = Array.from(shadowRoot.querySelectorAll(segments[stage]));
-        } catch (error) {
-          // The same refusal as the plain snippet's: a string the page will not parse is
-          // `invalid_selector`, whichever tree it was aimed at. The whitelist makes this
-          // unlikely — and "unlikely" is not "never" on somebody else's page.
-          return { outcome: "invalid_selector" };
-        }
-        for (const element of found) {
-          if (level.length >= cap) {
-            overflowed = true;
-            break;
-          }
-          level.push({ element, root: shadowRoot, prefix });
-        }
-        if (overflowed) break;
-      }
-      if (overflowed) truncated = true;
-      endpoints = level;
-    }
-
-    const needle = request.text === null ? null : request.text.toLowerCase();
-    const elements = [];
-    let count = 0;
-
-    for (const endpoint of endpoints) {
-      const candidate = endpoint.element;
-      // The same two filters as the plain snippet, in the same order: visibility first,
-      // because `count` is the number of hits after it.
-      if (!request.includeHidden && !isVisible(candidate)) continue;
-      if (needle !== null && textOf(candidate).toLowerCase().indexOf(needle) === -1) continue;
-      count += 1;
-      // The builder runs only for what is delivered — 5000 endpoints may meet a limit
-      // of two, and every one of them needs a selector only if it is delivered.
-      if (elements.length < request.limit) {
-        elements.push(described(candidate, elements.length, selectorOf(endpoint)));
-      }
-    }
-
-    return {
-      outcome: "ok",
-      url: String(location.href),
-      title: String(document.title),
-      count,
-      // Two reasons, both "there was more": the caller's `limit` cut the delivery, or a
-      // stage hit the cap — and then `count` is a lower bound instead of the truth.
-      truncated: truncated || count > elements.length,
-      elements,
-      href: String(location.href),
-    };
-  }
-
-  /**
-   * One string that finds `element` again — the whole point of `inspect`.
-   *
-   * A module function shipped into the page through `toString()` and handed to the
-   * snippet as a third part, because the uniqueness check needs `querySelectorAll` and
-   * only the page has one. It closes over nothing — `toString()` loses this scope, so
-   * both limits are arguments (the rule `describeElement` already states for itself).
-   *
-   * The order prefers stable identity hooks over generated class names, and the path
-   * comes last. A candidate is accepted only if it finds exactly *this* element:
-   * `length === 1` alone would accept a selector that hits a different one, and the
-   * caller would click the wrong thing while the answer looked right.
-   */
-  function selectorForElement(element, valueLimit, classLimit) {
-    const tag = String(element.tagName).toLowerCase();
-
-    /**
-     * An attribute value as it may stand inside a quoted CSS string, or `null`.
-     *
-     * A value carrying a `"` is refused instead of escaped: an escaped form the page
-     * has to parse is a risk for a name, and the path below always works.
-     */
-    function quotedValue(name) {
-      const value = element.getAttribute(name);
-      if (typeof value !== "string" || value === "" || value.indexOf('"') !== -1) return null;
-      return value.replace(/\r\n?|\n/g, " ").slice(0, valueLimit);
-    }
-
-    /** Is `candidate` a selector that finds this element and nothing else? */
-    function isTheOnlyMatch(candidate) {
-      try {
-        const matches = document.querySelectorAll(candidate);
-        return matches.length === 1 && matches[0] === element;
-      } catch (error) {
-        // A candidate the page cannot parse (`#1abc`, `#a b`) is no candidate. Its own
-        // `try`, so one bad string does not cost the next one its chance.
-        return false;
-      }
-    }
-
-    // The same split as `classesOf` in `inspectPageSource` — two realms, no shared
-    // scope, and the page payload is not the place for a third helper.
-    function classNames() {
-      const className = element.getAttribute("class");
-      if (typeof className !== "string") return [];
-      return className
-        .split(/\s+/)
-        .filter((name) => name !== "")
-        .slice(0, classLimit);
-    }
-
-    /** The 1-based position among the siblings that share the tag — what `:nth-of-type` counts. */
-    function positionOf(target) {
-      const parent = target.parentElement;
-      if (parent === null || parent === undefined) return 1;
-      const name = String(target.tagName);
-      let position = 0;
-      for (const sibling of parent.children) {
-        if (String(sibling.tagName) === name) position += 1;
-        if (sibling === target) break;
-      }
-      return position;
-    }
-
-    /**
-     * The last resort: the chain from `<html>` down, one `:nth-of-type` per step.
-     *
-     * Unique by construction and therefore returned unchecked, which is also why it is
-     * never `""`. It is a snapshot: a re-render that moves the element breaks it.
-     * `<html>` and `<body>` stay bare — one document, one body, so a position would buy
-     * nothing but length.
-     */
-    function pathOf() {
-      const steps = [];
-      let current = element;
-      while (current !== null && current !== undefined) {
-        const name = String(current.tagName).toLowerCase();
-        if (name === "html" || name === "body") steps.unshift(name);
-        else steps.unshift(`${name}:nth-of-type(${positionOf(current)})`);
-        current = current.parentElement;
-      }
-      return steps.join(" > ");
-    }
-
-    if (typeof element.id === "string" && element.id !== "") {
-      const candidate = `${tag}#${element.id}`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    const testId = quotedValue("data-testid");
-    if (testId !== null) {
-      const candidate = `[data-testid="${testId}"]`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    const label = quotedValue("aria-label");
-    if (label !== null) {
-      const candidate = `${tag}[aria-label="${label}"]`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    const name = quotedValue("name");
-    if (name !== null) {
-      const candidate = `${tag}[name="${name}"]`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    const classes = classNames();
-    if (classes.length > 0) {
-      const candidate = `${tag}${classes.map((className) => `.${className}`).join("")}`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    return pathOf();
-  }
-
-  /**
-   * `selectorForElement` inside one shadow tree: the same preference, asked of a root.
-   *
-   * A function of its own instead of a `root` parameter on the first one, because `eval`
-   * ships that one too: a changed signature would change two payloads, and the plain
-   * path is pinned byte for byte. Everything else is that function's reasoning — a
-   * candidate has to find exactly *this* element, and a value carrying a `"` is refused
-   * instead of escaped.
-   *
-   * Two things differ, and both come from the tree. Every candidate is checked against
-   * `root` instead of the document, because `document.querySelectorAll` never looks into
-   * a shadow root — every identity hook there would be silently discarded and the caller
-   * would get a path that finds nothing. And the position counts along `parentNode`: a
-   * node at the top of a root has no `parentElement`, so the document's `positionOf`
-   * would call every same-tag sibling the first, and the returned selector would point
-   * at a different element while looking right. It closes over nothing — `toString()`
-   * loses this scope, so both limits are arguments.
-   */
-  function shadowSelectorForElement(element, root, valueLimit, classLimit) {
-    const tag = String(element.tagName).toLowerCase();
-
-    /**
-     * An attribute value as it may stand inside a quoted CSS string, or `null`.
-     *
-     * A value carrying a `"` is refused instead of escaped: an escaped form the page has
-     * to parse is a risk for a name, and the path below always works.
-     */
-    function quotedValue(name) {
-      const value = element.getAttribute(name);
-      if (typeof value !== "string" || value === "" || value.indexOf('"') !== -1) return null;
-      return value.replace(/\r\n?|\n/g, " ").slice(0, valueLimit);
-    }
-
-    /** Is `candidate` a selector that finds this element in `root` and nothing else? */
-    function isTheOnlyMatch(candidate) {
-      try {
-        const matches = root.querySelectorAll(candidate);
-        return matches.length === 1 && matches[0] === element;
-      } catch (error) {
-        // A candidate the page cannot parse (`#1abc`, `#a b`) is no candidate. Its own
-        // `try`, so one bad string does not cost the next one its chance.
-        return false;
-      }
-    }
-
-    // The same split as `classesOf` — two realms, no shared scope.
-    function classNames() {
-      const className = element.getAttribute("class");
-      if (typeof className !== "string") return [];
-      return className
-        .split(/\s+/)
-        .filter((name) => name !== "")
-        .slice(0, classLimit);
-    }
-
-    /**
-     * The 1-based position among the siblings that share the tag — what `:nth-of-type`
-     * counts, counted along `parentNode`.
-     *
-     * `parentElement`, not `parentNode`, would answer `null` at the top of a root and
-     * call every sibling there "the first". The root is no element, but it does carry
-     * the children of its tree, and those are the siblings `:nth-of-type` counts.
-     */
-    function positionOf(target) {
-      const parent = target.parentNode;
-      if (parent === null || parent === undefined) return 1;
-      const name = String(target.tagName);
-      let position = 0;
-      for (const sibling of parent.children) {
-        if (String(sibling.tagName) === name) position += 1;
-        if (sibling === target) break;
-      }
-      return position;
-    }
-
-    /**
-     * The last resort: the chain from the root's edge down, one `:nth-of-type` per step.
-     *
-     * It stops where the root begins — at `parentNode === root`, which is also where
-     * `parentElement` answers `null`. One step further would name a chain the document
-     * cannot resolve, and a selector that looks like an answer while finding nothing is
-     * the one failure this project refuses to hand out silently. Note that the steps are
-     * joined with `>`, so a caller cannot reuse this one across a jump: a jump carries
-     * one simple selector on each side, and this is a chain.
-     */
-    function pathOf() {
-      const steps = [];
-      let current = element;
-      while (current !== null && current !== undefined) {
-        const name = String(current.tagName).toLowerCase();
-        steps.unshift(`${name}:nth-of-type(${positionOf(current)})`);
-        const parent = current.parentNode;
-        if (parent === root || parent === null || parent === undefined) break;
-        current = parent;
-      }
-      return steps.join(" > ");
-    }
-
-    if (typeof element.id === "string" && element.id !== "") {
-      const candidate = `${tag}#${element.id}`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    const testId = quotedValue("data-testid");
-    if (testId !== null) {
-      const candidate = `[data-testid="${testId}"]`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    const label = quotedValue("aria-label");
-    if (label !== null) {
-      const candidate = `${tag}[aria-label="${label}"]`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    const name = quotedValue("name");
-    if (name !== null) {
-      const candidate = `${tag}[name="${name}"]`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    // A position is a simple selector, and it is the candidate that survives two
-    // identical siblings in one root — the one case the class form cannot describe. It
-    // sits before the class form because a generated class name ages worse than a
-    // structural position inside a component that owns its own tree.
-    const positioned = `${tag}:nth-of-type(${positionOf(element)})`;
-    if (isTheOnlyMatch(positioned)) return positioned;
-
-    const classes = classNames();
-    if (classes.length > 0) {
-      const candidate = `${tag}${classes.map((className) => `.${className}`).join("")}`;
-      if (isTheOnlyMatch(candidate)) return candidate;
-    }
-
-    return pathOf();
-  }
-
-  /**
-   * The inspect snippet: the three shared helpers, the extra helpers, the query.
-   *
-   * The builder is a third part instead of a third shared helper: `PAGE_HELPERS_CODE`
-   * is the payload of every click and every typing, and forty dead lines there would
-   * be pure cost for both.
+   * The inspect call: the query and the frame filter, nothing else.
    *
    * The filter travels always, `null` included: one shape for both callers is easier to
-   * read than a condition, and `isAddressedFrame(null)` is the main-frame answer.
-   *
-   * A `>>>` in the selector is the only thing this side notices, and it only picks the
-   * payload: a `>>>` inside an attribute value needs the shadow snippet as well, and it
-   * is the snippet that decides the string is one selector. Without a jump the payload is
-   * byte-for-byte the one every earlier increment sent — the plain snippet, the builder,
-   * nothing of the shadow path.
+   * read than a condition, and the page reads `null` as "the main frame". Whether a
+   * `>>>` picks the shadow query is the page's business now — the branch is about the
+   * DOM, not about which heap of source the bridge packed.
    */
-  function inspectPageCode(request, want) {
-    const jumps = typeof request.selector === "string" && request.selector.indexOf(">>>") !== -1;
-    if (!jumps) {
-      return pageSnippetCode(inspectPageSource, [request, want], selectorForElement.toString());
-    }
-    // The shadow snippet calls five: the plain snippet for the one-segment case, the
-    // document builder the plain snippet needs anyway, the two pure functions of the
-    // split, and the builder for a tree the document cannot see into.
-    const extraHelpers = [
-      inspectPageSource,
-      selectorForElement,
-      splitPiercingSelector,
-      isSimpleSelector,
-      shadowSelectorForElement,
-    ]
-      .map((helper) => helper.toString())
-      .join("\n");
-    return pageSnippetCode(inspectShadowPageSource, [request, want], extraHelpers);
+  function inspectPageRequest(request, want) {
+    return { op: "inspect", args: { request, want } };
   }
 
   /* ------------------------------------------------------------------ focus */
@@ -4323,19 +3471,23 @@
     // does not.
     const guard = guardAfter(EVAL_GUARD_MS);
     try {
-      const results = await Promise.race([
-        injectPageCode(tab.id, evalPageCode(cfg, want), { allFrames: want !== null }),
-        guard.promise,
-      ]);
-      // `executeScript` answers an array, `guardAfter` answers `undefined`. So "no
-      // array" is the guard — or a browser that handed back nothing at all, which is
-      // the same statement for the caller: no answer from the page in time. The check
-      // has to stay *before* the frame selection: `frameTargetOf` would read the guard's
-      // `undefined` as "no frame answered" and turn the timeout into `frame_not_found`.
-      if (!Array.isArray(results)) {
+      const injected = askPageAgent(tab.id, evalPageRequest(cfg, want), {
+        allFrames: want !== null,
+      });
+      // The promise that loses the race keeps running and can still end at its own
+      // deadline ("no frame answered"). Nobody would be left to read that rejection, and
+      // an unhandled one takes the page down with it. Handled here, once.
+      void injected.catch(() => {});
+      const winner = await Promise.race([injected, guard.promise]);
+      // The guard answers `undefined`. So "not a call's answers" is the guard — or a
+      // browser that handed back nothing at all, which is the same statement for the
+      // caller: no answer from the page in time. The check has to stay *before* the frame
+      // selection: `frameTargetOf` would read the guard's `undefined` as "no frame
+      // answered" and turn the timeout into `frame_not_found`.
+      if (!isPageAnswers(winner)) {
         throw new EvalError(EVAL_TIMEOUT_CODE, EVAL_TIMEOUT_MESSAGE);
       }
-      return evalResultOf(tab.id, frameTargetOf(results, want));
+      return evalResultOf(tab.id, frameTargetOf(valuesOf(winner.answers), want));
     } finally {
       // Disarmed whichever side won: an uncleared guard would outlive the call it
       // belonged to.
@@ -4398,184 +3550,16 @@
     );
   }
 
-  /**
-   * The code of the agent tab, run in the page — and everything that follows it.
-   *
-   * Every number arrives as an argument and `selectorForElement` arrives as source
-   * (`evalPageCode`), because nothing of this scope survives the trip into the page.
-   * The code under test sees neither: `new Function` compiles in the page's global
-   * scope, so the IIFE's locals stay out of its reach while the DOM stays in it.
-   *
-   * Answers one `outcome` in every case and never a rejection: the caller's vocabulary
-   * is the wire protocol's codes, and a `TypeError` thrown out of here would reach it as
-   * "our bug" instead of "the page said no".
-   */
-  async function evalPageSource(cfg, want) {
-    // The frame filter of spec 25, and the first statement on purpose: a frame that is
-    // not meant runs no code at all. That is the whole difference between "described"
-    // and "restricted" for this tool — `eval` may change the page, and a frame nobody
-    // addressed must not be changed by a call that was meant for another one.
-    if (!isAddressedFrame(want)) {
-      return { outcome: "not_the_frame", href: String(location.href) };
-    }
-    /**
-     * The hit's own address, attached by every answer below.
-     *
-     * Unconditionally, unlike `readPageSource`'s twin: the `ok` answer has always carried
-     * it, and a refusal without one turns two throwing frames into `frame_ambiguous` with
-     * `candidates: [null, null]` — the extension builds those candidates out of exactly
-     * this field. `evalResultOf` drops it on its way to the wire either way.
-     */
-    function frameFieldsOf() {
-      return { href: String(location.href) };
-    }
-    /**
-     * One value, as data JSON can carry.
-     *
-     * `undefined` becomes `null` *by hand*, and that is the point of the walk:
-     * `JSON.stringify({a: undefined})` drops the key, while a missing key is a
-     * different statement than `"a": null`.
-     *
-     * `ancestors` is the path, not every object ever seen: a reference that is shared
-     * twice is duplicated, like `JSON.stringify` would, while a real cycle is the one
-     * thing JSON cannot say.
-     */
-    function serialize(value) {
-      function walk(current, ancestors) {
-        if (current === null || current === undefined) return null;
-        const type = typeof current;
-        if (type === "function") return "[function]";
-        if (type === "symbol") return "[symbol]";
-        // A decimal string instead of a number: `JSON` has no `BigInt`, and a rounded
-        // number would be a different value without saying so.
-        if (type === "bigint") return current.toString();
-        if (type !== "object") return current;
-
-        // A DOM node of any kind: `nodeType` is the one property they all share.
-        if (typeof current.nodeType === "number") {
-          // Only an element has a tag and a selector — a text node, a comment or a
-          // document has neither, and inventing one would be a second format. Its
-          // content is one `.textContent` away in a second call, which is the cheaper
-          // contract than two shapes in one answer.
-          if (current.nodeType !== 1) return { kind: "node", nodeType: current.nodeType };
-          return {
-            kind: "node",
-            // Lower-cased like `selectorForElement` does it, so `tag` and `selector`
-            // describe the same element in the same spelling.
-            tag: String(current.tagName).toLowerCase(),
-            selector: selectorForElement(current, cfg.valueLimit, cfg.classLimit),
-          };
-        }
-
-        if (ancestors.has(current)) throw new Error("circular result");
-        ancestors.add(current);
-        try {
-          if (Array.isArray(current)) return current.map((entry) => walk(entry, ancestors));
-          const mapped = {};
-          for (const key of Object.keys(current)) mapped[key] = walk(current[key], ancestors);
-          return mapped;
-        } finally {
-          // Popped on the way out: refused is a cycle, not an object that happens to be
-          // referenced from two places.
-          ancestors.delete(current);
-        }
-      }
-
-      return walk(value, new WeakSet());
-    }
-
-    /** Whether the code produced something we should wait for. */
-    function isThenable(value) {
-      return value !== null && typeof value === "object" && typeof value.then === "function";
-    }
-
-    /**
-     * Waits for `thenable`, but not longer than `cfg.timeoutMs`.
-     *
-     * Answers `deadline` — the caller's marker object, so "time ran out" cannot be
-     * confused with a code that answered nothing — and always disarms the timer: a page
-     * timer that outlives the answer keeps the content process busy for a value nobody
-     * will read.
-     */
-    async function withinDeadline(thenable, deadline) {
-      let timerId = null;
-      try {
-        return await Promise.race([
-          thenable,
-          new Promise((resolve) => {
-            timerId = setTimeout(() => resolve(deadline), cfg.timeoutMs);
-          }),
-        ]);
-      } finally {
-        clearTimeout(timerId);
-      }
-    }
-
-    /**
-     * The message of a throw, whatever was thrown.
-     *
-     * An `Error` carries one, a thrown string does not, and both are the page's words.
-     * Cut to what a caller can read — a stack never travels, because that stack is our
-     * side and not theirs.
-     */
-    function messageOf(error) {
-      const raw = error?.message ?? error;
-      return String(raw).slice(0, cfg.messageLimit);
-    }
-
-    // The window of `elapsedMs`: from immediately before the code is called to after
-    // its result is mapped. A number taken outside this window would be no measurement.
-    const startedAt = Date.now();
-    // A value no code can reach: the locals of this function are invisible to
-    // `new Function`, which compiles in the page's global scope.
-    const deadline = { deadline: true };
-
-    let produced;
-    try {
-      // A syntax error is thrown right here, while the function is built, and is the
-      // caller's failure exactly like a throw inside the code: same outcome, same
-      // message, because for the caller the two are the same event.
-      produced = new Function(cfg.code)();
-      if (isThenable(produced)) {
-        produced = await withinDeadline(produced, deadline);
-        if (produced === deadline) return { outcome: "timeout", ...frameFieldsOf() };
-      }
-    } catch (error) {
-      return { outcome: "threw", message: messageOf(error), ...frameFieldsOf() };
-    }
-
-    let json;
-    try {
-      json = JSON.stringify(serialize(produced));
-    } catch (error) {
-      return { outcome: "unserializable", ...frameFieldsOf() };
-    }
-
-    // Measured after the mapping, before the size check: the mapping is what the code
-    // cost the page, the check is our bookkeeping.
-    const elapsedMs = Date.now() - startedAt;
-    // A refusal, never a cut: half a JSON is no answer. The caller who needs a list is
-    // served by `inspect`.
-    if (json.length > cfg.resultLimit) return { outcome: "too_large", ...frameFieldsOf() };
-    return {
-      outcome: "ok",
-      url: location.href,
-      title: document.title,
-      elapsedMs,
-      json,
-      ...frameFieldsOf(),
-    };
-  }
 
   /**
-   * The eval snippet: the three shared helpers, the selector builder, the evaluator.
+   * The eval call: the code plus every number the page needs, and the frame filter.
    *
-   * The builder arrives as source like in `inspectPageCode`, because mapping a DOM
-   * element needs the one selector a caller can hand back to `click`. The filter
-   * travels always, `null` included (see `inspectPageCode`).
+   * The filter travels always, `null` included (see `inspectPageRequest`). The selector
+   * builder a DOM result is mapped with lives in `page-agent.js` now — one copy, shared
+   * with `inspect`, which is what keeps the two tools naming one element the same way.
    */
-  function evalPageCode(cfg, want) {
-    return pageSnippetCode(evalPageSource, [cfg, want], selectorForElement.toString());
+  function evalPageRequest(cfg, want) {
+    return { op: "eval", args: { cfg, want } };
   }
 
   /* ------------------------------------------------------------ screenshot */
@@ -4990,48 +3974,46 @@
   }
 
   /**
-   * The `frames` snippet: one frame's own address and whether it is the outermost one.
+   * The inventory call: no argument, one self-report per frame.
    *
-   * `window.top === window` is asked *inside* the frame because that is the only place
-   * that can answer it: `tabs.executeScript` in MV2 hands back the results without a
-   * frame id, so nothing outside tells the main frame from a child.
-   *
-   * The address travels as it is — non-strings included. Which entry is a usable frame
-   * is a single decision, and it lives in `framesOf`; a second opinion here would be a
-   * second rule about the same field.
+   * Every frame answers on its own and names its own address; the frame id rides along
+   * in the `sender` of the message, not in the payload, because a frame cannot answer a
+   * question about its own id. `window.top === window` is asked inside the frame for the
+   * same reason it was asked inside the snippet: nothing outside tells the main frame
+   * from a child.
    */
-  function framesPageSource() {
-    return { href: location.href, top: window.top === window };
-  }
-
-  /** The snippet as one injected expression — the same wrapper every snippet takes. */
-  function framesPageCode() {
-    return pageSnippetCode(framesPageSource, []);
+  function inventoryRequest() {
+    return { op: "inventory", args: {} };
   }
 
   /**
-   * The listed frames out of one `allFrames` result, and how many there are.
+   * The listed frames out of one collection of self-reports, and how many there are.
    *
-   * The order is `executeScript`'s and is deliberately *not* promised — Firefox may
-   * answer in any sequence, so nothing here sorts and no caller may pin a sequence as if
-   * it were a contract. A caller that needs the main frame finds it by `top`.
+   * The order is arrival order and is deliberately *not* promised — Firefox may answer in
+   * any sequence, so nothing here sorts and no caller may pin a sequence as if it were a
+   * contract. A caller that needs the main frame finds it by `top`.
    *
-   * An entry without a string `href` is dropped, and the drop is why `count` comes from
+   * A report without a string `href` is dropped, and the drop is why `count` comes from
    * the filtered list: a frame nobody can address is nothing `browser_frames` may name,
    * and counting it would make `count` and the list two different numbers under one word.
+   * An empty entry must not shift the filter: the drop happens *after* the address was
+   * read, so a neighbour keeps its own address either way.
    *
-   * A non-array answer is *not* "no frames": `executeScript` with `allFrames` always
-   * answers a list, so an object here is an injection whose result nobody can read — our
-   * own bug, and `frames_failed` says so instead of handing out an empty inventory that
-   * looks like a page without frames (`asArray` would happily do exactly that).
+   * A report that is not an object at all is our own bug — an answer whose value nobody
+   * can read — and `frames_failed` says so instead of handing out an empty inventory that
+   * looks like a page without frames.
    */
-  function framesOf(results) {
-    if (!Array.isArray(results)) {
+  function framesOf(answers) {
+    if (!Array.isArray(answers)) {
       throw new FramesError(FRAMES_FAILED_CODE, FRAMES_FAILED_MESSAGE);
     }
-    const frames = results
-      .filter((entry) => typeof entry?.href === "string")
-      .map((entry) => ({ href: entry.href, top: entry.top === true }));
+    const reports = answers.map((answer) => answer?.value);
+    if (reports.some((report) => report === null || typeof report !== "object")) {
+      throw new FramesError(FRAMES_FAILED_CODE, FRAMES_FAILED_MESSAGE);
+    }
+    const frames = reports
+      .filter((report) => typeof report.href === "string")
+      .map((report) => ({ href: report.href, top: report.top === true }));
     return { count: frames.length, frames };
   }
 
@@ -5048,8 +4030,10 @@
    */
   async function framesAgentTab(params) {
     const tab = await addressedAgentTab(params, FramesError);
-    const results = await injectPageCode(tab.id, framesPageCode(), { allFrames: true });
-    const { count, frames } = framesOf(results);
+    // Every frame answers by itself: the injection's own result is only good for its
+    // *length* (the frame count the collection waits for), never for an inventory.
+    const { answers } = await askPageAgent(tab.id, inventoryRequest(), { allFrames: true });
+    const { count, frames } = framesOf(answers);
     return { tabId: tab.id, url: asUrl(tab.url), count, frames };
   }
 
@@ -5282,41 +4266,6 @@
     });
   }
 
-  /**
-   * The two gates of a transcript call, in one snippet: is this a desktop YouTube watch
-   * page, and has the browser rendered it?
-   *
-   * They answer two different questions with two different errors:
-   *
-   * 1. Is this a desktop YouTube watch page? `example.com` must hear
-   *    `transcript_failed`, not the advice to focus — that advice would send the agent
-   *    into a loop it cannot leave (spec 32, R3-5). The host comparison is
-   *    `youtube.com` or `.youtube.com`, never a bare suffix (`notyoutube.com`), and
-   *    `m.youtube.com` is refused on purpose: it carries a different DOM.
-   * 2. Is the page rendered? A tab in the background never builds `ytd-watch-flexy`
-   *    (spec 32, M4), so there is nothing to read. `visibilityState` rides along because
-   *    a *visible* tab can still be hydrating, and the caller must be able to tell those
-   *    two states apart.
-   *
-   * The gates stay the first injection even though the panel is no longer opened: they
-   * are what keeps a call against a foreign or unrendered page from reaching the model
-   * snippet, and the answer's sentence is decided by where the page failed, not by what
-   * the model would have said.
-   */
-  function transcriptGateSource() {
-    /*bc:transcript-gate*/
-    const visibilityState = String(document.visibilityState);
-    const host = String(location.hostname);
-    const isYoutubeHost =
-      (host === "youtube.com" || host.endsWith(".youtube.com")) && host !== "m.youtube.com";
-    if (!isYoutubeHost || String(location.pathname) !== "/watch") {
-      return { outcome: "not_youtube", visibilityState };
-    }
-    if (document.querySelector("ytd-watch-flexy") === null) {
-      return { outcome: "needs_focus", visibilityState };
-    }
-    return { outcome: "ok", visibilityState };
-  }
 
   /**
    * The containers a player response is known to hang off — the measured one first
@@ -5335,636 +4284,24 @@
     "ytplayer.config.args.raw_player_response",
   ]);
 
-  /**
-   * Reads the player response: the caption tracks and the audio tracks, and nothing else.
-   *
-   * Everything below the walk is index loops and field-by-field copies, and that is the
-   * whole point. `window.wrappedJSObject` hands out the operator's own objects; over an
-   * Xray wrapper their `map`, `filter` and their iterator may simply not be there, and a
-   * spread would silently produce nothing. Copying field by field is also what keeps the
-   * answer small: a player response is megabytes, and this snippet answers four strings
-   * and two numbers per track.
-   *
-   * A candidate may be the response itself or the JSON string the page kept (M11: the
-   * string case was not measured, so both forms are read). `no_model` means no candidate
-   * held a response at all; a response *without* `captionTracks` is a model — the video
-   * simply has no subtitle track, and that is the caller's `no_transcript_panel`.
-   */
-  function transcriptModelSource(candidates) {
-    /*bc:transcript-model*/
-    // `wrappedJSObject` is absent only in a realm that is not a content script; the
-    // fallback keeps the snippet honest there instead of throwing on a missing property.
-    const pageRoot =
-      typeof window.wrappedJSObject === "object" && window.wrappedJSObject !== null
-        ? window.wrappedJSObject
-        : window;
-
-    function containerAt(path) {
-      const parts = String(path).split(".");
-      let current = pageRoot;
-      for (let i = 0; i < parts.length; i += 1) {
-        if (current === null || current === undefined) return null;
-        current = current[parts[i]];
-      }
-      return current === null || current === undefined ? null : current;
-    }
-    function responseOf(value) {
-      if (typeof value === "string") {
-        try {
-          const parsed = JSON.parse(value);
-          return parsed !== null && typeof parsed === "object" ? parsed : null;
-        } catch (error) {
-          return null;
-        }
-      }
-      return typeof value === "object" && value !== null ? value : null;
-    }
-    // The track list sits two levels down in the response YouTube actually ships:
-    // `captions.playerCaptionsTracklistRenderer`.
-    function tracklistOf(response) {
-      const captions = response.captions;
-      if (captions === null || typeof captions !== "object") return null;
-      const renderer = captions.playerCaptionsTracklistRenderer;
-      return renderer !== null && typeof renderer === "object" ? renderer : null;
-    }
-    // A track name is `{simpleText}` or `{runs:[{text}]}`, depending on the response. Both
-    // are read here, because the menu comparison of spec 33 (M16) needs one plain string.
-    function captionNameOf(name) {
-      if (name === null || typeof name !== "object") return "";
-      if (typeof name.simpleText === "string") return name.simpleText;
-      const runs = name.runs;
-      if (runs === null || runs === undefined) return "";
-      let text = "";
-      for (let i = 0; i < runs.length; i += 1) {
-        const run = runs[i];
-        if (run !== null && typeof run === "object" && typeof run.text === "string") text += run.text;
-      }
-      return text;
-    }
-    function captionTrackOf(track) {
-      return {
-        languageCode: typeof track.languageCode === "string" ? track.languageCode : "",
-        vssId: typeof track.vssId === "string" ? track.vssId : "",
-        name: captionNameOf(track.name),
-        kind: typeof track.kind === "string" ? track.kind : "",
-      };
-    }
-    function audioTrackOf(track) {
-      return {
-        audioTrackId: typeof track.audioTrackId === "string" ? track.audioTrackId : "",
-        // The index into `captionTracks` this audio track belongs to. The track's own
-        // *position* in `audioTracks` is deliberately not part of the copy: it was measured
-        // to move between two calls for the same video (spec 33, M3), and only the id
-        // identifies the original.
-        defaultCaptionTrackIndex: Number.isInteger(track.defaultCaptionTrackIndex)
-          ? track.defaultCaptionTrackIndex
-          : null,
-      };
-    }
-    function captionTracksOf(tracklist) {
-      const copied = [];
-      if (tracklist === null) return copied;
-      const tracks = tracklist.captionTracks;
-      if (tracks === null || tracks === undefined) return copied;
-      for (let i = 0; i < tracks.length; i += 1) {
-        const track = tracks[i];
-        // The *position* is the payload here: `defaultCaptionTrackIndex` of the original
-        // audio track is an index into this list. An entry that is not a track therefore
-        // becomes a placeholder with empty fields instead of being dropped — a dropped
-        // entry slides every later track up by one, and the original's index would then
-        // answer the neighbour's language, which looks healthy and is wrong (spec 33,
-        // M1/M2). The placeholder is refused where a track is actually *used*, not here.
-        copied[i] =
-          track !== null && typeof track === "object"
-            ? captionTrackOf(track)
-            : { languageCode: "", vssId: "", name: "", kind: "" };
-      }
-      return copied;
-    }
-    function audioTracksOf(tracklist) {
-      const copied = [];
-      if (tracklist === null) return copied;
-      const tracks = tracklist.audioTracks;
-      if (tracks === null || tracks === undefined) return copied;
-      for (let i = 0; i < tracks.length; i += 1) {
-        const track = tracks[i];
-        if (track !== null && typeof track === "object") copied.push(audioTrackOf(track));
-      }
-      return copied;
-    }
-
-    for (let i = 0; i < candidates.length; i += 1) {
-      const path = String(candidates[i]);
-      const response = responseOf(containerAt(path));
-      if (response === null) continue;
-      const tracklist = tracklistOf(response);
-      return {
-        outcome: "model",
-        source: path,
-        captionTracks: captionTracksOf(tracklist),
-        audioTracks: audioTracksOf(tracklist),
-      };
-    }
-    return { outcome: "no_model" };
+  /** The gate call: no argument, the page's verdict about itself. */
+  function transcriptGateRequest() {
+    return { op: "transcriptGate", args: {} };
   }
 
-  /**
-   * Reads the track file whose address the caller hands in, and applies the window to its cues.
-   *
-   * The address arrives as an argument and from nowhere else: the background page observed the
-   * request the *player* made, and only that one carries a valid signature (spec 33, M13). The
-   * page's own resource timeline is no longer read for one — it was measured blind for the
-   * page's requests (M18, spec 34), so a second address path in here would be the convenient
-   * way back into a channel that does not work.
-   *
-   * Which track the address belongs to was decided before the injection: `lang`, `kind` and
-   * `tlang` are the marks the wire matches on. What this snippet still reads out of the
-   * address is the language it *delivers*, and the format it appends.
-   *
-   * The address never leaves this snippet. The answer carries the language *read out of
-   * it* and the cues; an answer field with the address would be the leak the whole design
-   * is built to avoid, so there is no such field and no message that names one.
-   *
-   * The window logic is the one from `docs/32`, criterion 3, moved and not rewritten:
-   * every cue whose text overlaps `[offset, offset + maxChars)` travels whole, because
-   * half a cue would make its stamp a lie, and `truncated` hangs on the end of the last
-   * delivered cue rather than on `offset + chars`.
-   */
-  async function transcriptCaptionSource(request) {
-    /*bc:transcript-caption*/
-    const address = String(request.address);
-
-    // One query parameter of an address, or null. Parsed by hand instead of with `URL`:
-    // this snippet must run in the page realm as it is, and the address is a string with
-    // a query and a fragment, nothing more.
-    function paramOf(address, name) {
-      const questionMark = String(address).indexOf("?");
-      if (questionMark === -1) return null;
-      const query = String(address).slice(questionMark + 1);
-      const hash = query.indexOf("#");
-      const pairs = (hash === -1 ? query : query.slice(0, hash)).split("&");
-      for (let i = 0; i < pairs.length; i += 1) {
-        const pair = pairs[i];
-        const equals = pair.indexOf("=");
-        const key = equals === -1 ? pair : pair.slice(0, equals);
-        if (key !== name) continue;
-        const value = equals === -1 ? "" : pair.slice(equals + 1);
-        try {
-          return decodeURIComponent(value);
-        } catch (error) {
-          return value;
-        }
-      }
-      return null;
-    }
-    // `fmt=json3` is what makes the file a whole track with timestamps (M13). It is *set*,
-    // not appended blindly: an address that already names a format would otherwise carry
-    // two of them and the endpoint would pick one nobody asked for.
-    function json3AddressOf(address) {
-      const hash = address.indexOf("#");
-      const head = hash === -1 ? address : address.slice(0, hash);
-      const fragment = hash === -1 ? "" : address.slice(hash);
-      const questionMark = head.indexOf("?");
-      const path = questionMark === -1 ? head : head.slice(0, questionMark);
-      const query = questionMark === -1 ? "" : head.slice(questionMark + 1);
-      const kept = [];
-      const pairs = query.split("&");
-      for (let i = 0; i < pairs.length; i += 1) {
-        const pair = pairs[i];
-        if (pair === "" || pair === "fmt" || pair.startsWith("fmt=")) continue;
-        kept.push(pair);
-      }
-      kept.push("fmt=json3");
-      return `${path}?${kept.join("&")}${fragment}`;
-    }
-    // "[h:]m:ss" of the cue's start. The hour form is real: a lecture is longer than an
-    // hour, and `62:03` would be a stamp nobody writes.
-    function timeTextOf(startMs) {
-      const totalSeconds = Math.floor(startMs / 1000);
-      const hours = Math.floor(totalSeconds / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-      const padded = (value) => (value < 10 ? `0${value}` : String(value));
-      return hours > 0 ? `${hours}:${padded(minutes)}:${padded(seconds)}` : `${minutes}:${padded(seconds)}`;
-    }
-    // The cue's text is the joined `segs[].utf8`. Joined with one space and with the runs
-    // of spaces folded: the `ja` track writes its pieces without any space, and a parser
-    // that glued them would put "Japanischlernen" in the answer (spec 33, M15) — while a
-    // parser that inserted nothing would glue the *latin* words of the same track.
-    function textOf(segs) {
-      if (segs === null || segs === undefined) return "";
-      let text = "";
-      for (let i = 0; i < segs.length; i += 1) {
-        const seg = segs[i];
-        if (seg === null || typeof seg !== "object" || typeof seg.utf8 !== "string") continue;
-        text = text === "" ? seg.utf8 : `${text} ${seg.utf8}`;
-      }
-      // Runs of blanks are folded, not just ASCII spaces: a cue may carry a tab or a
-      // no-break space, and both would otherwise land in `chars` and `totalChars` as
-      // characters nobody can see.
-      return text.replace(/[ \t\u00a0]+/g, " ").trim();
-    }
-    function cueOf(event) {
-      const startMs = typeof event.tStartMs === "number" && Number.isFinite(event.tStartMs) ? event.tStartMs : 0;
-      return {
-        time: Math.floor(startMs / 1000),
-        timeText: timeTextOf(startMs),
-        text: textOf(event.segs),
-      };
-    }
-
-    let body = null;
-    try {
-      const response = await fetch(json3AddressOf(address));
-      if (response === null || typeof response !== "object" || response.ok === false) {
-        return { outcome: "caption_failed" };
-      }
-      if (typeof response.json !== "function") return { outcome: "caption_failed" };
-      body = await response.json();
-    } catch (error) {
-      return { outcome: "caption_failed" };
-    }
-    if (body === null || typeof body !== "object") return { outcome: "caption_failed" };
-    const events = body.events;
-    if (events === null || events === undefined) return { outcome: "caption_failed" };
-
-    const all = [];
-    for (let i = 0; i < events.length; i += 1) {
-      const event = events[i];
-      if (event === null || typeof event !== "object") continue;
-      const cue = cueOf(event);
-      // An event without text is a marker of the player, not a cue: keeping it would put
-      // an empty segment in the answer and cost the connector space in `totalChars`.
-      if (cue.text === "") continue;
-      all.push(cue);
-    }
-
-    const offset = request.offset;
-    const maxChars = request.maxChars;
-    const deliveredLanguage = paramOf(address, "lang");
-    const totalChars = all.map((cue) => cue.text).join(" ").length;
-    if (offset > totalChars) {
-      return { outcome: "offset_out_of_range", offset, totalChars };
-    }
-    // A paging loop's halt: exactly at the end is a valid window, one character further
-    // is the mistake above.
-    if (offset === totalChars) {
-      return {
-        outcome: "caption",
-        deliveredLanguage,
-        segments: [],
-        totalChars,
-        chars: 0,
-        offset,
-        truncated: false,
-      };
-    }
-
-    const windowEnd = offset + maxChars;
-    const delivered = [];
-    let cueStart = 0;
-    let endLast = 0;
-    for (const cue of all) {
-      const cueEnd = cueStart + cue.text.length;
-      // Overlap, not containment: a cue the window only touches from either side travels
-      // whole.
-      if (cueEnd > offset && cueStart < windowEnd) {
-        delivered.push(cue);
-        endLast = cueEnd;
-      }
-      // The one-space connector belongs to the end of this cue.
-      cueStart = cueEnd + 1;
-    }
-    return {
-      outcome: "caption",
-      deliveredLanguage,
-      segments: delivered,
-      totalChars,
-      chars: delivered.map((cue) => cue.text).join(" ").length,
-      offset,
-      truncated: endLast < totalChars,
-    };
+  /** The menu call, with its action and the model's track names as arguments. */
+  function transcriptMenuRequest(request) {
+    return { op: "transcriptMenu", args: { request } };
   }
 
-  /**
-   * The player's settings menu and the playhead: read the track list, pick one entry, jump.
-   *
-   * Nothing here is anchored on an interface string. The row that opens the track list is
-   * the one whose `.ytp-menuitem-content` is *exactly* one of the track names the model
-   * handed out — measured: exactly one such row (spec 33, M16) — and the localized label of
-   * that row is never read. The counter-check is the number of entries behind it:
-   * `captionTracks + 2`, plus one when the list carries a pair entry (`… >> …`, the
-   * auto-translation) — measured 2026-11-12 on `wKv-g1uEoDY`, four entries for a single track.
-   * A menu whose count is off by anything else is refused by name instead of being clicked at.
-   *
-   * Four actions in one snippet, because they share the walk over the rows and because the
-   * restore must be one injection: "track first, playhead last" cannot be reordered by a
-   * second injection arriving in between (criterion 6).
-   *
-   * Every list is walked by index: the page hands out Xray wrapped objects, and `map`,
-   * `filter` or a spread over one of them may simply not exist there.
-   */
-  function transcriptMenuSource(request) {
-    /*bc:transcript-menu*/
-    const SETTINGS_BUTTON = ".ytp-settings-button";
-    const MENU_ITEM = ".ytp-menuitem";
-    const MENU_CONTENT = ".ytp-menuitem-content";
-    const PANEL_MENU = ".ytp-panel-menu";
-    const CHECKED_ATTRIBUTE = "aria-checked";
-    // The marker auto-translate appends to an entry: "… >> English". Such an entry is a
-    // language pair, not a track, and picking it would answer one language over the text of
-    // another (M5, M9).
-    const TRANSLATED_MARK = ">>";
-
-    const names = request.names === null || request.names === undefined ? [] : request.names;
-    const expectedCount = Number(request.expectedCount);
-    // Whether the popup on screen is ours to close: we opened it with the settings button. A
-    // popup the operator left open is read and stays open — we did not make it and we do not
-    // get to remove it.
-    let ours = false;
-
-    function textOf(element) {
-      if (element === null || element === undefined) return "";
-      const text = element.innerText;
-      return typeof text === "string" ? text.trim() : "";
-    }
-    function listOf(root, selector) {
-      const list = [];
-      if (root === null || root === undefined || typeof root.querySelectorAll !== "function") {
-        return list;
-      }
-      const found = root.querySelectorAll(selector);
-      for (let i = 0; i < found.length; i += 1) list.push(found[i]);
-      return list;
-    }
-    function elementOf(root, selector) {
-      if (root === null || root === undefined || typeof root.querySelector !== "function") return null;
-      const found = root.querySelector(selector);
-      return found === undefined ? null : found;
-    }
-    function clickableOf(element) {
-      return element !== null && typeof element === "object" && typeof element.click === "function";
-    }
-    function videoOf() {
-      return elementOf(document, "video");
-    }
-    function playheadOf() {
-      const video = videoOf();
-      if (video === null) return null;
-      const value = Number(video.currentTime);
-      return Number.isFinite(value) ? value : null;
-    }
-    // Whether the popup is on screen right now: it shows a row. That is the same signal
-    // `trackRowsOf` leans on to decide whether the menu has to be opened first — a closed
-    // popup hands out no row, which is all this needs to know.
-    function menuIsOpen() {
-      return listOf(document, MENU_ITEM).length > 0;
-    }
-    // Opening and closing are the same click: the button toggles the popup. So the click is
-    // made only while the popup is on screen *and* was ours to begin with — a click on an
-    // entry closes the popup by itself, and clicking the button then would open it again and
-    // leave the operator with a menu that was closed before the call (review m4).
-    function closeMenu() {
-      if (!ours) return;
-      ours = false;
-      if (!menuIsOpen()) return;
-      const button = elementOf(document, SETTINGS_BUTTON);
-      if (clickableOf(button)) button.click();
-    }
-    // The row's value as the model names a track: with auto-translation on, the row shows the
-    // *pair* while the model names only the track. Measured 2026-11-12 on `wKv-g1uEoDY`: the
-    // row read "Japanisch (automatisch erzeugt) >> Englisch" against the model's "Japanisch
-    // (automatisch erzeugt)", so the exact comparison found nothing and the run ended in
-    // `no_row`. Hence the part before the first marker. Only here — the pick inside the
-    // track list stays exact, and that exactness is what keeps a pair entry out of it.
-    function rowNameOf(value) {
-      const mark = value.indexOf(TRANSLATED_MARK);
-      return mark === -1 ? value : value.slice(0, mark).trim();
-    }
-    // The row whose *value* is exactly a track name. The value is the point twice over: a
-    // row's label may carry a language name as well, and the entries of an open panel carry
-    // no value element at all — a substring search or an `innerText` comparison would find
-    // both and then be right by accident.
-    function trackRowsOf() {
-      const rows = [];
-      const all = listOf(document, MENU_ITEM);
-      for (let i = 0; i < all.length; i += 1) {
-        const value = rowNameOf(textOf(elementOf(all[i], MENU_CONTENT)));
-        if (value === "") continue;
-        for (let n = 0; n < names.length; n += 1) {
-          if (value === String(names[n])) {
-            rows.push(all[i]);
-            break;
-          }
-        }
-      }
-      return rows;
-    }
-    // The panels stack in document order, so the deepest — the one just opened — is the
-    // last. The count check in `openTrackList` is what catches a wrong panel; without it the
-    // first entry's text would be the only thing between us and a wrong click.
-    function deepestPanel() {
-      const panels = listOf(document, PANEL_MENU);
-      return panels.length === 0 ? null : panels[panels.length - 1];
-    }
-    // The track list, opened: the entries, their texts, and the refusal where the row is not
-    // the one the model describes. Every refusal is an outcome and not a thrown error:
-    // a snippet that throws reaches the caller as "this page is not readable", which is a
-    // different story and hides what happened.
-    function openTrackList() {
-      let rows = trackRowsOf();
-      if (rows.length === 0) {
-        const button = elementOf(document, SETTINGS_BUTTON);
-        if (!clickableOf(button)) return { outcome: "no_row" };
-        button.click();
-        ours = true;
-        rows = trackRowsOf();
-      }
-      if (rows.length === 0) {
-        closeMenu();
-        return { outcome: "no_row" };
-      }
-      if (rows.length > 1) {
-        const candidates = [];
-        for (let i = 0; i < rows.length; i += 1) candidates.push(textOf(rows[i]));
-        closeMenu();
-        return { outcome: "row_ambiguous", candidates };
-      }
-      // No claim of ownership here: the popup was already on screen, either because we
-      // opened it (then `ours` is set) or because the operator left it open (then it is not,
-      // and the popup stays).
-      rows[0].click();
-      const entries = listOf(deepestPanel(), MENU_ITEM);
-      const texts = [];
-      for (let i = 0; i < entries.length; i += 1) texts.push(textOf(entries[i]));
-      // A pair entry ("track >> language") is one entry on top of the count the model
-      // predicts: measured 2026-11-12 on `wKv-g1uEoDY` with auto-translation on, the list
-      // carried four entries — "Aus", the track, "Automatisch übersetzen" and
-      // "Japanisch (automatisch erzeugt) >> Englisch" — against `captionTracks + 2` = 3, so
-      // the counter-check refused the very list it was looking at. So one pair entry makes
-      // the expectation one higher; a list off by anything else is still refused by name.
-      let pairEntries = 0;
-      for (let i = 0; i < texts.length; i += 1) {
-        if (texts[i].indexOf(TRANSLATED_MARK) !== -1) pairEntries += 1;
-      }
-      const expected = expectedCount + (pairEntries > 0 ? 1 : 0);
-      if (entries.length !== expected) {
-        const count = entries.length;
-        closeMenu();
-        // The refusal names `expected`, not `expectedCount`: with a pair entry in the list the
-        // two differ, and a message quoting the model's number would tell the operator the
-        // wrong second number ("5 statt 3" where the check wanted 4).
-        return { outcome: "row_miscount", count, expectedCount: expected };
-      }
-      return { outcome: "open", entries, texts };
-    }
-    // The entry the player marks as running. The off entry carries the mark too, and that is
-    // how "captions were off" becomes a name that can be picked again.
-    function checkedNameOf(entries) {
-      for (let i = 0; i < entries.length; i += 1) {
-        const entry = entries[i];
-        if (typeof entry.getAttribute !== "function") continue;
-        if (String(entry.getAttribute(CHECKED_ATTRIBUTE)) !== "true") continue;
-        return textOf(entry);
-      }
-      return "";
-    }
-    // The entries worth naming in a refusal. A `>>` entry names a language pair, not a
-    // track, so it is no candidate for the pick the caller asked for. Exclusion from the
-    // pick itself needs none of this: there the comparison is exact (see the set branch).
-    function pickableTextsOf(texts) {
-      const pickable = [];
-      for (let i = 0; i < texts.length; i += 1) {
-        const text = texts[i];
-        if (text === "" || text.includes(TRANSLATED_MARK)) continue;
-        pickable.push(text);
-      }
-      return pickable;
-    }
-
-    if (String(request.action) === "seek") {
-      const video = videoOf();
-      if (video === null) return { outcome: "no_player" };
-      const from = playheadOf();
-      const duration = Number(video.duration);
-      const step = Number(request.seekOffsetS) > 0 ? Number(request.seekOffsetS) : 1;
-      let to = null;
-      // Forward when that still lies inside the video, backward otherwise, and not at all
-      // when neither does: a jump past either end would hand out a track file for an instant
-      // the video does not have. A length that is not a number — a live stream — is no basis
-      // for a jump either.
-      if (from !== null && Number.isFinite(duration)) {
-        if (from + step <= duration) to = from + step;
-        else if (from - step >= 0) to = from - step;
-      }
-      if (from === null || to === null) {
-        return { outcome: "seek", seeked: false, from, to: from };
-      }
-      video.currentTime = to;
-      return { outcome: "seek", seeked: true, from, to };
-    }
-
-    if (String(request.action) === "restore") {
-      const restoreName = typeof request.name === "string" ? request.name : "";
-      const restoreTime = Number.isFinite(request.currentTime) ? request.currentTime : null;
-      let trackRestored = false;
-      // The track half may throw — a page that is being rebuilt loses its menu mid-way — and
-      // the playhead write must survive that: it is the half the operator notices, and the
-      // cleanup is the one place where a partial result beats none (review m5).
-      try {
-        if (restoreName !== "") {
-          const list = openTrackList();
-          if (list.outcome === "open") {
-            let found = -1;
-            let count = 0;
-            // The remembered name is compared exactly *with* translations: this puts back
-            // what the operator had, it does not choose a track — that is what the pick
-            // above is for, and only there would a pair entry be the wrong track.
-            for (let i = 0; i < list.texts.length; i += 1) {
-              if (list.texts[i] !== restoreName) continue;
-              count += 1;
-              found = i;
-            }
-            if (count === 1 && clickableOf(list.entries[found])) {
-              list.entries[found].click();
-              trackRestored = true;
-            }
-          }
-          closeMenu();
-        }
-      } finally {
-        // Last, after every track click: a track change moves the playhead again, and the
-        // operator would be left where the change put them (criterion 6).
-        const video = videoOf();
-        if (video !== null && restoreTime !== null) video.currentTime = restoreTime;
-      }
-      return { outcome: "restored", trackRestored, currentTime: playheadOf() };
-    }
-
-    const list = openTrackList();
-    if (list.outcome !== "open") return list;
-    const checkedName = checkedNameOf(list.entries);
-    const currentTime = playheadOf();
-    if (String(request.action) !== "set") {
-      closeMenu();
-      return { outcome: "menu", entries: list.texts, checkedName, currentTime };
-    }
-    // Exact comparison on the trimmed entry text, and no index: the list starts with the off
-    // entry, so the position in it is not the position in `captionTracks` (M5). The exactness
-    // is also the whole exclusion of the auto-translate entries — "… >> Englisch" contains
-    // the target's name and never *is* it (M5, M9) — so there is no separate `>>` filter here
-    // that could look like a guard while the comparison already does the job.
-    const matches = [];
-    for (let i = 0; i < list.texts.length; i += 1) {
-      const text = list.texts[i];
-      if (text === "") continue;
-      if (text !== String(request.name)) continue;
-      matches.push(i);
-    }
-    if (matches.length !== 1) {
-      const candidates = pickableTextsOf(list.texts);
-      closeMenu();
-      return { outcome: matches.length === 0 ? "no_match" : "ambiguous", candidates };
-    }
-    list.entries[matches[0]].click();
-    // What the player *shows* now, read after the click: the requested name is what the call
-    // asked for, and answering with it would report an intention as a state (review m6).
-    let settledName = checkedNameOf(list.entries);
-    let settledTexts = list.texts;
-    // One re-open, then the verdict. The click closes the popup, and a page that rebuilds its
-    // entries on open (or hands out the mark only while the popup is on screen) answers
-    // nothing on the nodes the pick was read from — the mark is not missing, it is unread. So
-    // a mark that does not match is measured a second time, in the list as it stands now, and
-    // only an unread result there is the pick that did not take effect.
-    if (settledName !== String(request.name)) {
-      const reopened = openTrackList();
-      if (reopened.outcome === "open") {
-        settledName = checkedNameOf(reopened.entries);
-        settledTexts = reopened.texts;
-      }
-    }
-    closeMenu();
-    return { outcome: "menu", entries: settledTexts, checkedName: settledName, currentTime };
+  /** The model call, with the container candidates as the only argument. */
+  function transcriptModelRequest() {
+    return { op: "transcriptModel", args: { candidates: TRANSCRIPT_MODEL_CANDIDATES } };
   }
 
-  /** The gate snippet as one injected expression. */
-  function transcriptGateCode() {
-    return pageSnippetCode(transcriptGateSource, []);
-  }
-
-  /** The menu snippet, with its action and the model's track names as arguments. */
-  function transcriptMenuCode(request) {
-    return pageSnippetCode(transcriptMenuSource, [request]);
-  }
-
-  /** The model snippet, with the container candidates as the only argument. */
-  function transcriptModelCode() {
-    return pageSnippetCode(transcriptModelSource, [TRANSCRIPT_MODEL_CANDIDATES]);
-  }
-
-  /** The reading snippet, with the target track and the window as its argument. */
-  function transcriptCaptionCode(request) {
-    return pageSnippetCode(transcriptCaptionSource, [request]);
+  /** The reading call, with the target track and the window as its argument. */
+  function transcriptCaptionRequest(request) {
+    return { op: "transcriptCaption", args: { request } };
   }
 
   /**
@@ -6316,10 +4653,10 @@
   async function transcriptAgentTab(params) {
     const { offset, maxChars } = windowParamsOf(params, TranscriptError);
     const tab = await addressedAgentTab(params, TranscriptError);
-    const gateResults = await injectPageCode(tab.id, transcriptGateCode());
-    requireTranscriptGate(frameTargetOf(gateResults));
-    const modelResults = await injectPageCode(tab.id, transcriptModelCode());
-    const model = transcriptModelOf(frameTargetOf(modelResults));
+    const { answers: gateAnswers } = await askPageAgent(tab.id, transcriptGateRequest());
+    requireTranscriptGate(frameTargetOf(valuesOf(gateAnswers)));
+    const { answers: modelAnswers } = await askPageAgent(tab.id, transcriptModelRequest());
+    const model = transcriptModelOf(frameTargetOf(valuesOf(modelAnswers)));
     const target = transcriptTargetTrackOf(model);
 
     const captionRequest = transcriptCaptionRequestOf(target, offset, maxChars);
@@ -6334,26 +4671,26 @@
       names: transcriptCaptionNamesOf(model),
       expectedCount: model.captionTracks.length + TRANSCRIPT_MENU_EXTRA_ENTRIES,
     };
-    const menuResults = await injectPageCode(
+    const { answers: menuAnswers } = await askPageAgent(
       tab.id,
-      transcriptMenuCode({ ...menuBase, action: "read" }),
+      transcriptMenuRequest({ ...menuBase, action: "read" }),
     );
-    const menu = transcriptMenuOf(frameTargetOf(menuResults), target.name);
+    const menu = transcriptMenuOf(frameTargetOf(valuesOf(menuAnswers)), target.name);
     const previous = { name: menu.checkedName, currentTime: menu.currentTime };
     const changed = { track: false, position: false };
     let answer = null;
     let failure = null;
     try {
       if (menu.checkedName !== target.name) {
-        const setResults = await injectPageCode(
+        const { answers: setAnswers } = await askPageAgent(
           tab.id,
-          transcriptMenuCode({ ...menuBase, action: "set", name: target.name }),
+          transcriptMenuRequest({ ...menuBase, action: "set", name: target.name }),
         );
         // The flag first, and before the answer is read: a click may have happened and the
         // answer still be unusable, and then the operator must not be left on a track this
         // run picked (review m5). A refusal is the one answer that clicked nothing, so it is
         // the one case that leaves nothing to undo.
-        const setEntry = frameTargetOf(setResults);
+        const setEntry = frameTargetOf(valuesOf(setAnswers));
         changed.track = transcriptMenuDidClick(setEntry);
         const settled = transcriptMenuOf(setEntry, target.name);
         // The snippet reports the entry the player marks *after* the click, so a pick that
@@ -6419,15 +4756,15 @@
   async function readTranscriptFile(tab, request, deadlineMs) {
     const entry = await transcriptCaptionWaitFor(tab, request, deadlineMs);
     if (entry === null) return { outcome: "no_address" };
-    const results = await injectPageCode(
+    const { answers } = await askPageAgent(
       tab.id,
-      transcriptCaptionCode({
+      transcriptCaptionRequest({
         address: entry.address,
         offset: request.offset,
         maxChars: request.maxChars,
       }),
     );
-    return frameTargetOf(results);
+    return frameTargetOf(valuesOf(answers));
   }
 
   /**
@@ -6438,9 +4775,9 @@
    * this started.
    */
   async function seekAndReadTranscriptFile(tab, request, changed) {
-    const seekResults = await injectPageCode(
+    const { answers: seekAnswers } = await askPageAgent(
       tab.id,
-      transcriptMenuCode({ action: "seek", seekOffsetS: TRANSCRIPT_SEEK_OFFSET_S }),
+      transcriptMenuRequest({ action: "seek", seekOffsetS: TRANSCRIPT_SEEK_OFFSET_S }),
     );
     // The flag before the answer is judged: the jump happened, and a `seek` answer this side
     // cannot read must not end with the operator's playhead left where the jump put it
@@ -6448,7 +4785,7 @@
     // is nothing to undo, and writing `currentTime` back onto its own value would be a write
     // without a change behind it.
     changed.position = true;
-    changed.position = transcriptSeekOf(frameTargetOf(seekResults)).seeked === true;
+    changed.position = transcriptSeekOf(frameTargetOf(valuesOf(seekAnswers))).seeked === true;
     return readTranscriptFile(tab, request, TRANSCRIPT_CAPTION_DEADLINE_MS);
   }
 
@@ -6464,9 +4801,9 @@
   async function restoreTranscriptPlayer(tab, menuBase, previous, changed) {
     if (!changed.track && !changed.position) return;
     try {
-      await injectPageCode(
+      await askPageAgent(
         tab.id,
-        transcriptMenuCode({
+        transcriptMenuRequest({
           ...menuBase,
           action: "restore",
           name: changed.track ? previous.name : null,
@@ -6624,15 +4961,6 @@
     return Math.floor(Math.random() * (PROTOCOL.RECONNECT_JITTER_MS + 1));
   }
 
-  // The harness's own door into the message channel — and only the harness's. Until
-  // stage 1b converts the sixteen callers, nothing in this file sends a
-  // `{callId, op, args}` message, so the deadline and the collection could not be proven
-  // at all. Published only when `test/extension.test.js` sets `globalThis.__bcInjectionProbe`
-  // before this file loads; the extension itself never sets it, so a real page carries no
-  // hook. It goes away with the last converted caller.
-  if (globalThis.__bcInjectionProbe === true) {
-    globalThis.__bcInjection = Object.freeze({ requestPageAnswers });
-  }
   console.log(STARTUP_LOG_LINE);
   // Before the dial, for the same reason as the wire below: an answer can only be matched
   // while its call is open, and a call is only open while the socket is.

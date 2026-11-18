@@ -5,6 +5,37 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+**Die Injection-Naht, Block 2 von Stufe 1b — der Quelltext-Pfad ist weg** — auch
+`inspect`, `eval`, `frames` und `transcript` schicken keinen Quelltext mehr in die
+Seite. Damit ist die Naht aus `docs/45` auf dem Produktionspfad vollständig:
+`tabs.executeScript({file})` lädt `extension/page-agent.js`, jeder Aufruf reist
+als `{callId, op, args}` über `tabs.sendMessage`, die Antwort kommt als
+`{callId, ok, value}` zurück. Werkzeugergebnisse, Fehlercodes und deutsche Sätze
+sind unverändert.
+
+- **`extension/page-agent.js`:** `inspect`, `eval`, `transcriptGate`,
+  `transcriptModel`, `transcriptCaption` und `transcriptMenu` als Ops; die
+  Seitenfunktionen sind wörtlich mitgewandert (`inspectPageSource`,
+  `inspectShadowPageSource`, `splitPiercingSelector`, `isSimpleSelector`,
+  `selectorForElement`, `shadowSelectorForElement`, `evalPageSource`,
+  `transcriptGateSource`, `transcriptModelSource`, `transcriptCaptionSource`,
+  `transcriptMenuSource`). Welche `inspect`-Variante läuft, entscheidet jetzt die
+  Seite (`inspectAnswerFor`) — die Frage nach einem `>>>` ist eine über das DOM.
+- **`frames`:** die Inventur entsteht aus Selbstmeldungen. Jeder Frame antwortet
+  auf `{op: "inventory"}`, `sender.frameId` steht an der Nachricht, `framesOf`
+  bekommt die Antworten statt eines Arrays aus der Injection. Kein Auflösen beim
+  ersten Treffer; der Inhaltsfilter bleibt.
+- **`extension/bridge.js`:** `injectPageCode` heißt `askPageAgent` und hat nur
+  noch den Nachrichtenpfad; `pageSnippetCode`, `PAGE_HELPERS_CODE`,
+  `describeElement`, `isVisible`, `isAddressedFrame` und der Testhaken
+  `globalThis.__bcInjectionProbe` sind gelöscht. Die vierte `injection_*`-Prüfung
+  läuft über `inspect` statt über einen Haken; neue Fälle:
+  `frames_inventory_shouldComeFromSelfReports`,
+  `frames_withAnEmptyEntry_shouldNotShiftTheFilter`.
+- **Beleg:** 508 Node-Fälle grün, Parität 7/7, `pageSnippetCode(` ⇒ 0,
+  `PAGE_HELPERS_CODE` ⇒ 0, `__bcInjectionProbe` ⇒ 0. Ungemessen bleibt die
+  Messung am echten Browser (Kriterien 6 und 7).
+
 **Die Injection-Naht, Block 1 von Stufe 1b** — `read`, `click` und `type` schicken
 keinen Quelltext mehr in die Seite: sie laden `page-agent.js` als Datei und
 fragen `{op, args}` über den Nachrichtenkanal (`docs/45`). Die vier Seitenfunktionen

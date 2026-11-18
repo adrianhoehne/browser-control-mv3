@@ -8,31 +8,39 @@ Log oder einer Spec widerspricht, gilt der Beleg und diese Datei ist falsch.
 
 **Eine Übergabe-Datei gibt es nicht mehr.** Bis 2026-11-12 lag hier `docs/HANDOVER.md` (Stand, Entscheidungen, Betrieb); für die Veröffentlichung ist sie entfallen, weil sie Betriebsdaten trug. Der Stand steht in dieser Datei, das Verfahren in `CONTRIBUTING.md`, die Einrichtung in `INSTALL.md`.
 
-## Stand (2026-11-18): die Injection-Naht, Block 1 von Stufe 1b
+## Stand (2026-11-18): die Injection-Naht ist auf dem Produktionspfad fertig
 
-**`docs/45` ist `proposed`, Stufe 1a und Block 1 von 1b sind gebaut.** `read`,
-`click` und `type` laden `extension/page-agent.js` als Datei und fragen
+**`docs/45` ist `proposed`, Stufe 1 ist vollständig gebaut** (1a und beide Blöcke
+von 1b). Alle 16 Aufrufer laden `extension/page-agent.js` als Datei und fragen
 `{callId, op, args}` über `tabs.sendMessage`; die Seite antwortet mit
-`{callId, ok, value}`. Die vier Seitenfunktionen (`readPageSource`,
-`settlePageSource`, `clickPageSource`, `typePageSource`) sind wörtlich in die
-Datei gewandert und dort als `read`, `settle`, `click`, `type` registriert. Kein
-Werkzeugergebnis, kein Fehlercode und kein deutscher Satz hat sich geändert
-(508 Node-Fälle grün).
+`{callId, ok, value}`. Es gibt **keinen Quelltext-Pfad** mehr: `pageSnippetCode`,
+`PAGE_HELPERS_CODE` und der Testhaken `globalThis.__bcInjectionProbe` sind
+gelöscht, `injectPageCode` heißt `askPageAgent` und kennt nur noch den
+Nachrichtenpfad. Kein Werkzeugergebnis, kein Fehlercode und kein deutscher Satz
+hat sich geändert (508 Node-Fälle grün, Parität 7/7).
 
-- **Noch auf dem Quelltext-Pfad:** `inspect`, `eval`, `frames` und `transcript`
-  (10 der 16 Aufrufe) senden weiter Snippets als `code`. Deshalb stehen
-  `pageSnippetCode`, `PAGE_HELPERS_CODE` und der Testhaken
-  `globalThis.__bcInjectionProbe` noch; sie fallen mit dem letzten Aufrufer.
+- **Die Seitenfunktionen leben in `page-agent.js`:** `read`, `settle`, `click`,
+  `type`, `inventory`, `inspect` (mit der `>>>`-Verzweigung), `eval` und die vier
+  Transcript-Ops. Welche `inspect`-Variante läuft, entscheidet die Seite — die
+  Frage nach einem `>>>` ist eine über das DOM, nicht über den Transport.
+- **`frames` kommt aus Selbstmeldungen:** ein `inventory`-Aufruf an den ganzen
+  Tab, jede Antwort trägt `sender.frameId`, `framesOf` filtert die Adressen. Die
+  Sammlung endet erst bei der Frame-Zahl (oder an ihrer 5 000-ms-Frist); späte
+  Antworten fallen über `callId` weg.
 - **Harness:** `createPageAgentChannel` fährt die Ops im Seitenrealm der Fixture
   (`pageContextOf`) und sammelt die Antworten über den Kanal; `answer` stellt
-  eine Antwort pro Op (`{silent: true}` für einen stummen Op),
-  `refuseInjection`/`refuseInjectionTimes`/`refuseInjectionAfter` bilden die drei
-  Wege ab, auf denen Firefox die Datei verweigert.
-- **Eine Semantik, die die Naht mitbringt:** ein abgebrochener Warte-Aufruf (der
-  Watchdog gewinnt) lässt seine eigene Sammel-Frist von 5 000 ms stehen; sie
-  räumt sich selbst ab. Die Fälle, die das berühren, sagen das jetzt ausdrücklich.
-- **Ungemessen:** die Messung am echten Browser (Kriterium 6 und 7 aus `docs/45`)
-  steht aus.
+  eine Antwort pro Op (`{silent: true}` für einen stummen Op, `{error}` für einen,
+  der wirft), `refuseInjection`/`refuseInjectionTimes`/`refuseInjectionAfter`
+  bilden die drei Wege ab, auf denen Firefox die Datei verweigert.
+  `advanceMs: null` heißt „Uhr leerlaufen lassen“, eine Zahl hält sie an einem
+  benannten Zeitpunkt an. Die vier `injection_*`-Fälle laufen ohne Haken über
+  `inspect`.
+- **Eine Semantik, die die Naht mitbringt:** ein Aufruf, den sein eigener
+  Watchdog beendet (der `eval`-Guard bei 2 500 ms), lässt die Sammel-Frist von
+  5 000 ms stehen; sie räumt sich selbst ab und die späte Antwort wird verworfen.
+  Der Fall, der das berührt, sagt das jetzt ausdrücklich.
+- **Ungemessen:** die Messung am echten Browser (Kriterien 6 und 7 aus `docs/45`)
+  steht aus. Das ist Stufe 3 und der nächste Schritt.
 
 ## Stand (2026-11-17): die CI prüft, was ausgeliefert wird
 

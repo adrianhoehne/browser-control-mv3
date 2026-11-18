@@ -182,8 +182,10 @@ steht danach noch — das ist der Zwischenstand, nicht das Ziel.
 
 Erster Block: `read`, `click`, `type` — sie antworten auf `sender.frameId` und
 brauchen den Frame-Filter. **Gebaut am 2026-11-18** (siehe Log). Zweiter Block:
-`inspect`, `eval`, `frames`, `transcript` — **offen**. Erst wenn der letzte
-umgestellt ist, fallen `pageSnippetCode` und `PAGE_HELPERS_CODE`.
+`inspect`, `eval`, `frames`, `transcript` — **gebaut am 2026-11-18**. Mit dem
+letzten Aufrufer sind `pageSnippetCode`, `PAGE_HELPERS_CODE`, die drei Helfer in
+`bridge.js` und der Testhaken gefallen; `injectPageCode` heißt `askPageAgent` und
+hat nur noch den Nachrichtenpfad.
 
 Beweis: Kriterien 1, 5, 6; `grep -Fc 'pageSnippetCode('` ⇒ 0.
 
@@ -202,8 +204,9 @@ Beweis: Kriterium 6 und die Sichtprüfung in Kriterium 7.
 
 ## Bekannte Lücken
 
-- **Nichts ist gemessen.** Es gibt keine `page-agent.js` im Baum; die 16
-  Aufrufstellen und die drei Helfer stammen aus dem Code.
+- **Nichts ist gemessen.** `extension/page-agent.js` steht im Baum und die 508
+  Node-Fälle fahren alle 16 Aufrufer, aber kein Lauf hat die Naht in einem echten
+  Firefox gesehen (Stufe 3).
 - **Die isolierte Welt ist eine Grenze, kein Fehler.** Seitenvariablen bleiben
   unsichtbar — wie heute.
 - **`func` wurde verworfen**, weil die Helfer sonst wieder als Text reisen
@@ -241,6 +244,27 @@ Beweis: Kriterium 6 und die Sichtprüfung in Kriterium 7.
   Produktionsaufrufer den Nachrichtenpfad nutzt, hängt Stufe 1a an einem
   Testhaken (`globalThis.__bcInjectionProbe`); der fällt mit dem letzten
   umgestellten Aufrufer.
+- **2026-11-18, Stufe 1b Block 2 gebaut:** `inspect`, `eval`, `frames` und
+  `transcript` senden `{op, args}`. Elf Seitenfunktionen sind wörtlich nach
+  `extension/page-agent.js` gewandert (`inspectPageSource`,
+  `inspectShadowPageSource`, `splitPiercingSelector`, `isSimpleSelector`,
+  `selectorForElement`, `shadowSelectorForElement`, `evalPageSource`,
+  `transcriptGateSource`, `transcriptModelSource`, `transcriptCaptionSource`,
+  `transcriptMenuSource`) und dort als `inspect`, `eval`, `transcriptGate`,
+  `transcriptModel`, `transcriptCaption`, `transcriptMenu` registriert. Die
+  `>>>`-Verzweigung entscheidet die Seite (`inspectAnswerFor`), nicht mehr die
+  Wahl des Payloads. Die Frame-Inventur entsteht aus Selbstmeldungen: ein
+  `{op: "inventory"}` an alle Frames, `framesOf` nimmt die Antworten statt eines
+  Injection-Arrays; kein Auflösen beim ersten Treffer, späte Antworten fallen
+  über `callId` weg. `pageSnippetCode`, `PAGE_HELPERS_CODE`, `describeElement`,
+  `isVisible`, `isAddressedFrame` und `globalThis.__bcInjectionProbe` sind
+  gelöscht; die vier `injection_*`-Fälle laufen ohne Haken über `inspect`. Neue
+  Fälle: `frames_inventory_shouldComeFromSelfReports`,
+  `frames_withAnEmptyEntry_shouldNotShiftTheFilter`. Der Harness fährt
+  `inspect`/`eval`/`frames`/`transcript` im Seitenrealm der Fixture über den
+  Kanal; der Standard-`executeScript` eines Stubs verweigert `{code}` laut,
+  damit kein Rest des Quelltext-Pfads grün bleiben kann. **Offen: Stufe 3** (die
+  Messung am echten Browser, Kriterien 6 und 7).
 - **2026-11-18, Stufe 1b Block 1 gebaut:** `read`, `click`, `type` senden
   `{op, args}`. `readPageSource`, `settlePageSource`, `clickPageSource` und
   `typePageSource` sind wörtlich nach `extension/page-agent.js` gewandert und
