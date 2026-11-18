@@ -369,6 +369,17 @@ neu.
 
 ## Log
 
+- **2026-11-18, Kriterien 13 und 14 gebaut** (zusammen mit `docs/44`, das denselben
+  Code berührt): `bridge.js` filtert den Brücken-Tab aus `browser_status`
+  (`isInspectableTab` = Default-Container **und** nicht `bridge.html`), und
+  `findDefaultContainerTab` verweigert ihn — damit antworten `read`, `click`,
+  `type`, `focus`, `inspect`, `frames`, `transcript` und `close_tab` mit
+  `no_agent_tab`, auch wenn eine Hand die Tab-Id in `agentTabIds` schreibt
+  (`storage.local` ist editierbar). Drei Fälle in `test/extension.test.js`:
+  `status_shouldNotListTheBridgeTab`, `read_withTheBridgeTabId_shouldAnswerNoAgentTab`,
+  `closeTab_withTheBridgeTabId_shouldAnswerNoAgentTab`; alle drei sind rot, wenn
+  der Filter zurückgenommen wird. Die Parität bleibt 7/7 — die Artefakte der
+  Fixture enthalten keinen Brücken-Tab, der Filter ändert dort nichts.
 - **2026-11-17, Betreiberentscheid:** Branch `mv3`, Spec zuerst.
 - **2026-11-18, Lücke geschlossen:** bei der Teilung war verlorengegangen, dass
   der Brücken-Tab in `browser_status` sichtbar ist. Kriterien 13 und 14

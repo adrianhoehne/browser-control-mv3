@@ -8,6 +8,45 @@ Log oder einer Spec widerspricht, gilt der Beleg und diese Datei ist falsch.
 
 **Eine Übergabe-Datei gibt es nicht mehr.** Bis 2026-11-12 lag hier `docs/HANDOVER.md` (Stand, Entscheidungen, Betrieb); für die Veröffentlichung ist sie entfallen, weil sie Betriebsdaten trug. Der Stand steht in dieser Datei, das Verfahren in `CONTRIBUTING.md`, die Einrichtung in `INSTALL.md`.
 
+## Stand (2026-11-18): der Schalter in der Symbolleiste
+
+**`docs/44` ist `proposed`, Stufen 1–4 sind gebaut** (nicht committet). Die
+Erweiterung hat ein Symbol in der Symbolleiste und ist nach der Installation
+**aus**: kein Tab, kein Socket. Ein Klick schaltet an (Tab, Socket), ein Klick
+schaltet aus — und sagt vorher Servus.
+
+- **Drei Zustände, drei Icons:** `icons/bridge-off.svg` (überkreuzt, Vorgabe),
+  `icons/bridge.svg` (verbunden), `icons/bridge-offline.svg` (gelber Blitz: an,
+  aber die Bridge antwortet nicht). Gezeichnet auf 32 × 32 mit `context-fill`,
+  damit sie in beiden Themes lesbar bleiben. `default_icon` im Manifest ist das
+  `off`-Icon; die anderen zwei setzt `setIcon` zur Laufzeit.
+- **Der Zustand ist `bridgeEnabled` in `storage.local`**, Vorgabe `false` (kein
+  Wert ⇒ aus). Die Zeile `const DEFAULT_BRIDGE_ENABLED = false;` steht in
+  `bridge.js` **und** `background.js` — der Koordinator entscheidet über den Tab,
+  bevor es eine Seite gibt, die Seite entscheidet über den Socket. Der dritte
+  E2E-Seam patcht beide Dateien und zählt **je Datei 1** (`state=1`).
+- **Der Klick lebt im Koordinator**, der Namespace hängt an der
+  `manifest_version` (`browserAction` unter MV2, `action` unter MV3); ein Fall
+  fährt beide Richtungen. `extension.test.js` und `test/bridge-tab.test.js`
+  brauchten dafür `storage.local`, `runtime.sendMessage`, `runtime.onMessage`
+  und den Action-Stub.
+- **Ausschalten in der Reihenfolge:** `goodbye` auf die Leitung, `close(1000)`,
+  Tab zu, dann `bridgeEnabled = false`. Ohne offenen Socket entfällt `goodbye`.
+  `onSocketClosed` verbindet bei `aus` nicht weiter (und ein Klick bricht den
+  laufenden Reconnect-Timer ab).
+- **`GOODBYE` steht in beiden Protokolldateien** (`extension/protocol.js`,
+  `bridge-rs/src/protocol.rs`); die Bridge tut nichts damit (`hub.rs` verwirft
+  unbekannte Typen). Beim Bauen fiel auf, dass
+  `protocol_constants_matchTheExtension` **schon vorher rot war**: `docs/45` hatte
+  `INJECTION_REPLY_TIMEOUT_MS` einseitig angelegt. Die Kopie ist nachgetragen.
+- **`docs/42`, Kriterien 13/14 sind mitgebaut:** der Brücken-Tab erscheint nicht
+  in `browser_status` und ist für jedes Werkzeug `no_agent_tab` — auch wenn seine
+  Id in `agentTabIds` steht.
+- **Ungemessen:** Kriterien 5–8 aus `docs/44` (echter Klick, Blitz binnen 5 s,
+  `off` überlebt den Neustart, 60 s ohne `extension connected`) brauchen einen
+  Browser und den Betreiber. Ebenso ungemessen: ob die drei SVGs bei 16 px
+  lesbar sind.
+
 ## Stand (2026-11-18): die Injection-Naht ist auf dem Produktionspfad fertig
 
 **`docs/45` ist `proposed`, Stufe 1 ist vollständig gebaut** (1a und beide Blöcke

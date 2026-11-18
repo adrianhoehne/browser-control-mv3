@@ -258,6 +258,23 @@ Bezeichner `HubRequestError::unavailable`; Kriteriengrenze 1–4 und 9 / 5–8;
 
 ## Log
 
+- **2026-11-18, Stufen 1–4 gebaut** (nicht committet):
+  `extension/icons/{bridge,bridge-off,bridge-offline}.svg` (32 × 32,
+  `context-fill`, rotes Kreuz, gelber Blitz), `browser_action` mit
+  `default_icon: icons/bridge-off.svg` und ohne `default_popup`,
+  `bridgeEnabled` in `storage.local` (kein Wert ⇒ `aus`), der Koordinator mit
+  Klick, `setIcon`/`setTitle` und der Namespace-Wahl nach `manifest_version`,
+  `goodbye` vor `close(1000)`, kein Reconnect bei `aus`, die Konstante in beiden
+  Protokolldateien, der dritte Seam-Anker (`state=1` in **zwei** Dateien) und die
+  Doku. **Zwei Mutationsproben** belegen die Fälle: Klick ohne Zustandsprüfung ⇒
+  `switch_whenClickedOff_shouldSendGoodbyeThenClose` und
+  `…_withoutASocket_…` rot; `goodbye` weggelassen ⇒
+  `switch_whenClickedOff_shouldSendGoodbyeThenClose` rot.
+- **2026-11-18, Befund beim Bauen:** `protocol_constants_matchTheExtension` war
+  **schon vor diesem Inkrement** rot — `docs/45` hatte
+  `INJECTION_REPLY_TIMEOUT_MS` in `extension/protocol.js` angelegt, ohne die
+  Kopie in `bridge-rs/src/protocol.rs` nachzuziehen (31 gegen 32). Die fehlende
+  Zeile ist nachgetragen; ohne sie wäre das Kriterium 4 nicht erreichbar.
 - **2026-11-17, Betreiberentscheid:** Icon in der Symbolleiste, drei Zustände
   über drei Icons, Vorgabe `aus`, Brücken-Tab **angepinnt** und die Icons werden
   ohne Entwurf direkt eingebaut.

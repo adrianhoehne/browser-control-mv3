@@ -64,10 +64,31 @@
   // effect without a reload.
   const ALLOW_SCREENSHOT = "allowScreenshot";
 
+  // The operator's switch from spec 44: the icon in the toolbar. Read on load and on
+  // every retry, because `off` means "no socket" and not merely "no new socket".
+  const BRIDGE_ENABLED_KEY = "bridgeEnabled";
+  // The state of a fresh profile: off until the operator clicks the icon. The same
+  // literal stands in `background.js`, which has to decide about the tab before this
+  // page exists; the E2E seam patches the line in both files and counts them, so the
+  // two copies cannot drift apart in silence.
+  const DEFAULT_BRIDGE_ENABLED = false;
+  // RFC 6455's normal closure, and the whole point of it here: "we meant to". The
+  // bridge logs the reason, and a goodbye followed by `1006` would look like a crash.
+  const FAREWELL_CLOSE_CODE = 1000;
+  // The extension-internal channel between this page and `background.js`. Not wire
+  // protocol: neither frame ever reaches the bridge, so neither belongs in
+  // `BC_PROTOCOL` (which the Rust side mirrors).
+  const LEAVE_MESSAGE = "bc:leave";
+  const CONNECTION_MESSAGE = "bc:connection";
+
   // Only the default container is exposed to the agent: a tab in a
   // multi-account container carries its own cookie jar and is logged in nowhere.
   const DEFAULT_COOKIE_STORE_ID = "firefox-default";
   const NORMAL_WINDOW_TYPE = "normal";
+  // The page this file runs in. It is a tab like any other, and the one tab the agent
+  // must never see in a status answer or reach with a tool (spec 42, criteria 13/14):
+  // it is the transport, not a page of the operator's.
+  const BRIDGE_PAGE_FILE = "bridge.html";
 
   const WEBSOCKET_OPEN = 1;
   const UNSUPPORTED_METHOD_CODE = "unsupported_method";
@@ -504,6 +525,8 @@
   const MISSING_SETTINGS_LOG_LINE =
     "bc: Endpunkt oder Token fehlt in den Optionen — es wird keine Verbindung aufgebaut";
   const SETTINGS_READ_FAILED_LOG_LINE = "bc: Einstellungen nicht lesbar, neuer Versuch mit Backoff";
+  const STATE_READ_FAILED_LOG_LINE =
+    "bc: Schalterzustand nicht lesbar — die Erweiterung bleibt aus";
   const INVALID_ENDPOINT_LOG_PREFIX = "bc: Endpunkt ungültig:";
   const RECONNECT_LOG_PREFIX = "bc: neuer Verbindungsversuch in";
 
@@ -512,6 +535,13 @@
   // extension reconnects in about a second instead of the last backoff step.
   let reconnectAttempt = 0;
   let connectedAt = null;
+  // The retry waiting to happen, kept so a switch-off can call it off. Without the id
+  // a page in backoff would dial once more after the operator said "off" — the loop
+  // this switch exists to end.
+  let reconnectTimer = null;
+  // Set by `leave`: the close that follows is ours, not a lost connection. Without it
+  // the close event would read as "bridge gone" and start the backoff again.
+  let leaving = false;
   // Only the operator matters here: one message about the missing settings, not
   // one per reconnect.
   let missingSettingsLogged = false;
@@ -539,6 +569,27 @@
       endpoint: asText(stored[ENDPOINT_KEY]),
       token: asText(stored[TOKEN_KEY]),
     };
+  }
+
+  /**
+   * Whether the operator switched the extension on — default `off`.
+   *
+   * Only the boolean `true` opens, exactly like the three tool switches: a storage
+   * that cannot be read answers "off". Here that is not a matter of taste — the
+   * permissive answer would dial a socket the operator believes is closed.
+   */
+  async function bridgeEnabled() {
+    try {
+      // Array form like `readSettings`: the stub mirrors only the array and the
+      // object form, and a wrong form would look "correctly off" for the wrong
+      // reason.
+      const stored = await browser.storage.local.get([BRIDGE_ENABLED_KEY]);
+      const storedState = stored?.[BRIDGE_ENABLED_KEY];
+      return typeof storedState === "boolean" ? storedState : DEFAULT_BRIDGE_ENABLED;
+    } catch (error) {
+      console.warn(STATE_READ_FAILED_LOG_LINE, error);
+      return DEFAULT_BRIDGE_ENABLED;
+    }
   }
 
   /**
@@ -580,6 +631,10 @@
   }
 
   async function connect() {
+    // Before the settings, because it is the cheaper and the wider answer: `off`
+    // means no socket at all, not a socket that fails quietly.
+    if (!(await bridgeEnabled())) return;
+
     let settings;
     try {
       settings = await readSettings();
@@ -624,6 +679,7 @@
     socket = nextSocket;
 
     nextSocket.addEventListener("open", () => {
+      reportConnection(true);
       void sendHello(nextSocket, settings);
     });
     nextSocket.addEventListener("message", (event) => {
@@ -837,12 +893,26 @@
       id: window.id,
       focused: Boolean(window.focused),
       type: window.type,
-      tabs: asArray(window.tabs).filter(isDefaultContainerTab).map((tab) => toTabSummary(tab, agentTabIds)),
+      tabs: asArray(window.tabs).filter(isInspectableTab).map((tab) => toTabSummary(tab, agentTabIds)),
     };
+  }
+
+  function isInspectableTab(tab) {
+    return isDefaultContainerTab(tab) && !isBridgePageTab(tab);
   }
 
   function isDefaultContainerTab(tab) {
     return tab.cookieStoreId === DEFAULT_COOKIE_STORE_ID;
+  }
+
+  /**
+   * The bridge tab itself, matched by url rather than by tab id.
+   *
+   * The url is the only mark that survives a reload, and it is what `background.js`
+   * queries by as well. A tab without a url (`about:newtab` for a moment) is not it.
+   */
+  function isBridgePageTab(tab) {
+    return typeof tab?.url === "string" && tab.url.includes(BRIDGE_PAGE_FILE);
   }
 
   /**
@@ -1380,10 +1450,10 @@
     return tab;
   }
 
-  /** `null` for a tab that is gone or that lives in a container. */
+  /** `null` for a tab that is gone, that lives in a container, or that is the bridge page itself. */
   async function findDefaultContainerTab(tabId) {
     const tab = await readTabOrNull(tabId);
-    return tab !== null && isDefaultContainerTab(tab) ? tab : null;
+    return tab !== null && isInspectableTab(tab) ? tab : null;
   }
 
   async function createAgentTab(url, windowId) {
@@ -4934,8 +5004,87 @@
     // `connectedAt` describes the current connection; a stale value would make
     // a later status claim a connection time that never happened.
     connectedAt = null;
+    reportConnection(false);
 
-    scheduleReconnect(reconnectAttempt + 1);
+    // Our own farewell closed this socket, and the tab is about to disappear with it.
+    // A retry from here would reconnect the moment the operator switched off.
+    if (leaving) return;
+
+    void reconnectWhenEnabled(reconnectAttempt + 1);
+  }
+
+  /**
+   * Schedules the next attempt only while the switch says yes.
+   *
+   * The state is re-read here and not remembered from the last `connect`: the operator
+   * can switch off at any time, and an extension that keeps dialling after that is
+   * visible only in the bridge log (spec 44, risk 1).
+   */
+  async function reconnectWhenEnabled(attempt) {
+    if (!(await bridgeEnabled())) return;
+    scheduleReconnect(attempt);
+  }
+
+  /**
+   * Says goodbye, then closes the socket — in that order, and in one function because
+   * the order *is* the contract: a close ends both directions of the connection, and a
+   * frame handed to it afterwards never leaves.
+   *
+   * Answers the coordinator, which waits for this promise before it closes the tab.
+   * Without a socket there is nothing to say and nothing to close, and the answer says
+   * so instead of pretending.
+   */
+  async function leave() {
+    // Before anything else: a retry that fires in the middle of this would dial the
+    // bridge the operator just left.
+    leaving = true;
+    cancelReconnect();
+
+    const farewellSocket = socket;
+    if (farewellSocket === null) return { left: true, saidGoodbye: false };
+
+    send(farewellSocket, { type: PROTOCOL.TYPES.GOODBYE });
+    farewellSocket.close(FAREWELL_CLOSE_CODE);
+    // Cleared by hand: the `close` event is asynchronous in Firefox, and a caller that
+    // reads `socket` before it lands would still see a connection that no longer exists.
+    socket = null;
+    connectedAt = null;
+    reportConnection(false);
+    return { left: true, saidGoodbye: true };
+  }
+
+  /**
+   * Tells the coordinator whether the socket stands — the bolt in the toolbar is the
+   * only reader.
+   *
+   * Fire and forget on purpose: a coordinator that is not listening (an extension that
+   * was reloaded under this page) must not turn a working connection into a failed call.
+   */
+  function reportConnection(connected) {
+    void tellCoordinator({ type: CONNECTION_MESSAGE, connected });
+  }
+
+  async function tellCoordinator(message) {
+    try {
+      await browser.runtime.sendMessage(message);
+    } catch {
+      // No receiver. The icon is a convenience; the socket is the product.
+    }
+  }
+
+  /**
+   * The coordinator's word to this page, on the extension-internal channel.
+   *
+   * A second listener beside `listenForPageReplies`, and not part of it: that one
+   * matches by `callId` and belongs to the injection seam (spec 45), this one matches
+   * by `type`. Returning the promise is how a MV2 listener answers, and that answer is
+   * what the coordinator waits for before it closes the tab.
+   */
+  function listenForTheCoordinator() {
+    browser.runtime.onMessage.addListener((message) => {
+      if (message?.type !== LEAVE_MESSAGE) return undefined;
+      return leave();
+    });
   }
 
   /**
@@ -4946,9 +5095,16 @@
     reconnectAttempt = attempt;
     const delayMs = reconnectDelayMs(attempt);
     console.log(`${RECONNECT_LOG_PREFIX} ${delayMs} ms`);
-    setTimeout(() => {
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
       void connect();
     }, delayMs);
+  }
+
+  function cancelReconnect() {
+    if (reconnectTimer === null) return;
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
   }
 
   function reconnectDelayMs(attempt) {
@@ -4965,6 +5121,9 @@
   // Before the dial, for the same reason as the wire below: an answer can only be matched
   // while its call is open, and a call is only open while the socket is.
   listenForPageReplies();
+  // Before the dial as well, or a click in the first second would have nobody to say
+  // goodbye to.
+  listenForTheCoordinator();
   // Before the dial: a page that fetched its track file while the bridge was down is the
   // normal case, and the wire has to be listening before the first call arrives (spec 34).
   // Nothing is logged here — the address is a session credential.

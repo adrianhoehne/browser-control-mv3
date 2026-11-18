@@ -273,8 +273,8 @@ Then in Firefox:
    file.
 4. Open `about:addons` in a new tab, select **Browser Control**, then select
    **Preferences**. `about:debugging` shows only “Reload” and “Remove” for a
-   temporary add-on — it has no link to the settings. (An extension icon may not
-   be in the toolbar either; `about:addons` is the reliable route.)
+   temporary add-on — it has no link to the settings, so `about:addons` is the
+   reliable route.
 5. The **endpoint** field **is pre-filled with** `ws://127.0.0.1:8110` — the
    address the bridge listens on unless you set `BC_BIND`. Leave it as it is
    while bridge and Firefox run on the same machine; change it only when the
@@ -284,6 +284,10 @@ Then in Firefox:
    server.
 7. **Save**, then **reload the extension once** in `about:debugging` — stored
    options take effect on the next connection attempt.
+8. Select the **Browser Control** icon in the toolbar to switch the extension on.
+   Off by default: nothing happens until you switch it on — no tab, no socket. The
+   crossed-out icon means “off”, the bridge icon means “connected”, the yellow bolt
+   means “on, but the bridge does not answer”.
 
 The extension ID is fixed (`browser-control@bergkaese.dev`), so endpoint and
 token stay in `storage.local` across reloads. **After a Firefox restart** the
@@ -439,7 +443,7 @@ token.
 | `No such file or directory` for the binary in the journal | the binary was never installed — build it and run `./scripts/install.sh` (section 3) |
 | `env: node: No such file` in the journal | an old unit from before the Rust port; replace it: `cp ~/browser-control/deploy/browser-control.service ~/.config/systemd/user/ && systemctl --user daemon-reload && systemctl --user restart browser-control` |
 | `status windows=… tabs=0` | Firefox has no agent tab yet; `browser_navigate` creates one |
-| Nothing in the log, no `extension connected` | extension console (`about:debugging` → “Inspect”), not the page console. `bc: background page started`, `bc: endpoint invalid: …`, or nothing at all. Silence usually means: the token is empty, or step 4.7 (the reload) was skipped |
+| Nothing in the log, no `extension connected` | **first** the switch in the toolbar: a crossed-out icon means off, and that is the normal state after loading the extension. Then the extension console (`about:debugging` → “Inspect”), not the page console: `bc: background page started`, `bc: endpoint invalid: …`, or nothing at all. Silence after a switch-on usually means: the token is empty, or step 4.7 (the reload) was skipped |
 | `auth failed` in the bridge log | the token differs between file and extension options — section 2, “Rotating the token” |
 | `502` from a proxy | bridge not listening, or the upstream is `localhost` instead of `127.0.0.1` — section 9 |
 | Tools missing in the client | the service or the extension still runs the old code: restart it / reload the extension |

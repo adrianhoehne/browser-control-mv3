@@ -16,6 +16,10 @@ globalThis.BC_PROTOCOL = Object.freeze({
     WELCOME: "welcome",
     REQUEST: "request",
     RESPONSE: "response",
+    // The extension's farewell, sent once before it closes the socket on a
+    // switch-off (spec 44). The bridge reads it and deliberately does nothing with
+    // it — the sender is this increment, the reaction is roadmap 32.
+    GOODBYE: "goodbye",
   }),
   // Methods the extension answers in this increment. Anything else is replied to
   // with `ok:false, code:"unsupported_method"` rather than silently ignored.

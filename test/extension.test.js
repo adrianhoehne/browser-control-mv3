@@ -618,8 +618,10 @@ function createBrowserStub({
   channel = null,
 }) {
   const storage = { ...settings };
+  const sentMessages = [];
 
   return {
+    sentMessages,
     storage: {
       local: {
         // Mirrors the real API for the read path: an array of keys yields only
@@ -659,6 +661,15 @@ function createBrowserStub({
       // included — that `sender.frameId` is how a frame names itself.
       onMessage: {
         addListener: (listener) => channel.addBridgeListener(listener),
+      },
+      /**
+       * The other direction: the page telling the coordinator whether its socket stands
+       * (spec 44). Recorded and answered with nothing — the coordinator is not part of
+       * this harness, and the toolbar cases live in `test/bridge-tab.test.js`.
+       */
+      sendMessage: async (message) => {
+        sentMessages.push(message);
+        return undefined;
       },
     },
     windows: {
@@ -1917,7 +1928,13 @@ function createSandbox({
 async function startBackground(options = {}) {
   FakeWebSocket.reset();
   FakeAbortController.reset();
-  const { browser, sandbox, clock, consoleLines, headFetch, encoder } = createSandbox(options);
+  // The switch is **on** unless a case says otherwise (spec 44). The default of a fresh
+  // profile is off, and a page that never dials would make every tool case below green
+  // for the wrong reason; the switch itself has its own cases, and they pass the value.
+  const { browser, sandbox, clock, consoleLines, headFetch, encoder } = createSandbox({
+    ...options,
+    settings: { bridgeEnabled: true, ...options.settings },
+  });
   vm.runInNewContext(PROTOCOL_SOURCE, sandbox, { filename: "extension/protocol.js" });
   vm.runInNewContext(BACKGROUND_SOURCE, sandbox, { filename: "extension/bridge.js" });
   await settleAsyncWork();
@@ -2413,6 +2430,59 @@ test("endpoint_withAStoredValue_shouldDialThatValue", async () => {
   assert.equal(FakeWebSocket.latest()?.url, storedEndpoint);
 });
 
+/**
+ * The switch of spec 44, page side: a page that was not switched on does not dial.
+ *
+ * The state is written by `background.js` and tested there (criterion 2 and the click);
+ * what this case pins is that the *page* obeys it — an extension that dials on load would
+ * bring the socket back after every reload of the tab, switch or no switch.
+ */
+test("switch_withoutAStoredState_shouldNotDial", async () => {
+  // GIVEN endpoint and token, and the switch off — a fresh install, or one whose store
+  // lost the key,
+  const { clock } = await startBackground({
+    settings: { endpoint: ENDPOINT, token: TOKEN, bridgeEnabled: false },
+  });
+
+  // WHEN the bridge page loads,
+  await settleAsyncWork();
+
+  // THEN there is no socket and no retry: off means off, not "off until the first
+  // backoff step".
+  assert.equal(FakeWebSocket.instances.length, 0);
+  assert.deepStrictEqual(clock.pendingDelays(), []);
+});
+
+/**
+ * The one message the toolbar needs: whether the socket stands (spec 44, the bolt).
+ *
+ * The icon is the coordinator's, and the socket is the page's, so this message is the
+ * only way the two can agree — a page that kept the news to itself would leave a crossed
+ * or a bolted icon next to a perfectly healthy connection.
+ */
+test("switch_afterTheSocketOpens_shouldReportTheConnection", async () => {
+  // GIVEN a switched-on extension,
+  const { browser } = await startBackground({ settings: { endpoint: ENDPOINT, token: TOKEN } });
+
+  // WHEN the socket opens,
+  const socket = await openSocket();
+
+  // THEN the page reported it — the message carries the sandbox realm's prototype, so
+  // it comes back through the same JSON round trip as every other sandbox value:
+  assert.deepStrictEqual(inThisRealm(browser.sentMessages.at(-1)), {
+    type: "bc:connection",
+    connected: true,
+  });
+
+  // ... and WHEN it goes away again, the loss is reported just as plainly.
+  socket.fail();
+  await settleAsyncWork();
+  assert.deepStrictEqual(inThisRealm(browser.sentMessages.at(-1)), {
+    type: "bc:connection",
+    connected: false,
+  });
+});
+
 test("connect_withUnparseableEndpoint_shouldReportOnceAndScheduleReconnect", async () => {
   // GIVEN a hand-typed endpoint that is not a URL at all,
   const { clock, consoleLines } = await startBackground({
@@ -2613,6 +2683,106 @@ test("status_withThreeAgentTabs_shouldMarkEachExactlyOnce", async () => {
     statusTabs(socket).map((tab) => tab.id),
     [101, 500, 201, 202],
   );
+});
+
+/**
+ * The bridge tab is not a page (spec 42, criteria 13 and 14).
+ *
+ * `background.js` opens it and `bridge.js` runs inside it — the transport of this
+ * extension. No tool may see or touch it: a `read` or `close_tab` there would hand the
+ * agent the extension's own socket page, and a status answer that listed it would invite
+ * exactly that. Matched by url, because the url is the only mark that survives a reload.
+ */
+const BRIDGE_TAB_URL = "moz-extension://bridge-page-test/bridge.html";
+
+function createBridgePageTab(overrides = {}) {
+  return createAgentTabFixture({
+    id: 601,
+    url: BRIDGE_TAB_URL,
+    title: "Browser Control — Bridge",
+    pinned: true,
+    ...overrides,
+  });
+}
+
+test("status_shouldNotListTheBridgeTab", async () => {
+  // GIVEN a window whose tabs include the extension's own bridge page — pinned, in the
+  // default container, exactly as `background.js` creates it,
+  const windows = [
+    {
+      id: 1,
+      focused: true,
+      type: "normal",
+      incognito: false,
+      tabs: [
+        {
+          id: 101,
+          active: true,
+          pinned: false,
+          url: "https://example.org/",
+          title: "Beispiel",
+          cookieStoreId: "firefox-default",
+        },
+        {
+          id: 601,
+          active: false,
+          pinned: true,
+          url: BRIDGE_TAB_URL,
+          title: "Browser Control — Bridge",
+          cookieStoreId: "firefox-default",
+        },
+      ],
+    },
+  ];
+
+  // WHEN the status is collected,
+  const socket = await requestStatusIdOne(windows);
+
+  // THEN the operator's tab is there and the bridge tab is not:
+  assert.deepStrictEqual(statusTabs(socket).map((tab) => tab.id), [101]);
+
+  // ... and the page is not named anywhere in the answer either — a filter that only
+  // dropped the tab entry but kept its url would pass a count of ids and fail the
+  // criterion (`grep -c 'bridge.html'` on the answer ⇒ 0):
+  assert.equal(
+    JSON.stringify(socket.sent.at(-1)).includes("bridge.html"),
+    false,
+    "the bridge page must not be named in the status answer",
+  );
+});
+
+test("read_withTheBridgeTabId_shouldAnswerNoAgentTab", async () => {
+  // GIVEN a store that names the bridge tab as an agent tab — `storage.local` is what an
+  // operator with a console can edit, and the list is a hint the extension writes,
+  const tabs = createTabsStub({ tabs: [createBridgePageTab({ status: "complete" })] });
+  const { socket } = await connectedBackground({
+    tabs,
+    settings: { agentTabIds: [601] },
+  });
+
+  // WHEN the bridge reads it by name,
+  await sendRead(socket, 2, { tab: 601 });
+
+  // THEN it is `no_agent_tab` — the transport is not a page — and nothing was injected:
+  assert.equal(responsesById(socket).get(2).error.code, "no_agent_tab");
+  assert.deepStrictEqual(tabs.scriptCalls, []);
+});
+
+test("closeTab_withTheBridgeTabId_shouldAnswerNoAgentTab", async () => {
+  // GIVEN the same store, where the bridge tab is the last used one,
+  const tabs = createTabsStub({ tabs: [createBridgePageTab()] });
+  const { socket } = await connectedBackground({
+    tabs,
+    settings: { agentTabIds: [601] },
+  });
+
+  // WHEN the bridge closes it,
+  await sendCloseTab(socket, 2, { tab: 601 });
+
+  // THEN it is `no_agent_tab` as well, and the tab is still open: closing it would kill
+  // the connection the call arrived on.
+  assert.equal(responsesById(socket).get(2).error.code, "no_agent_tab");
+  assert.deepStrictEqual(tabs.calls.filter((call) => call.kind === "tabs.remove"), []);
 });
 
 /**
@@ -12092,6 +12262,10 @@ test("reconnect_afterEachCloseWithoutWelcome_shouldBackOffExponentially", async 
   let currentSocket = firstSocket;
   for (let round = 0; round < 3; round += 1) {
     currentSocket.fail();
+    // One settle before the clock: the retry is armed after the page has asked the store
+    // whether the switch is still on (spec 44), so the timer exists one microtask later
+    // than the close.
+    await settleAsyncWork();
     delays.push(clock.runNext());
     await settleAsyncWork();
     currentSocket = FakeWebSocket.latest();
@@ -12106,9 +12280,12 @@ test("reconnect_afterWelcome_shouldResetBackoffToTheFirstDelay", async () => {
   // GIVEN a connection that already failed twice,
   const { clock } = await startBackground({ settings: { endpoint: ENDPOINT, token: TOKEN } });
   FakeWebSocket.latest().fail();
+  // The switch is consulted before the retry is armed (spec 44), hence the settle.
+  await settleAsyncWork();
   clock.runNext();
   await settleAsyncWork();
   FakeWebSocket.latest().fail();
+  await settleAsyncWork();
   clock.runNext();
   await settleAsyncWork();
 
@@ -12120,6 +12297,7 @@ test("reconnect_afterWelcome_shouldResetBackoffToTheFirstDelay", async () => {
 
   // THEN the attempt counter starts over — a bridge restart must not cost the
   // operator the last backoff step:
+  await settleAsyncWork();
   assert.equal(clock.runNext(), 1000);
 });
 
@@ -14180,7 +14358,25 @@ async function startCoordinatorWithoutWebRequest() {
   const browser = {
     runtime: {
       getURL: (path) => `moz-extension://coordinator/${path}`,
+      // The coordinator reads the manifest version to pick `browserAction` or `action`
+      // (spec 44), and it listens to the page's report about the socket.
+      getManifest: () => ({ version: MANIFEST_VERSION, manifest_version: 2 }),
       onStartup: { addListener: () => {} },
+      onMessage: { addListener: () => {} },
+      sendMessage: async () => undefined,
+    },
+    // The switch is on, so the coordinator does its own job here; what this case is about
+    // is the *permission* it must not touch.
+    storage: {
+      local: {
+        get: async () => ({ bridgeEnabled: true }),
+        set: async () => {},
+      },
+    },
+    browserAction: {
+      setIcon: async () => {},
+      setTitle: async () => {},
+      onClicked: { addListener: () => {} },
     },
     windows: {
       get: async () => {

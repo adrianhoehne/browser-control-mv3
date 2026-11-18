@@ -55,10 +55,20 @@ Die Schritte, in dieser Reihenfolge:
    dann **Preferences**. `about:debugging` hat für ein temporäres Add-on keinen
    Einstellungs-Link — das ist der Punkt, an dem ein neuer Nutzer sonst hängt.
 6. Als Endpunkt `ws://127.0.0.1:8110` eintragen.
-7. Das Token aus der Zeile `token: …` des Startfensters eintragen.
-8. Speichern.
-9. Die Erweiterung in `about:debugging` einmal neu laden (**Reload** neben
-   Browser Control).
+7. Das **Browser-Control-Symbol** in der Symbolleiste anklicken. Die Erweiterung
+   ist nach der Installation **aus**, und es passiert nichts, bis der Schalter
+   an ist: kein Tab, kein Socket.
+8. Das Token aus der Zeile `token: …` des Startfensters eintragen.
+9. Speichern.
+10. Die Erweiterung in `about:debugging` einmal neu laden (**Reload** neben
+    Browser Control).
+
+**Warum der Icon-Schritt vor dem Token steht:** die Spec (`docs/44`, Kriterium 9)
+verlangt ihn dort, und die Reihenfolge ist auch inhaltlich die richtige — der
+Schalter ist die eine Handlung, ohne die die Erweiterung bewusst stumm bleibt.
+Die drei Symbole werden im Schritt benannt (überkreuzt = aus, Brücke =
+verbunden, gelber Blitz = an ohne Verbindung), damit der Leser den Zustand
+später ohne diese Anleitung wiedererkennt.
 
 **Die Warnung steht als Kasten zwischen Schritt 1 und 2**, direkt vor dem
 Laden — „The extension is temporary. After a Firefox restart it is gone. Repeat

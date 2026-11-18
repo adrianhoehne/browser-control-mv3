@@ -77,20 +77,23 @@ PING 2026-11-17T15:15:48.205Z                     (die Seite selbst, 4 s später
 2. **Token erzeugen** (32 Bytes Zufall, 64 Hex) in eine Datei; `BC_TOKEN_FILE`
    darauf zeigen. `E2E_TOKEN_FILE` benennt sie.
 3. **Test-Kopie der Erweiterung bauen** (Verzeichnis, **kein Zip**): `extension/`
-   kopieren, dann **zwei Ersetzungen** in `<kopie>/bridge.js` — gepatcht und
-   gezählt wird **nur diese Datei**; `options.js` trägt denselben
+   kopieren, dann **drei Ersetzungen** — Endpunkt und Token in
+   `<kopie>/bridge.js`, der Schalterzustand in `<kopie>/bridge.js` **und**
+   `<kopie>/background.js`. Gepatcht und gezählt wird nur die genannte Datei je
+   Anker; `options.js` trägt denselben
    Endpunkt-Anker und würde jede Zählung über den ganzen Ordner zur Lüge
-   machen — beide mit gezähltem Anker
-   (`grep -Fc` ⇒ genau **1**, sonst `seam moved` und Exit 1 — `grep -F`, weil
-   der zweite Anker `[` und `]` enthält und als BRE nie träfe):
+   machen — alle mit gezähltem Anker
+   (`grep -Fc` ⇒ genau **1** je Datei, sonst `seam moved` und Exit 1 — `grep -F`,
+   weil der zweite Anker `[` und `]` enthält und als BRE nie träfe):
 
-   | Anker (vorher) | nachher |
-   |---|---|
-   | `const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";` | `const DEFAULT_ENDPOINT = "ws://127.0.0.1:18810";` |
-   | `      token: asText(stored[TOKEN_KEY]),` | `      token: asText(stored[TOKEN_KEY]) \|\| "<token>",` |
+   | Anker (vorher) | Datei | nachher |
+   |---|---|---|
+   | `const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";` | `bridge.js` | `const DEFAULT_ENDPOINT = "ws://127.0.0.1:18810";` |
+   | `      token: asText(stored[TOKEN_KEY]),` | `bridge.js` | `      token: asText(stored[TOKEN_KEY]) \|\| "<token>",` |
+   | `const DEFAULT_BRIDGE_ENABLED = false;` | `bridge.js`, `background.js` | `const DEFAULT_BRIDGE_ENABLED = true;` |
 
    Die zweite Zeile steht in `readSettings`; sie ist eine Ersetzung, keine
-   Einfügung — deshalb funktioniert `grep -c` für beide. Die ausgelieferte
+   Einfügung — deshalb funktioniert `grep -c` für alle drei. Die ausgelieferte
    Erweiterung bleibt unverändert.
 
    **Warum `bridge.js` und nicht `background.js`:** seit `docs/42` hält der
@@ -98,6 +101,14 @@ PING 2026-11-17T15:15:48.205Z                     (die Seite selbst, 4 s später
    Koordinator, der diesen Tab anlegt und hält, und kennt weder Endpunkt noch
    Token. Ein Anker, der weiter in `background.js` gesucht wird, wäre kein
    Seam-Treffer, sondern ein `seam moved`.
+
+   **Warum der Schalter-Anker zwei Dateien hat:** seit `docs/44` ist die
+   Erweiterung von Haus aus **aus**. Beide Seiten brauchen denselben Vorgabewert —
+   der Koordinator entscheidet über den Tab, *bevor* es eine Seite gibt, und die
+   Seite entscheidet über den Socket. Eine Kopie, in der nur eine der beiden Zeilen
+   gepatcht ist, lädt fehlerfrei und bleibt aus; der E2E-Lauf würde eine Minute
+   später an `no extension connected` scheitern statt am Seam. Der Zähler verlangt
+   deshalb **je Datei genau 1**.
 4. **Bridge starten:** `BC_BIND=127.0.0.1:18810 BC_HTTP_PORT=18811
    <binary> --http`, Ausgabe in eine Logdatei, **stdin auf `ignore`** (unter
    POSIX `< /dev/null`). Sonst beendet ein Pipe-EOF die Bridge mit 0
@@ -208,7 +219,7 @@ npm run test:bundle
 | `E2E_BEACON_MODE` | `ok` (Vorgabe) oder `broken` — `broken` lässt `/ping` mit **500** antworten (Kriterium 2) |
 
 Flags: `--keep` lässt die Prozesse stehen, `--windows` setzt die
-Windows-Pfade, `--self-check --source <dir>` prüft nur die zwei Anker.
+Windows-Pfade, `--self-check --source <dir>` prüft nur die drei Anker.
 
 **Alles, was das Skript anlegt, liegt unter `os.tmpdir()`** — Test-Kopie,
 Tokendatei und `--keep`-Reste gehören nicht in den Baum, sonst schlägt der
@@ -225,7 +236,7 @@ Secret-Grep der Abnahme auf einem echten Token an.
 | `test/ci/workflow.test.js` | `workflow_bundleJob_shouldUploadTheZips` | `npm run test:bundle` und `upload-artifact` `portable-zips` |
 | `test/ci/workflow.test.js` | `workflow_releaseJob_shouldAskForWritePermissions` | `contents: write`, `merge-multiple`, `gh release create` |
 | `test/ci/workflow.test.js` | `workflow_shouldNotContainAStyleLinter` | kein `ste-lint`, kein `actionlint` |
-| `test/ci/e2e.test.js` | `e2e_seamPatch_shouldFindBothLines` | der Patch findet in einer Kopie Endpunkt **und** Token-Zeile; nach einer Umbenennung meldet er `seam moved` |
+| `test/ci/e2e.test.js` | `e2e_seamPatch_shouldFindBothLines` | der Patch findet in einer Kopie die Endpunkt- und die Token-Zeile und den Schalterzustand in **beiden** Dateien; nach einer Umbenennung meldet er `seam moved` |
 
 Der E2E-Lauf selbst ist **kein** Unit-Fall: er startet Firefox und steht als
 Kriterium 1–2 bei den Betreiber-Kriterien. Kriterium 3 (`--self-check`) startet
@@ -245,10 +256,14 @@ keinen Browser und ist als `e2e_seamPatch_shouldFindBothLines` gepinnt.
    `PING` — obwohl die Bridge `open tab=` meldet. Die Bridge kann den Test also
    nicht bestehen, indem sie nur „ok" antwortet.
 3. **Der Seam ist gepinnt.** `node scripts/e2e/run.mjs --self-check --source
-   extension` ⇒ Exit 0; auf einer **Kopie** mit `sed -i
+   extension` ⇒ Exit 0 und `endpoint=1 token=1 state=1`; auf einer **Kopie** mit `sed -i
    's/DEFAULT_ENDPOINT/ENDPOINT/g' <kopie>/bridge.js` ⇒ Exit 1 mit
-   `seam moved`. Die getrackte Datei bleibt unangetastet:
-   `test -z "$(git status --porcelain extension/)"` ⇒ Exit **0**.
+   `seam moved`. Die getrackte Datei bleibt unangetastet: `git status --porcelain
+   extension/` liefert vor und nach dem Build **dieselbe** Ausgabe.
+   *(Amendment 2026-11-18:* `test -z "$(git status --porcelain extension/)"` war
+   am Abnahmetag grün, prüft aber auch, dass der Baum *committet* ist — und ein
+   Inkrement wird geprüft, solange seine Dateien noch nicht committet sind. Die
+   Eigenschaft, um die es geht, ist „der Build schreibt nichts in den Baum".)*
 4. **Unit und E2E sind getrennt.** `grep -c 'scripts/e2e/run.mjs'
    .github/workflows/test.yml` ⇒ **1**; `grep -c 'runs-on: windows-latest'` ⇒
    **1**; `awk '/^  unit:/{u=1;next} u&&/^  [a-z0-9]+:/{exit} u'
@@ -356,6 +371,15 @@ Kommando; die 4 s waren falsch zugeordnet.
 ### Runde 4 — steht aus
 
 ## Log
+
+- **2026-11-18, dritter Seam-Anker (`docs/44`):** der E2E baut eine Erweiterung,
+  die von Haus aus **aus** ist. Der Anker `const DEFAULT_BRIDGE_ENABLED = false;`
+  steht deshalb in **zwei** Dateien — `bridge.js` (die Seite, die nicht wählen
+  darf) und `background.js` (der Koordinator, der den Tab nicht anlegen darf) —,
+  und `checkSeams` verlangt **je Datei genau 1**. Die Ausgabe von `--self-check`
+  ist `endpoint=1 token=1 state=1`. Nebenbei: `test/ci/e2e.test.js` vergleicht den
+  `git status` vor und nach dem Build statt mit dem leeren String (Amendment in
+  Kriterium 3).
 
 - **2026-11-17, umgesetzt (Stufen 1–4):** `scripts/e2e/{run,beacon,build-test-extension}.mjs`,
   `test/ci/{workflow,e2e}.test.js`, `npm run test:ci`, `scripts/ci-local.sh`, die fünf

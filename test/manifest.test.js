@@ -95,6 +95,54 @@ test("browserSpecificSettings_afterTheSwitchToMV2_shouldKeepTheExtensionId", () 
 });
 
 /**
+ * The toolbar button of spec 44: there is one, it has no popup, and it starts crossed out.
+ *
+ * Three separate promises, and each fails differently. A missing button is an extension
+ * the operator cannot switch on; a `default_popup` swallows the click (`onClicked` never
+ * fires with a popup, so the switch would be dead markup); and a `default_icon` that is not
+ * the off icon would claim "on" before anything was switched on. The namespace is tied to
+ * the manifest version, and not to `||`: under MV3 `browserAction` does not exist.
+ */
+test("manifest_shouldCarryAButtonWithoutPopup", async () => {
+  // GIVEN the manifest of an extension that is either MV2 or MV3,
+  const key = MANIFEST.manifest_version === 3 ? "action" : "browser_action";
+
+  // WHEN we read the button it declares,
+  const button = MANIFEST[key];
+
+  // THEN it is there under the key of *this* version and under no other,
+  assert.notEqual(button, undefined, `manifest.json must carry "${key}"`);
+  assert.equal("browser_action" in MANIFEST, MANIFEST.manifest_version === 2);
+  assert.equal("action" in MANIFEST, MANIFEST.manifest_version === 3);
+
+  // ... it has no popup, because a popup is exactly what makes the click unreachable,
+  assert.equal("default_popup" in button, false, "a popup would swallow the click");
+
+  // ... its icon is the off one — off is the state of a fresh profile,
+  assert.equal(button.default_icon, "icons/bridge-off.svg");
+
+  // ... and it has a tooltip, which is where the three states are readable.
+  assert.equal(typeof button.default_title, "string");
+  assert.ok(button.default_title.length > 0, "the button needs a title");
+});
+
+test("manifest_shouldShipTheThreeToolbarIcons", async () => {
+  // GIVEN the three states of spec 44 — off, on, on without a bridge,
+  const names = ["bridge", "bridge-off", "bridge-offline"];
+
+  // WHEN we read the files `setIcon` names at runtime,
+  for (const name of names) {
+    const svg = await readFile(new URL(`../extension/icons/${name}.svg`, import.meta.url), "utf8");
+
+    // THEN each one is a real, square 32-pixel drawing: the runtime states have no
+    // manifest entry, so a missing or mis-sized file would only show up as a blank or
+    // crooked button in the operator's toolbar.
+    assert.match(svg, /viewBox="0 0 32 32"/, `${name}.svg must be drawn on a 32×32 canvas`);
+    assert.match(svg, /<path /, `${name}.svg must carry a path`);
+  }
+});
+
+/**
  * The password switch of spec 07, checked without a browser.
  *
  * The checkbox, its id and the storage key are three separate literals in two

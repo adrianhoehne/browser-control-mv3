@@ -5,6 +5,45 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+**Der Schalter in der Symbolleiste (`docs/44`, Stufen 1–4)** — die Erweiterung
+hat ein Symbol und ist nach der Installation **aus**. Ein Klick öffnet den
+Brücken-Tab und den Socket, ein zweiter schließt beides wieder, und dabei sagt
+sie Servus.
+
+- **Drei Icons, drei Zustände** (`extension/icons/`): Brücke (verbunden),
+  überkreuzte Brücke (`off`, die Vorgabe) und Brücke mit gelbem Blitz (an, aber
+  die Bridge antwortet nicht). Gezeichnet auf `viewBox="0 0 32 32"` mit
+  `context-fill`; die zwei Laufzeit-Zustände setzt `setIcon`. Im Manifest steht
+  `browser_action` mit `default_icon: icons/bridge-off.svg`, `default_title`
+  und **ohne** `default_popup` — mit Popup feuert `onClicked` nicht.
+- **`extension/background.js`:** `bridgeEnabled` aus `storage.local` (kein Wert
+  ⇒ aus), Klick schaltet um, `setIcon`/`setTitle` folgen dem Zustand, der
+  Namespace hängt an `manifest_version` (`browserAction` unter MV2, `action`
+  unter MV3). Ausschalten in dieser Reihenfolge: `goodbye` an die Seite,
+  `close(1000)`, Tab zu, `bridgeEnabled = false`.
+- **`extension/bridge.js`:** liest den Schalter vor jedem Verbindungsversuch,
+  verbindet bei `aus` nicht weiter (der Reconnect-Timer wird abgebrochen),
+  meldet dem Koordinator über `runtime.sendMessage`, ob der Socket steht, und
+  führt den Abschied aus (`goodbye` vor `close`).
+- **`GOODBYE` in beiden Protokolldateien** (`extension/protocol.js`,
+  `bridge-rs/src/protocol.rs`); die Bridge reagiert nicht darauf (Roadmap 32).
+  Nebenbei nachgetragen: `INJECTION_REPLY_TIMEOUT_MS` fehlte in
+  `bridge-rs/src/protocol.rs`, weshalb `protocol_constants_matchTheExtension`
+  schon vor diesem Inkrement rot war.
+- **`docs/42`, Kriterien 13/14:** der Brücken-Tab wird aus `browser_status`
+  gefiltert und ist für jedes Werkzeug `no_agent_tab`, auch mit einer von Hand
+  eingetragenen Id in `agentTabIds`.
+- **Dritter E2E-Seam:** `const DEFAULT_BRIDGE_ENABLED = false;` in `bridge.js`
+  **und** `background.js`, gepatcht und je Datei einmal gezählt
+  (`--self-check` ⇒ `endpoint=1 token=1 state=1`).
+- **Belege:** 522 Node-Fälle grün (`# fail 0`, `# cancelled 0`), 16 Fälle in
+  `test/bridge-tab.test.js` (davon 6 `switch_*`), `cargo test --test protocol`
+  grün, `npm run test:ci` 11 Fälle grün, Parität 7/7, `npm run check` ⇒ 0. Zwei
+  Mutationsproben: Klick ohne Zustandsprüfung und weggelassenes `goodbye`
+  machen je einen `switch_`-Fall rot. **Ungemessen:** der echte Klick, der
+  Blitz binnen 5 s, `off` über den Neustart, 60 s ohne `extension connected`
+  (Betreiber-Kriterien 5–8).
+
 **Die Injection-Naht, Block 2 von Stufe 1b — der Quelltext-Pfad ist weg** — auch
 `inspect`, `eval`, `frames` und `transcript` schicken keinen Quelltext mehr in die
 Seite. Damit ist die Naht aus `docs/45` auf dem Produktionspfad vollständig:

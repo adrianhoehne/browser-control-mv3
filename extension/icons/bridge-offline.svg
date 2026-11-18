@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <title>Browser Control — on, no connection</title>
+  <g fill="none" stroke="context-fill" stroke-width="3" stroke-linecap="round">
+    <path d="M3 13h26" />
+    <path d="M8 14v15" />
+    <path d="M24 14v15" />
+    <path d="M8 14c1.5-6 5-9 8-9s6.5 3 8 9" />
+  </g>
+  <!-- Yellow, not red: "on but not reachable" is a warning, not a refusal. -->
+  <path d="M18.5 2 9 18h5.5L13 30l9.5-16h-5.5z" fill="#e8a300" />
+</svg>

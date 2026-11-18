@@ -90,6 +90,16 @@ protocol_constants! {
         /// `ExtensionTimeout`.
         CALL_TIMEOUT_MS: u64 = 20_000;
 
+        /// The budget of one injected call's answers (spec 45). Its own number and
+        /// not `CALL_TIMEOUT_MS`: a page deadline of the same length would fire
+        /// together with the bridge's patience, and the agent would see
+        /// `ExtensionTimeout` instead of the tool's own answer.
+        ///
+        /// The mirror was missing since spec 45 stage 1a — the extension carried the
+        /// constant and this table did not, which is exactly the drift this test exists
+        /// for. Found while adding the farewell type (spec 44).
+        INJECTION_REPLY_TIMEOUT_MS: u64 = 5_000;
+
         /// Reconnect backoff of the extension, kept here because it is
         /// wire-adjacent timing that both sides read from the same table.
         RECONNECT_BASE_MS: u64 = 1_000;
@@ -103,6 +113,10 @@ protocol_constants! {
         WELCOME: &str = "welcome";
         REQUEST: &str = "request";
         RESPONSE: &str = "response";
+        /// The extension's farewell on a switch-off (spec 44). Received and
+        /// deliberately ignored — `hub.rs` drops every type but `response`, and the
+        /// reaction belongs to roadmap 32, not to this increment.
+        GOODBYE: &str = "goodbye";
     }
 
     /// Methods the extension answers in this increment. Anything else is replied
