@@ -42,7 +42,7 @@ Reload.
   Promise über einen Sterbenden. Beides gehört in den Tab.
 - **Das Wire-Protokoll bleibt unverändert.** Bridge, Hub und die dreizehn
   Werkzeuge merken nichts; die Parität (`7/7`) bleibt der Maßstab.
-- **Gemessen:** die Verbindung hält über Stunden, überlebt Tab-Neustart,
+- **Gemessen:** die Verbindung hält über die Messdauer, überlebt Tab-Neustart,
   Tab-Discard und Browser-Neustart.
 
 ## Non-goals
@@ -112,8 +112,9 @@ in `args` nicht mit. Damit ist `pageSnippetCode` nicht „umgestellt", sondern
 - eine **Content-Script-Datei** `page-agent.js` mit den drei Helfern und einem
   Dispatcher,
 - geladen als Datei (`tabs.executeScript({file})` unter MV2, `scripting.executeScript({files})` unter MV3); `func` scheidet aus: sonst reisen die drei Helfer wieder als Text mit,
-- der Aufruf übergibt `{op, args}` als Nachricht, die Antwort kommt als
-  Rückgabewert des Dispatchers.
+- der Aufruf übergibt `{callId, op, args}` als Nachricht; die Antwort kommt als
+  Nachricht zurück (`{callId, ok, value}`), **nicht** als Rückgabewert — bei
+  `{file}` ist `result` `undefined`.
 
 **Diese Arbeit ist der Kern des Inkrements** und bekommt deshalb eine eigene
 Stufe mit eigenem Beweis: alle 16 Aufrufstellen müssen danach unverändert
@@ -176,7 +177,7 @@ nach **Inhalt**, nicht nach Position.
 | `test/extension.test.js` | `transcript_captureAndWaiter_shouldLiveInTheSameContext` | Listener und Wartender im selben Kontext (kein Promise über den Worker) |
 | `test/manifest.test.js` | die zwei `background.js`-Leser auf die neue Datei | `ALLOW_EVAL`/`ALLOW_SCREENSHOT` werden weiter gepinnt |
 | `test/ci/e2e.test.js` | `e2e_seamPatch_shouldFindBothLines` (Pfad **und** Inhalt) | der Seam findet seine zwei Zeilen in `bridge.js` |
-| live (Betreiber) | 8 h Leerlauf, Tab schließen, Tab verwerfen, Browser-Neustart | die Verbindung hält |
+| live (Betreiber) | 30 min Leerlauf, Tab schließen, Tab verwerfen, Browser-Neustart | die Verbindung hält |
 
 ## Acceptance criteria
 
@@ -202,8 +203,9 @@ nach **Inhalt**, nicht nach Position.
 6. **Die Werkzeuge antworten unverändert.** `npm test` ⇒ `# fail 0`,
    `# cancelled 0`; `node --test test/bridge-tab.test.js` ⇒ `# fail 0`.
 7. **Der Seam findet seine Zeilen.** `node scripts/e2e/build-test-extension.mjs
-   --self-check --source extension` ⇒ Ausgabe **`seams ok: endpoint=1 token=1`**,
-   Exit **0**.
+   --self-check --source extension` ⇒ Exit **0**, und die Ausgabe nennt
+   **`endpoint=1`** und **`token=1`** (gezählt je für sich, nicht als ein
+   Präfix-String — `docs/44` hängt einen dritten Anker an dieselbe Zeile).
 8. **Die Parität bleibt.** `scripts/parity.sh --impl rust --check` ⇒ `7/7 wie
    erwartet`, `--self-test` ⇒ `7/7 rot wie erwartet`. Die Bridge ist unberührt.
 9. **Die Verbindung hält 30 Minuten.** (Betreiber.) Vor dem Lauf: Bridge
@@ -277,8 +279,24 @@ ordnet die Antwort über `callId` zu.
 **Für die Frame-Inventur ist das eine Vereinfachung:** statt eines Arrays in
 unversprochener Reihenfolge (heute entscheidet `framesOf` nach *Inhalt*, weil
 `tabs.executeScript` mit `allFrames` nicht sortiert liefert) meldet sich jeder
-Frame selbst, und `sender.frameId` steht in der Nachricht. Der Filter nach
-Inhalt bleibt trotzdem, weil ein Frame stumm bleiben darf.
+Frame selbst, und `sender.frameId` steht in der Nachricht.
+
+**Drei Dinge, die die Naht deshalb festlegen muss:**
+
+1. **Die Frame-Liste kommt aus den Selbstmeldungen.** Ein Aufruf schickt
+   `{op: "inventory"}` ohne `frameId` an den Tab; jeder Frame antwortet, und die
+   Liste entsteht aus den Antworten. Es gibt keine Frame-Liste aus der Injection
+   mehr — `framesOf` darf deshalb kein Array erwarten, sonst wirft es sofort
+   `frames_failed`.
+2. **Die Frist ist `PROTOCOL.CALL_TIMEOUT_MS`** (dieselbe wie für den
+   Werkzeugaufruf). Ein stummer Frame hängt sonst bis zum Bridge-Timeout, und der
+   Agent sieht `ExtensionTimeout` statt einer Antwort. Der Fall heißt
+   `injection_whenAFrameStaysSilent_shouldRejectAtTheDeadline`.
+3. **Ein abgelehntes `tabs.sendMessage`** („Could not establish connection.
+   Receiving end does not exist") ist **kein** Fehler, sondern der Normalfall
+   nach jeder Navigation im Frame. Er wird wie ein stummer Frame behandelt:
+   Werkzeug ⇒ `not_readable`, Inventur ⇒ `frames_failed`. Der Filter nach Inhalt
+   bleibt, weil genau dieser Fall Einträge leer lässt.
 
 Was diese Stufe liefert: **kein Quelltext mehr auf der Leitung.** Die drei
 Helfer reisen als Datei, nicht als Text; `pageSnippetCode` verschwindet.

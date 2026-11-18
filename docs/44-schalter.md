@@ -87,7 +87,12 @@ Bye")** und heute offen. Diese Spec liefert nur den Absender.
 1. **Der Reconnect-Loop.** `onSocketClosed` plant heute unbedingt neu. Ohne
    expliziten Abbruch bei `off` verbindet die Erweiterung nach dem Ausschalten
    weiter — sichtbar nur im Bridge-Log.
-2. **Ein laufender Auftrag beim Ausschalten.** Der Socket fällt mitten im
+2. **Der Namespace, falls `docs/43` schon gebaut ist.** Dann steht `action` im
+   Manifest und der Code muss `browser.action.setIcon` rufen;
+   `browser.browserAction` ist dort `undefined`. Der Fall
+   `action_namespace_shouldFollowTheManifestVersion` (in `docs/43`, Kriterium 3)
+   deckt beide Richtungen ab.
+3. **Ein laufender Auftrag beim Ausschalten.** Der Socket fällt mitten im
    Auftrag; die Bridge bricht ihn über `reject_all_pending` ab
    (`HubRequestError::unavailable`, Meldung „the extension connection went
    away"). Das ist richtig, gehört aber in die Anleitung.
@@ -162,10 +167,13 @@ brauchen einen echten Browser).
    und starten ⇒ kein Tab, kein Socket, überkreuztes Icon.
 8. **`off` verbindet nicht weiter.** (Betreiber.) Nach dem Ausschalten **60 s**
    warten ⇒ keine neue `extension connected`-Zeile im Bridge-Log.
-9. **Die Anleitungen führen zum Icon.** `grep -c 'icon' docs/portable/FIREFOX.md`
-   ⇒ **≥ 1**, und der Schritt steht **vor** dem Eintragen des Tokens
-   (`grep -n`-Vergleich). In `INSTALL.md` steht `grep -c 'may not be in the
-   toolbar' INSTALL.md` ⇒ **0** und `grep -c 'switch' INSTALL.md` ⇒ **≥ 1**.
+9. **Die Anleitungen führen zum Icon.** In `docs/portable/FIREFOX.md`:
+   `grep -c 'icon'` ⇒ **≥ 1**, und die Zeilennummer von `grep -n 'icon'` ist
+   **kleiner** als die von `grep -n 'token from the'` (der Schritt kommt vor dem
+   Token). In `INSTALL.md`: `grep -c 'extension icon may not' INSTALL.md` ⇒
+   **0** (der alte Satz ist weg) und `grep -c 'nothing happens until you switch'
+   INSTALL.md` ⇒ **1** (die neue Formulierung steht da). Beide Zählungen sind
+   **heute** falsch — 0 ist 1 und 1 ist 0 —, also entscheiden sie etwas.
 
 ## Dev plan
 

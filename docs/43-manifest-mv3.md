@@ -77,16 +77,17 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
 
 1. **Manifest:** drei Schlüssel ändern sich, `background` verliert `persistent`
    und die `scripts`-Liste wird zur Eventpage.
-2. **Injection:** `browser.tabs.executeScript(tabId, {code, …})` →
+2. **Injection:** `browser.tabs.executeScript(tabId, {file, …})` →
    `browser.scripting.executeScript({target: {tabId, frameIds|allFrames},
-   files: ["page-agent.js"]})` beziehungsweise `func`. Die Antwortform ändert
-   sich: MV2 gab je Frame einen Wert, MV3 gibt `{frameId, result}`.
-   `framesOf` und der Frame-Filter (`docs/24`) entscheiden nach **Inhalt** — sie
-   dürfen keine leeren Einträge sehen.
+   files: ["page-agent.js"]})`. **`result` wird nicht gelesen:** bei `files` ist
+   es `undefined`, die Injection ist nur das „ist es gelaufen"-Signal. Die
+   Antworten laufen weiter über `callId`-Nachrichten (`docs/42`, Stufe 2), und
+   `framesOf` entscheidet nach **Inhalt** — leere Einträge dürfen den Filter
+   nicht verschieben.
 3. **Tests:** `test/manifest.test.js` bekommt neue Pins (MV3, `scripting`,
    `host_permissions`, kein `persistent`, `page-agent.js` in den web-accessible
-   resources, falls nötig); `test/extension.test.js`-Stubs sprechen
-   `tabs.executeScript` an und brauchen `scripting`.
+   resources); `test/extension.test.js`-Stubs sprechen `tabs.executeScript` an
+   und brauchen `scripting`.
 4. **Action-Block und API-Namespace ziehen mit.** Hat `docs/44` schon gebaut,
    steht `browser_action` im Manifest; MV3 verlangt `action`. Der Namespace
    ändert sich mit: `browser.browserAction.setIcon` ist unter MV3 `undefined`,
@@ -155,7 +156,10 @@ angefasst.
    Kommentare, die den alten Namen nennen, werden mit umgeschrieben.
 3. **Die Tests stellt der Umbau bewusst um.** `node --test --test-reporter=tap
    test/manifest.test.js` ⇒ `# fail 0`, und die vier neuen Fälle sind darin
-   namentlich grün.
+   namentlich grün. Dazu `action_namespace_shouldFollowTheManifestVersion` in
+   `test/extension.test.js`: der Stub kennt `browser.action` **und**
+   `browser.browserAction`, und der Code ruft den, der zur Manifest-Version
+   gehört — sonst bleibt das Icon stumm, ohne dass ein Test es merkt.
 4. **Die Werkzeuge antworten unverändert.** `npm test` ⇒ `# fail 0`,
    `# cancelled 0`; die 16 Aufrufer laufen gegen den `scripting`-Stub.
 5. **Die Parität bleibt.** `scripts/parity.sh --impl rust --check` ⇒ `7/7 wie
