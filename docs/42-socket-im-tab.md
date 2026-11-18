@@ -268,6 +268,18 @@ Der Umbau läuft **noch unter MV2**: `browser.tabs.executeScript(tabId, {file:
 `browser.scripting` samt `scripting`-Berechtigung gehört zu `docs/43` — hier
 verbietet das Non-Goal „keine neue Berechtigung" ihn.
 
+**Der Rückgabewert fällt dabei weg.** `tabs.executeScript({code})` gab den Wert
+der Funktion zurück, `{file}` gibt `undefined` — die Antwort kommt deshalb als
+Nachricht: der Aufrufer schickt `{callId, op, args}` per `tabs.sendMessage` an
+den Frame, der Dispatcher antwortet mit `{callId, ok, value}` und die Seite
+ordnet die Antwort über `callId` zu.
+
+**Für die Frame-Inventur ist das eine Vereinfachung:** statt eines Arrays in
+unversprochener Reihenfolge (heute entscheidet `framesOf` nach *Inhalt*, weil
+`tabs.executeScript` mit `allFrames` nicht sortiert liefert) meldet sich jeder
+Frame selbst, und `sender.frameId` steht in der Nachricht. Der Filter nach
+Inhalt bleibt trotzdem, weil ein Frame stumm bleiben darf.
+
 Was diese Stufe liefert: **kein Quelltext mehr auf der Leitung.** Die drei
 Helfer reisen als Datei, nicht als Text; `pageSnippetCode` verschwindet.
 
