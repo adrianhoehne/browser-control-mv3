@@ -120,7 +120,7 @@ brauchen `browserAction`/`action`, sonst wirft der Start), `test/manifest.test.j
 
 | Datei | Fall | Was er beweist |
 |---|---|---|
-| `test/manifest.test.js` | `manifest_shouldCarryAButtonWithoutPopup` | Action-Block vorhanden (je Manifest-Version der richtige Schlüssel), **kein** `default_popup`, drei `default_icon`-Pfade existieren als Datei |
+| `test/manifest.test.js` | `manifest_shouldCarryAButtonWithoutPopup` | Action-Block vorhanden (je Manifest-Version der richtige Schlüssel), **kein** `default_popup`, `default_icon` zeigt auf `bridge-off.svg`, und die **drei Icon-Dateien** liegen vor |
 | `test/bridge-tab.test.js` | `switch_onAFreshProfile_shouldBeOff` | ohne gespeicherten Wert gilt `off`: kein Tab, kein Socket |
 | `test/bridge-tab.test.js` | `switch_whenClickedOn_shouldOpenTheTabAndConnect` | Klick erzeugt Tab, `on`, Icon Brücke |
 | `test/bridge-tab.test.js` | `switch_whenClickedOff_shouldSendGoodbyeThenClose` | **Frame-Reihenfolge**: `goodbye` gesendet, danach `close(1000)`, dann Tab zu, dann `off` gespeichert |
@@ -162,9 +162,10 @@ brauchen einen echten Browser).
    und starten ⇒ kein Tab, kein Socket, überkreuztes Icon.
 8. **`off` verbindet nicht weiter.** (Betreiber.) Nach dem Ausschalten **60 s**
    warten ⇒ keine neue `extension connected`-Zeile im Bridge-Log.
-9. **Die Anleitung führt zum Icon.** `grep -c 'icon' docs/portable/FIREFOX.md`
+9. **Die Anleitungen führen zum Icon.** `grep -c 'icon' docs/portable/FIREFOX.md`
    ⇒ **≥ 1**, und der Schritt steht **vor** dem Eintragen des Tokens
-   (`grep -n`-Vergleich).
+   (`grep -n`-Vergleich). In `INSTALL.md` steht `grep -c 'may not be in the
+   toolbar' INSTALL.md` ⇒ **0** und `grep -c 'switch' INSTALL.md` ⇒ **≥ 1**.
 
 ## Dev plan
 

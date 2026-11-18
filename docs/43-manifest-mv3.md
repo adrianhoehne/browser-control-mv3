@@ -99,13 +99,11 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
    Firefox die Rechte bestätigen; ohne Grant liest `browser_read` nichts.
    Deshalb ein Kriterium mit `browser.permissions.contains({origins:
    ["<all_urls>"]})` ⇒ `true`.
-2. **`page-agent.js` muss web-accessible sein**, wenn es per `files` injiziert
+2. **`page-agent.js` muss web-accessible sein**, weil es per `files` injiziert
    wird. Fehlt der Eintrag, schlägt jede Injection fehl und alle Werkzeuge
-   antworten `not_readable`. Stufe 1 **misst** das: einmal ohne Eintrag injizieren
-   und den Fehler notieren, dann den Eintrag setzen. Das Ergebnis ersetzt jedes
-   „falls" in dieser Spec. **`bridge.html` und `bridge.js` gehören nie dorthin**
-   — sie tragen Token und Sitzung, und ein `"resources": ["*"]` machte sie für
-   jede Webseite ladbar.
+   antworten `not_readable` — der Betreiber sieht das in Kriterium 6.
+   **`bridge.html` und `bridge.js` gehören nie dorthin** — sie tragen Token und
+   Sitzung, und ein `"resources": ["*"]` machte sie für jede Webseite ladbar.
 3. **Die Eventpage schläft weiter** — sie darf es. Jeder Zustand, der einen
    Schlaf überleben muss, gehört in `storage.local` oder in den Tab; ein
    In-Memory-Feld im Hintergrund ist ab hier ein Fehler.
@@ -120,8 +118,9 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
 **Erlaubt:** `extension/manifest.json`, `extension/background.js`,
 `extension/bridge.js` (Injection-Aufrufe), `extension/page-agent.js`,
 `test/manifest.test.js`, `test/extension.test.js`, `test/ci/e2e.test.js`,
-`docs/02`, `docs/36`, `docs/40`, `docs/42`, `docs/43`, `docs/README.md`,
-`docs/PROJECT-STATE.md`, `CHANGELOG.md`.
+`docs/02`, `docs/43`, `docs/README.md`, `docs/PROJECT-STATE.md`, `CHANGELOG.md`.
+`docs/36`, `docs/40` und `docs/42` gehören zu `docs/42` und werden hier **nicht**
+angefasst.
 
 **Nicht:** `bridge-rs/**`, `test/fixtures/**`, `scripts/parity/**`,
 `extension/options.*`, `deploy/**`.
@@ -133,7 +132,7 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
 | `test/manifest.test.js` | `manifest_shouldDeclareVersionThree` | `manifest_version: 3` |
 | `test/manifest.test.js` | `manifest_shouldNotClaimAPersistentBackground` | kein `persistent` — der Grund von `docs/02` ist entfallen, nicht vergessen |
 | `test/manifest.test.js` | `manifest_shouldAskForScriptingAndHostPermissions` | `scripting` in `permissions`, `<all_urls>` in `host_permissions`, nicht mehr in `permissions` |
-| `test/manifest.test.js` | `manifest_shouldExposeThePageAgent` | `page-agent.js` steht in `web_accessible_resources` (falls `files` genutzt wird) |
+| `test/manifest.test.js` | `manifest_shouldExposeThePageAgent` | `page-agent.js` steht in `web_accessible_resources`, und **nicht** `bridge.html`/`bridge.js` |
 | `test/extension.test.js` | die 16 Aufrufer gegen `scripting` gestubbt | die Werkzeuge antworten unverändert, `{frameId, result}` wird gelesen |
 | `test/extension.test.js` | `frames_withEmptyResultEntries_shouldNotShiftTheFilter` | der Frame-Filter entscheidet nach Inhalt, nicht nach Position |
 
@@ -143,13 +142,17 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
 
 1. **Das Manifest ist MV3.** `node -e "const m=require('./extension/manifest.json');
    console.log(m.manifest_version, Boolean(m.background.persistent),
-   m.permissions.includes('scripting'), (m.host_permissions||[]).includes('<all_urls>'))"`
-   ⇒ `3 false true true`.
-2. **Kein `code` mehr in der Injection.** `grep -Fc 'browser.tabs.executeScript('
-   extension/background.js` ⇒ **0**; `grep -Fc 'scripting.executeScript('
-   extension/bridge.js` ⇒ **≥ 1**. Die zwei Kommentare, die den alten Namen
-   nennen, werden mit umgeschrieben — sie erklären sonst einen Aufruf, den es
-   nicht mehr gibt.
+   m.permissions.includes('scripting'), (m.host_permissions||[]).includes('<all_urls>'),
+   JSON.stringify(m.web_accessible_resources).includes('page-agent.js'),
+   JSON.stringify(m.web_accessible_resources).includes('bridge.js'))"` ⇒
+   `3 false true true true false` (der letzte Wert: `bridge.js` steht **nicht**
+   in den web-accessible resources).
+2. **Die alte API ist weg, die neue steht genau einmal da.**
+   `grep -Fc 'browser.tabs.executeScript(' extension/bridge.js
+   extension/background.js` ⇒ **0** in beiden Dateien (der Werkzeugpfad liegt
+   nach `docs/42` in `bridge.js`); `grep -Fc 'browser.scripting.executeScript('
+   extension/bridge.js` ⇒ **1** (eine Aufrufstelle, 16 Aufrufer). Die zwei
+   Kommentare, die den alten Namen nennen, werden mit umgeschrieben.
 3. **Die Tests stellt der Umbau bewusst um.** `node --test --test-reporter=tap
    test/manifest.test.js` ⇒ `# fail 0`, und die vier neuen Fälle sind darin
    namentlich grün.
@@ -187,11 +190,12 @@ Beweis: Kriterien 1, 2, 3, 4, 5.
 
 Dateien: `docs/02-persistenter-background.md`.
 
-Die Kriterien von `docs/02` bekommen „gilt bis `docs/42`"; der Messbeleg bleibt
-**stehen** — ein Messprotokoll schreibt man nicht um. `docs/36` und `docs/40`
+Die Kriterien von `docs/02` bekommen den einen Satz „gilt bis `docs/43`"; der
+Messbeleg bleibt **stehen** — ein Messprotokoll schreibt man nicht um. Der Satz
+steht genau einmal, damit der Beweis oben nicht vakuum-grün wird. `docs/36` und `docs/40`
 gehören zu `docs/42` und werden hier **nicht** angefasst.
 
-Beweis: `grep -c 'gilt bis' docs/02-persistenter-background.md` ⇒ ≥ 1, und der
+Beweis: `grep -c 'gilt bis' docs/02-persistenter-background.md` ⇒ **1**, und der
 Messwert `30,0 s` steht weiterhin dort (`grep -c '30,0 s'` ⇒ ≥ 1).
 
 **Stufe 3 — die Messung**
@@ -205,9 +209,9 @@ Beweis: Kriterien 6, 7, 8, 9 mit Zeitstempeln.
 - **Nichts ist gemessen.** Der Tab ist gebaut, das Manifest nicht.
 - **Die Eventpage darf schlafen — ob sie es tut, entscheidet Firefox.** Kriterium
   8 prüft die Folge (Verbindung bleibt), nicht den Schlaf selbst.
-- **`web_accessible_resources` ist nur nötig, wenn `files` injiziert wird.**
-  Wird `func` genutzt, entfällt der Eintrag; dann entfällt auch Kriterium 4 der
-  Testtabelle.
+- **`web_accessible_resources` ist der Preis für `files`.** Der Eintrag macht
+  `page-agent.js` für Webseiten ladbar (nicht die Brücke, siehe Risiko 2) — das
+  ist bewusst und steht im Manifest-Test.
 
 ## Open questions
 
