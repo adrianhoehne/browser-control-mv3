@@ -5,6 +5,26 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+**Die Injection-Naht, Block 1 von Stufe 1b** — `read`, `click` und `type` schicken
+keinen Quelltext mehr in die Seite: sie laden `page-agent.js` als Datei und
+fragen `{op, args}` über den Nachrichtenkanal (`docs/45`). Die vier Seitenfunktionen
+sind wörtlich in die Datei gewandert; die Werkzeugergebnisse, Fehlercodes und
+deutschen Sätze sind unverändert.
+
+- **`extension/page-agent.js`:** `read`, `settle`, `click` und `type` als
+  benannte Ops neben `inventory`; jeder Op bekommt ein flaches, JSON-fähiges
+  Argumentobjekt. Der Dispatcher wartet das Ergebnis ab, weil `settle` eine
+  Zusage beantwortet.
+- **`extension/bridge.js`:** `readPageRequest`, `pageStateRequest`,
+  `settlePageRequest`, `clickPageRequest`, `typePageRequest` bauen `{op, args}`;
+  `readAgentTabPage`, `settleAgentTab`, `clickAgentTab`, `clickResult`,
+  `typeAgentTab` und `typeResult` lesen die Antworten über `valuesOf`. Ein Op, der
+  wirft, wird wie eine abgelehnte Injection in `not_readable`/`page_busy`/
+  `no_agent_tab` übersetzt — derselbe eine Fehlerpfad wie vorher.
+- **Noch offen (Block 2):** `inspect`, `eval`, `frames` und `transcript` senden
+  weiter Quelltext; `pageSnippetCode`, `PAGE_HELPERS_CODE` und der Testhaken
+  `globalThis.__bcInjectionProbe` bleiben bis zum letzten dieser Aufrufer.
+
 **Der Socket zieht in einen eigenen Tab** — Stufe 1 von `docs/42`, die
 Voraussetzung für MV3. Der Code der bisherigen Hintergrundseite lebt jetzt als
 `extension/bridge.js` in einem angepinnten Erweiterungs-Tab; `background.js` ist

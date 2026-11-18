@@ -8,6 +8,32 @@ Log oder einer Spec widerspricht, gilt der Beleg und diese Datei ist falsch.
 
 **Eine Übergabe-Datei gibt es nicht mehr.** Bis 2026-11-12 lag hier `docs/HANDOVER.md` (Stand, Entscheidungen, Betrieb); für die Veröffentlichung ist sie entfallen, weil sie Betriebsdaten trug. Der Stand steht in dieser Datei, das Verfahren in `CONTRIBUTING.md`, die Einrichtung in `INSTALL.md`.
 
+## Stand (2026-11-18): die Injection-Naht, Block 1 von Stufe 1b
+
+**`docs/45` ist `proposed`, Stufe 1a und Block 1 von 1b sind gebaut.** `read`,
+`click` und `type` laden `extension/page-agent.js` als Datei und fragen
+`{callId, op, args}` über `tabs.sendMessage`; die Seite antwortet mit
+`{callId, ok, value}`. Die vier Seitenfunktionen (`readPageSource`,
+`settlePageSource`, `clickPageSource`, `typePageSource`) sind wörtlich in die
+Datei gewandert und dort als `read`, `settle`, `click`, `type` registriert. Kein
+Werkzeugergebnis, kein Fehlercode und kein deutscher Satz hat sich geändert
+(508 Node-Fälle grün).
+
+- **Noch auf dem Quelltext-Pfad:** `inspect`, `eval`, `frames` und `transcript`
+  (10 der 16 Aufrufe) senden weiter Snippets als `code`. Deshalb stehen
+  `pageSnippetCode`, `PAGE_HELPERS_CODE` und der Testhaken
+  `globalThis.__bcInjectionProbe` noch; sie fallen mit dem letzten Aufrufer.
+- **Harness:** `createPageAgentChannel` fährt die Ops im Seitenrealm der Fixture
+  (`pageContextOf`) und sammelt die Antworten über den Kanal; `answer` stellt
+  eine Antwort pro Op (`{silent: true}` für einen stummen Op),
+  `refuseInjection`/`refuseInjectionTimes`/`refuseInjectionAfter` bilden die drei
+  Wege ab, auf denen Firefox die Datei verweigert.
+- **Eine Semantik, die die Naht mitbringt:** ein abgebrochener Warte-Aufruf (der
+  Watchdog gewinnt) lässt seine eigene Sammel-Frist von 5 000 ms stehen; sie
+  räumt sich selbst ab. Die Fälle, die das berühren, sagen das jetzt ausdrücklich.
+- **Ungemessen:** die Messung am echten Browser (Kriterium 6 und 7 aus `docs/45`)
+  steht aus.
+
 ## Stand (2026-11-17): die CI prüft, was ausgeliefert wird
 
 **`docs/40` ist `active`.** `.github/workflows/test.yml` hat fünf Jobs in einer

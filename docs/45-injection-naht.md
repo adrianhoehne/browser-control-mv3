@@ -181,9 +181,9 @@ steht danach noch — das ist der Zwischenstand, nicht das Ziel.
 **Stufe 1b — die 16 Aufrufer, in zwei Blöcken**
 
 Erster Block: `read`, `click`, `type` — sie antworten auf `sender.frameId` und
-brauchen den Frame-Filter. Zweiter Block: `inspect`, `eval`, `frames`,
-`transcript`. Erst wenn der letzte umgestellt ist, fallen `pageSnippetCode` und
-`PAGE_HELPERS_CODE`.
+brauchen den Frame-Filter. **Gebaut am 2026-11-18** (siehe Log). Zweiter Block:
+`inspect`, `eval`, `frames`, `transcript` — **offen**. Erst wenn der letzte
+umgestellt ist, fallen `pageSnippetCode` und `PAGE_HELPERS_CODE`.
 
 Beweis: Kriterien 1, 5, 6; `grep -Fc 'pageSnippetCode('` ⇒ 0.
 
@@ -241,3 +241,19 @@ Beweis: Kriterium 6 und die Sichtprüfung in Kriterium 7.
   Produktionsaufrufer den Nachrichtenpfad nutzt, hängt Stufe 1a an einem
   Testhaken (`globalThis.__bcInjectionProbe`); der fällt mit dem letzten
   umgestellten Aufrufer.
+- **2026-11-18, Stufe 1b Block 1 gebaut:** `read`, `click`, `type` senden
+  `{op, args}`. `readPageSource`, `settlePageSource`, `clickPageSource` und
+  `typePageSource` sind wörtlich nach `extension/page-agent.js` gewandert und
+  als `read`, `settle`, `click`, `type` registriert; die vier Builder in
+  `bridge.js` heißen jetzt `readPageRequest`, `pageStateRequest`,
+  `settlePageRequest`, `clickPageRequest`, `typePageRequest` und bauen nur noch
+  `{op, args}`. Ein `op`, der wirft, wird wie eine abgelehnte Injection
+  behandelt (`not_readable`/`page_busy`/`no_agent_tab`) — der eine Fehlerpfad,
+  den die Naht ersetzt. Der Harness fährt die Ops im Seitenrealm der Fixture
+  (`pageContextOf`) und sammelt die Antworten über den Kanal; `answer` kann
+  eine Antwort pro Op stellen (`{silent: true}` für einen stummen Op), und
+  `refuseInjection`/`refuseInjectionTimes`/`refuseInjectionAfter` bilden die
+  drei Wege ab, auf denen Firefox die Datei verweigert. **Offen (Block 2):**
+  `inspect`, `eval`, `frames` und `transcript` (10 Aufrufe) senden weiter
+  Quelltext; `pageSnippetCode`, `PAGE_HELPERS_CODE` und der Testhaken bleiben
+  deshalb stehen.
