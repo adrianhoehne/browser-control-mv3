@@ -213,6 +213,13 @@ dann in `bridge.js` liegen.
 11. **Der Tab überlebt den Browser-Neustart.** (Betreiber.) Firefox beenden und
     starten ⇒ innerhalb **30 s** ist ein Brücken-Tab da und verbunden (gewählt:
     Sitzungswiederherstellung plus Koordinator).
+
+    **Nicht messbar mit einem temporären Add-on** (Messung 2026-11-18): nach
+    einem Firefox-Neustart ist die Erweiterung selbst weg. Gemessen wurde
+    stattdessen der **Dienst**-Neustart — die Eigenschaft, um die es geht:
+    **1 453 ms** bis `extension connected`, und der Brücken-Tab blieb derselbe.
+    Der Browser-Neustart wird erst nach einer dauerhaften Installation messbar
+    (Roadmap 23/24).
 12. **Der Mitschnitt wartet im selben Kontext.** (Betreiber.) Eine Seite mit
     `api/timedtext`-Anfrage laden, dann `browser_transcript` ⇒ die
     Original-Adresse wird gefunden. Das entscheidet das Kriterium. Die
@@ -224,6 +231,20 @@ dann in `bridge.js` liegen.
     `persistent: true` — der Hintergrund schläft nicht. Die 30-Sekunden-Grenze
     fällt erst mit dem Manifest und wird in `docs/43`, Kriterien 8 und 9,
     gemessen.
+
+## Die Messung (2026-11-18, bigdelli, Firefox 152, Dienst auf 8110)
+
+| Kriterium | Verlangt | gemessen |
+|---|---|---|
+| 9 — 30 min Leerlauf | `connected` 1, `disconnected` 0, 1 Socket | **33 min** ohne Ereignis, 1 Socket; die eine `4409`-Zeile ist die Übergabe von einem zweiten Browser |
+| 10 — Tab schließen | Rückkehr ≤ 10 s | **168 ms** und **147 ms** (zweimal geschlossen) |
+| 11 — Neustart | ≤ 30 s | Dienst-Neustart: **1 453 ms**, Tab blieb derselbe; Browser-Neustart mit temporärem Add-on **nicht messbar** |
+| 12 — Transkript | Original-Adresse gefunden | Segmente geliefert (`en`, `source: ytplayer.bootstrapPlayerResponse`), **aber** der `webRequest`-Pfad lief nicht — siehe Lücken |
+
+**Ein Nebenbefund:** der **erste** `browser_transcript`-Aufruf auf einer kalten
+YouTube-Seite lief in `BC_CALL_TIMEOUT_MS` (20 s, Vorgabe) und antwortete nicht;
+der zweite war sofort da. Das ist älter als dieser Umbau, aber jetzt zum ersten
+Mal gemessen.
 
 ## Dev plan
 
@@ -300,6 +321,12 @@ Beweis: Kriterien 9, 10, 11 mit Zeitstempeln aus dem Bridge-Log.
   page started") bleibt, solange `INSTALL.md:442` sie zitiert — `INSTALL.md`
   gehört zu `docs/44`. `scripts/e2e/run.mjs` druckt in seiner
   `--self-check`-Meldung noch `background.js` (gehört zu `docs/40`).
+- **Der `webRequest`-Pfad des Transkripts ist ungemessen.** Die Messung traf den
+  Bootstrap-Zweig (`ytplayer.bootstrapPlayerResponse`), weil die englische
+  Originalspur dort schon stand. Der Mitschnitt greift erst, wenn der Weg über
+  das Spielermenü und die signierte `api/timedtext`-Adresse nötig ist — also bei
+  einem Original, das nicht im Bootstrap steht (die Fälle aus `docs/33`, z. B.
+  ein japanisches Video). Bleibt offen bis zu einem solchen Video.
 - **`bridge.js` ist eine 7 000-Zeilen-IIFE.** Der Umzug hat die Form nicht
   geändert, nur den Ort; ein Aufteilen nach Zuständigkeit (Socket, Tab-Store,
   Werkzeuggruppen) wäre ein eigener Umbau.
@@ -326,6 +353,9 @@ neu.
 ## Log
 
 - **2026-11-17, Betreiberentscheid:** Branch `mv3`, Spec zuerst.
+- **2026-11-18, Messung durchgeführt:** Kriterien 9, 10 und 12 sind mit einem
+  sichtbaren Firefox auf bigdelli gelaufen (Dienst, echter Token, Repo-Kopie mit
+  eingebautem Token). Die Zahlen stehen unter `## Die Messung`.
 - **2026-11-17, Teilung (dritter Block):** die Injection-Naht wird
   `docs/45-injection-naht.md`. `docs/42` behält Tab, Koordinator, Mitschnitt und
   die Messung — das ist der Umbau, den ein Tag trägt; die Naht ist ein eigener
