@@ -2163,22 +2163,143 @@
     return { promise, cancel: () => clearTimeout(timerId) };
   }
 
+  /* ------------------------------------------ the page agent's channel */
+
   /**
-   * Runs `code` in `tabId` and hands back the raw `executeScript` result.
+   * The file that carries the helpers and the dispatcher into the page (spec 45).
    *
-   * The `read` snippet, the second injection of a click and the frame inventory come
-   * through here:
-   * a page that refuses injection is the same outcome for either, and what the
-   * answer is worth is `pageResultOf`'s or `clickOutcomeOf`'s decision, not this
-   * one's.
+   * It has to be in `web_accessible_resources`: `tabs.executeScript({file})` resolves
+   * the name against the extension package, and MV2 refuses a file the manifest does
+   * not expose.
+   */
+  const PAGE_AGENT_FILE = "page-agent.js";
+
+  /**
+   * The call id of the next `{callId, op, args}` message.
    *
-   * Two modes, and the caller must pick the right one:
+   * A counter, not a timestamp and not a random number (spec 45): two calls on the same
+   * tab have to be told apart, and "unique" is a promise only a number that is never
+   * handed out twice can keep.
+   */
+  let nextCallId = 1;
+
+  /**
+   * The calls that are still waiting for answers, by their call id.
    *
-   * - without `allFrames` the snippet runs in the main frame, addressed as
-   *   `frameId: 0`;
-   * - with `allFrames` it runs in every frame of the tab, and `frameId` stays out of
-   *   the details because `tabs.executeScript` refuses the two together. The result is
-   *   then one entry per frame, in no promised order — which is why every consumer of
+   * A `Map` and not a list: an answer is matched by its id, and the entry is gone the
+   * moment the call ends — which is exactly what makes a late answer fall through to
+   * "nobody is waiting for this".
+   */
+  const pendingReplies = new Map();
+
+  function takeCallId() {
+    const callId = nextCallId;
+    nextCallId += 1;
+    return callId;
+  }
+
+  /**
+   * One answer as this side records it: which frame said it, and what it said.
+   *
+   * The frame id is the `sender`'s and no longer the page's business — a frame cannot
+   * answer a question about its own id, but the message it sends carries one.
+   */
+  function replyOf(message, frameId) {
+    return message.ok === true
+      ? { frameId, ok: true, value: message.value }
+      : { frameId, ok: false, error: message.error ?? null };
+  }
+
+  /**
+   * One call's answers, gathered until the expected number is in.
+   *
+   * `expectedCount` is the frame count of the injection: `tabs.executeScript` with
+   * `{file, allFrames}` answers one entry per frame it reached, so the *length* of that
+   * result is how many answers this call may expect.
+   *
+   * Three rules the shape carries (spec 45, `## Die Naht`):
+   *
+   * - the call ends at the count, not at the first answer — `frame_ambiguous` and the
+   *   frame filter of spec 24 need *every* frame's word, and an early resolution would
+   *   silently devalue both;
+   * - a frame that never answers is the deadline's job, not an idle guess. The budget is
+   *   `INJECTION_REPLY_TIMEOUT_MS` (5 000 ms), deliberately under the bridge's 20 000: an
+   *   injected call has to answer the tool, not expire the whole call;
+   * - a frame that could not be reached at all counts as silent, not as an error — after
+   *   a navigation that is the normal case.
+   */
+  function createReplyCollection(expectedCount) {
+    const answers = [];
+    let settledCount = 0;
+    let settle = () => {};
+    const done = new Promise((resolve) => {
+      settle = resolve;
+    });
+    const deadlineId = setTimeout(finish, PROTOCOL.INJECTION_REPLY_TIMEOUT_MS);
+
+    // Clears the timer on both ways out: a deadline that fired while the last answer was
+    // already in would leave a timer behind, and `clearTimeout` twice is harmless.
+    function finish() {
+      clearTimeout(deadlineId);
+      settle(answers);
+    }
+
+    function fill(answer) {
+      // A duplicate for a completed call is dropped here instead of being handed to the
+      // next caller: one frame, one slot.
+      if (settledCount >= expectedCount) return;
+      settledCount += 1;
+      if (answer !== null) answers.push(answer);
+      if (settledCount === expectedCount) finish();
+    }
+
+    // An injection that reached no frame at all has nothing to wait for — the call is
+    // answered now and the caller decides what silence means.
+    if (expectedCount <= 0) finish();
+
+    return {
+      receive: (message, frameId) => fill(replyOf(message, frameId)),
+      markSilent: () => fill(null),
+      // Resolves with the answers as they are — the deadline and the last answer share the
+      // way out, so a call that ends without an answer gets an empty list, not `undefined`.
+      done,
+    };
+  }
+
+  /**
+   * Routes the page agent's answers to the call that waits for their `callId`.
+   *
+   * Registered before the socket is dialled, because a call can only be open while a
+   * socket is: the answers have to have somewhere to land before the first `read`.
+   */
+  function listenForPageReplies() {
+    browser.runtime.onMessage.addListener((message, sender) => {
+      const collection = pendingReplies.get(message?.callId);
+      // The id is the whole filter. An answer for a call that is over — the late frame of
+      // a collection that hit its deadline — belongs to nobody, and handing it to the
+      // next caller would be the one mix-up this counter exists to prevent.
+      if (collection === undefined) return undefined;
+      collection.receive(message, sender?.frameId ?? null);
+      // Nothing on the response channel: the answer already travelled as its own
+      // message, and a second copy here would answer the same call twice.
+      return undefined;
+    });
+  }
+
+  /**
+   * Runs one request in `tabId`: a snippet as source, or a `{op, args}` call to the page
+   * agent.
+   *
+   * Two shapes, one door. The sixteen callers of stage 1b still pass source text and keep
+   * their path unchanged; `{op, args}` takes the file plus the message channel. The source
+   * form goes away with the last of them.
+   *
+   * Three modes, and the caller must pick the right one:
+   *
+   * - without `allFrames` the request runs in the main frame, addressed as `frameId: 0`;
+   * - with `allFrames` it runs in every frame of the tab, and `frameId` stays out of the
+   *   details because `tabs.executeScript` refuses the two together. The injection then
+   *   answers one entry per frame, in no promised order — which is why every consumer of
    *   that mode decides by *content* (`framesOf`, and the frame filter of spec 24) and
    *   never by position. `matchAboutBlank` is the option that makes an `about:blank`
    *   frame injectable at all; without it that frame is simply not in the list.
@@ -2186,45 +2307,137 @@
    * `head` only concerns the `not_readable` frame of the rejection: `false` keeps the
    * HEAD request out of a call whose error nobody will read.
    */
-  async function injectPageCode(tabId, code, { head = true, allFrames = false } = {}) {
+  async function injectPageCode(tabId, request, { head = true, allFrames = false } = {}) {
+    // A string is source text, an object is a request — `typeof` is the whole branch, and
+    // the two paths share nothing but the refusal handling in `injectScript`.
+    if (typeof request === "string") {
+      return injectScript(tabId, sourceDetails(request, allFrames), { head });
+    }
+    return requestPageAnswers(tabId, request, { head, allFrames });
+  }
+
+  /** The `executeScript` details of a snippet that travels as source text. */
+  function sourceDetails(code, allFrames) {
+    return allFrames
+      ? { code, runAt: "document_idle", allFrames: true, matchAboutBlank: true }
+      : {
+          code,
+          runAt: "document_idle",
+          // Named explicitly instead of relying on a default: the main frame is the
+          // whole page for every caller that does not ask for all of them.
+          frameId: 0,
+        };
+  }
+
+  /**
+   * The `executeScript` details of the page agent — the same two modes, one file.
+   *
+   * `{file}` hands back `undefined` and nothing else: the result of this injection is
+   * only good for its *length*, which is the number of frames that received the file.
+   */
+  function pageAgentDetails(allFrames) {
+    return allFrames
+      ? { file: PAGE_AGENT_FILE, runAt: "document_idle", allFrames: true, matchAboutBlank: true }
+      : { file: PAGE_AGENT_FILE, runAt: "document_idle", frameId: 0 };
+  }
+
+  /**
+   * `tabs.executeScript` for one detail set, with the three codes a refusal can mean.
+   *
+   * The single injection call of this file lives here on purpose: a page that refuses
+   * injection is refused for every snippet, and a second call site would be a second
+   * opinion about what that means.
+   */
+  async function injectScript(tabId, details, { head = true } = {}) {
     try {
-      return await browser.tabs.executeScript(
-        tabId,
-        allFrames
-          ? { code, runAt: "document_idle", allFrames: true, matchAboutBlank: true }
-          : {
-              code,
-              runAt: "document_idle",
-              // Named explicitly instead of relying on a default: the main frame is the
-              // whole page for every caller that does not ask for all of them.
-              frameId: 0,
-            },
-      );
+      return await browser.tabs.executeScript(tabId, details);
     } catch (error) {
       // The rejection texts for `about:`, `view-source:`, the PDF viewer and AMO
       // are no contract; parsing them would break on the next browser version.
       // Every rejection now means one of three things — the tab is gone, the page
       // is not there *yet*, or it has nothing to give — and only the tab says
-      // which. Never the rejection text. What kind of page it was comes from the
-      // tab's address instead.
-      //
-      // Which of the three codes the caller sees is the *tab's* decision, and the
-      // tab is looked up exactly once — here, because the enrichment further down
-      // needs the same tab. The `await` is load-bearing: without it a promise would
-      // be thrown, the `instanceof ReadError` check in every `…ErrorFor` would miss,
-      // and the code would silently become `read_failed`.
-      const tab = await readTabOrNull(tabId);
-      if (tab === null) {
-        // Gone for real: no page to read, and no address to enrich it with.
-        throw new ReadError(NO_AGENT_TAB_CODE, NO_AGENT_TAB_MESSAGE);
-      }
-      if (tab.status === TAB_STATUS_LOADING) {
-        // Refused because the page was not there *yet*, not because it has nothing
-        // to give — calling that `not_readable` would make the caller give up. No
-        // details on purpose: this speaks about the moment, not about the page.
-        throw new ReadError(PAGE_BUSY_CODE, PAGE_BUSY_MESSAGE);
-      }
-      throw await notReadableErrorForTab(tab, { head });
+      // which. Never the rejection text.
+      throw await unavailablePageError(tabId, { head });
+    }
+  }
+
+  /**
+   * Why a page could not be reached: gone, still loading, or nothing to give.
+   *
+   * Which of the three codes the caller sees is the *tab's* decision, and the tab is
+   * looked up exactly once — here, because the enrichment further down needs the same
+   * tab. Two later paths use this: a refused injection, and a call that no frame
+   * answered at all. Neither can be decided from a rejection text.
+   */
+  async function unavailablePageError(tabId, { head = true } = {}) {
+    // The `await` is load-bearing: without it a promise would be thrown, the
+    // `instanceof ReadError` check in every `…ErrorFor` would miss, and the code would
+    // silently become `read_failed`.
+    const tab = await readTabOrNull(tabId);
+    if (tab === null) {
+      // Gone for real: no page to read, and no address to enrich it with.
+      throw new ReadError(NO_AGENT_TAB_CODE, NO_AGENT_TAB_MESSAGE);
+    }
+    if (tab.status === TAB_STATUS_LOADING) {
+      // Refused because the page was not there *yet*, not because it has nothing
+      // to give — calling that `not_readable` would make the caller give up. No
+      // details on purpose: this speaks about the moment, not about the page.
+      throw new ReadError(PAGE_BUSY_CODE, PAGE_BUSY_MESSAGE);
+    }
+    return notReadableErrorForTab(tab, { head });
+  }
+
+  /**
+   * Hands one call to the frames: one frame with an address, all of them as a broadcast.
+   *
+   * Without a `frameId` every frame of the tab receives the message. That is what a
+   * collection needs — the frame ids are unknown on this side, and the answers are told
+   * apart by `callId`, never by their order.
+   */
+  function sendPageMessage(tabId, message, allFrames) {
+    return allFrames
+      ? browser.tabs.sendMessage(tabId, message)
+      : browser.tabs.sendMessage(tabId, message, {
+          // The main frame is the whole page for a caller that asked for one — the same
+          // number the injection uses.
+          frameId: 0,
+        });
+  }
+
+  /**
+   * One call to the page agent: inject the file, send `{callId, op, args}`, collect the
+   * answers.
+   *
+   * The injection comes first and the message second: a frame that does not run the file
+   * yet would drop the message, and `executeScript` is what guarantees the listener is in
+   * place before anybody speaks.
+   */
+  async function requestPageAnswers(tabId, request, { head = true, allFrames = false } = {}) {
+    const callId = takeCallId();
+    const injected = await injectScript(tabId, pageAgentDetails(allFrames), { head });
+    const collection = createReplyCollection(Array.isArray(injected) ? injected.length : 0);
+    pendingReplies.set(callId, collection);
+    try {
+      // A refused channel — "Receiving end does not exist", the normal case after a
+      // navigation — is not an error but a silent frame (spec 45): the call ends as if
+      // that frame had said nothing, which is what `markSilent` records. A frame that
+      // receives the message but answers nothing does *not* reject the promise in MV2;
+      // the answer of the page agent travels as its own message either way.
+      await sendPageMessage(tabId, { callId, op: request.op, args: request.args ?? {} }, allFrames).catch(
+        () => collection.markSilent(),
+      );
+      const answers = await collection.done;
+      // One addressed frame and no answer at all: no second frame could carry the result,
+      // and the caller has no list to sort out — the page is as unreadable as one that
+      // refused the injection. A collection is different: it hands back what came in,
+      // because "no frame said anything" is the *tool's* verdict (`not_readable` for a
+      // read, `frames_failed` for the inventory) and not this function's.
+      if (answers.length === 0 && allFrames !== true) throw await unavailablePageError(tabId, { head });
+      return { callId, answers };
+    } finally {
+      // Whatever ended the wait, this call is over: from here on an answer with its id
+      // belongs to nobody and is dropped by the listener.
+      pendingReplies.delete(callId);
     }
   }
 
@@ -7027,7 +7240,19 @@
     return Math.floor(Math.random() * (PROTOCOL.RECONNECT_JITTER_MS + 1));
   }
 
+  // The harness's own door into the message channel — and only the harness's. Until
+  // stage 1b converts the sixteen callers, nothing in this file sends a
+  // `{callId, op, args}` message, so the deadline and the collection could not be proven
+  // at all. Published only when `test/extension.test.js` sets `globalThis.__bcInjectionProbe`
+  // before this file loads; the extension itself never sets it, so a real page carries no
+  // hook. It goes away with the last converted caller.
+  if (globalThis.__bcInjectionProbe === true) {
+    globalThis.__bcInjection = Object.freeze({ requestPageAnswers });
+  }
   console.log(STARTUP_LOG_LINE);
+  // Before the dial, for the same reason as the wire below: an answer can only be matched
+  // while its call is open, and a call is only open while the socket is.
+  listenForPageReplies();
   // Before the dial: a page that fetched its track file while the bridge was down is the
   // normal case, and the wire has to be listening before the first call arrives (spec 34).
   // Nothing is logged here — the address is a session credential.

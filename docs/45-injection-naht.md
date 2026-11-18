@@ -232,3 +232,12 @@ Beweis: Kriterium 6 und die Sichtprüfung in Kriterium 7.
 - **2026-11-18, Umbau in zwei Blöcke geteilt:** 1a (Dispatcher, Kanal,
   Sammlung) und 1b (die 16 Aufrufer). `pageSnippetCode` fällt erst mit dem
   letzten Aufrufer; der Zwischenstand ist kein Ziel.
+- **2026-11-18, Stufe 1a gebaut:** `extension/page-agent.js` (drei Helfer wörtlich,
+  idempotenter Dispatcher), `injectPageCode` mit `{file}` plus Nachricht,
+  `callId`-Zähler und Sammlung bis zur Frame-Zahl unter
+  `INJECTION_REPLY_TIMEOUT_MS` (5 000), `web_accessible_resources` im Manifest,
+  vier `injection_*`-Fälle im Harness. **Offen für Stufe 1b:** die 16 Aufrufer
+  senden weiter Quelltext (`pageSnippetCode` steht), und weil damit noch kein
+  Produktionsaufrufer den Nachrichtenpfad nutzt, hängt Stufe 1a an einem
+  Testhaken (`globalThis.__bcInjectionProbe`); der fällt mit dem letzten
+  umgestellten Aufrufer.

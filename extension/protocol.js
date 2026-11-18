@@ -45,6 +45,13 @@ globalThis.BC_PROTOCOL = Object.freeze({
   MAX_MESSAGE_BYTES: 5242880,
   HELLO_TIMEOUT_MS: 5000,
   CALL_TIMEOUT_MS: 20000,
+  // The budget of one injected call's answers (spec 45). Its own number, not
+  // `CALL_TIMEOUT_MS`: that one is the bridge's patience with the whole tool call, and
+  // a page deadline of the same length would fire together with it — the agent would
+  // then see `ExtensionTimeout` instead of the tool's own answer. 5 000 ms sits under
+  // every local budget (`SETTLE_GUARD_MS` 4 s, `NAVIGATE_TIMEOUT_MS` 8 s) and over a
+  // normal answer that crosses frames.
+  INJECTION_REPLY_TIMEOUT_MS: 5000,
   RECONNECT_BASE_MS: 1000,
   RECONNECT_MAX_MS: 30000,
   RECONNECT_JITTER_MS: 250,

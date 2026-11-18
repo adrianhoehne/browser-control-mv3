@@ -21,6 +21,13 @@ import vm from "node:vm";
 
 const PROTOCOL_SOURCE = await readFile(new URL("../extension/protocol.js", import.meta.url), "utf8");
 const BACKGROUND_SOURCE = await readFile(new URL("../extension/bridge.js", import.meta.url), "utf8");
+// The page agent (spec 45): the file the injection really loads, run in a realm of its
+// own so the dispatcher and its guard are proven against the shipped source and not
+// against a stand-in.
+const PAGE_AGENT_SOURCE = await readFile(
+  new URL("../extension/page-agent.js", import.meta.url),
+  "utf8",
+);
 // The coordinator, for the one case that has to prove what it does *not* touch: the
 // request capture belongs to the bridge page, not to the page that keeps it alive.
 const COORDINATOR_SOURCE = await readFile(
@@ -67,6 +74,11 @@ const READ_MAX_CHARS_LIMIT = 100000;
 // able to say "this page is too short to be an article". The production value is the
 // one that counts — it travels into the snippet as an argument.
 const ARTICLE_MIN_CHARS = 500;
+// The answer budget of one injected call (spec 45). Its own number, deliberately under
+// the bridge's `CALL_TIMEOUT_MS` of 20 000: a page deadline of the same length would fire
+// together with the bridge's and the agent would see `ExtensionTimeout` instead of the
+// tool's answer.
+const INJECTION_REPLY_TIMEOUT_MS = 5000;
 const URL_LIMIT = 2048;
 const TITLE_LIMIT = 1024;
 // The cap on the address in a `not_readable` error frame: the same number as
@@ -310,6 +322,177 @@ class FakeWebSocket {
   }
 }
 
+/**
+ * The message channel of spec 45: the file a `{file}` injection loads, and the way back.
+ *
+ * `tabs.executeScript({file})` answers `undefined` and nothing else — the *length* of
+ * that answer is the number of frames it reached. The answer itself comes the other way:
+ * the injected page agent calls `runtime.sendMessage`, and the extension page receives it
+ * on `runtime.onMessage` with `sender.frameId`. Both halves are stubbed here, once, so a
+ * case only has to describe its frames.
+ *
+ * `frames` are the invented frames of the tab, main frame first: `{href}` for a frame,
+ * and `top: false` for a child. Three switches model the situations the seam has to
+ * survive, and every one of them is a real state of the browser:
+ *
+ * - `silent` on a frame: the file runs but its listener never arrives. That is the frame
+ *   mid-navigation, and the extension has to see plain silence — not an error and not an
+ *   early answer.
+ * - `refuseSendMessage`: `tabs.sendMessage` rejects with "Could not establish
+ *   connection. Receiving end does not exist.", which is what a tab without a content
+ *   script says after every navigation.
+ * - `holdAnswersFrom`: the named frames answer only when the case calls
+ *   `flushHeldAnswers()`, which is how "the first answer does not end the collection"
+ *   becomes provable instead of asserted.
+ *
+ * A realm is created once per frame and the file is run in it again for every injection —
+ * exactly what a second `{file}` injection into the same frame does. The page agent's own
+ * guard is what keeps that from being a second listener, and `listenerCount()` is what
+ * reads it off.
+ */
+function createPageAgentChannel(config = null) {
+  const frames = config?.frames ?? [];
+  const heldFrameIndexes = new Set(config?.holdAnswersFrom ?? []);
+  const bridgeListeners = new Set();
+  // Every answer a frame sent, in arrival order: `{frameId, message}`. The wire record,
+  // and the only place a duplicate answer would show up.
+  const answers = [];
+  const realms = new Map();
+  const heldAnswers = [];
+  let currentTabId = null;
+
+  function requireConfig(what) {
+    assert.notEqual(config, null, `${what} needs a page realm: pass \`pageAgent\` to createTabsStub`);
+  }
+
+  /** The realm of one frame, created on first use and kept for the tab's lifetime. */
+  function realmOf(index) {
+    const existing = realms.get(index);
+    if (existing !== undefined) return existing;
+    const frame = frames[index];
+    const listeners = [];
+    // `window.top === window` only on the main frame: an object graph, because a boolean
+    // would answer the page agent's own question for it.
+    const window = {};
+    window.top = frame.top === false ? {} : window;
+    const context = vm.createContext({
+      browser: {
+        runtime: {
+          onMessage: {
+            addListener: (listener) => {
+              // A silent frame is one whose listener never arrives — see the note above.
+              if (frame.silent === true) return;
+              listeners.push(listener);
+            },
+          },
+          sendMessage: (message) => {
+            // Through JSON, like every value that crosses a realm here: the receiver
+            // compares against objects of its own realm, prototypes included.
+            const answer = JSON.parse(JSON.stringify(message));
+            answers.push({ frameId: index, message: answer });
+            for (const bridgeListener of bridgeListeners) {
+              bridgeListener(answer, { tabId: currentTabId, frameId: index });
+            }
+            // Firefox answers the sending content script with the receivers' return
+            // values; the page agent ignores that answer, so `undefined` is enough.
+            return Promise.resolve();
+          },
+        },
+      },
+      location: { href: frame.href },
+      window,
+    });
+    const realm = { context, listeners };
+    realms.set(index, realm);
+    return realm;
+  }
+
+  function runFileIn(index) {
+    const { context } = realmOf(index);
+    vm.runInContext(PAGE_AGENT_SOURCE, context, { filename: "injected:page-agent.js" });
+  }
+
+  /**
+   * `tabs.executeScript(id, {file})`: the file into every addressed frame, one `undefined`
+   * per frame back.
+   *
+   * The two shapes are asserted here, because they are one contract: `allFrames` without
+   * `frameId` and with `matchAboutBlank`, or the main frame alone at `frameId: 0`.
+   */
+  function inject(tabId, details) {
+    requireConfig("a `{file}` injection");
+    currentTabId = tabId;
+    if (details.allFrames === true) {
+      assert.equal(details.frameId, undefined, "`allFrames` and `frameId` exclude each other");
+      assert.equal(
+        details.matchAboutBlank,
+        true,
+        "without `matchAboutBlank` an about:blank frame is never reached",
+      );
+    } else {
+      assert.equal(details.frameId, 0, "without `allFrames` the injection addresses the main frame");
+    }
+    const indexes = details.allFrames === true ? frames.map((_, index) => index) : [0];
+    for (const index of indexes) runFileIn(index);
+    return indexes.map(() => undefined);
+  }
+
+  function invoke(listener, message, index) {
+    void Promise.resolve(listener(message, { tabId: currentTabId, frameId: index }));
+  }
+
+  /**
+   * `tabs.sendMessage(id, message, {frameId})`: to one frame, or to all of them.
+   *
+   * A frame in `holdAnswersFrom` keeps its answer until the case flushes it. Everything
+   * else answers while this call is running, so the collection is already filled when
+   * `sendMessage` resolves — the earliest a real browser could answer, too.
+   */
+  function deliver(tabId, message, options) {
+    requireConfig("a `sendMessage`");
+    currentTabId = tabId;
+    if (config.refuseSendMessage === true) {
+      return Promise.reject(new Error("Could not establish connection. Receiving end does not exist."));
+    }
+    const indexes = options?.frameId === undefined ? [...realms.keys()] : [options.frameId];
+    if (indexes.length === 0) {
+      return Promise.reject(new Error("Could not establish connection. Receiving end does not exist."));
+    }
+    for (const index of indexes) {
+      for (const listener of realmOf(index).listeners) {
+        if (heldFrameIndexes.has(index)) heldAnswers.push(() => invoke(listener, message, index));
+        else invoke(listener, message, index);
+      }
+    }
+    return Promise.resolve();
+  }
+
+  return {
+    answers,
+    realms,
+    inject,
+    deliver,
+    addBridgeListener: (listener) => bridgeListeners.add(listener),
+    flushHeldAnswers() {
+      for (const answer of heldAnswers.splice(0)) answer();
+    },
+    /** How many answers arrived per `callId` — the duplicate detector of risk 2. */
+    answerCounts() {
+      const counts = {};
+      for (const { message } of answers) {
+        counts[message.callId] = (counts[message.callId] ?? 0) + 1;
+      }
+      return counts;
+    },
+    /** How many `runtime.onMessage` listeners the frames of this tab registered. */
+    listenerCount() {
+      let total = 0;
+      for (const realm of realms.values()) total += realm.listeners.length;
+      return total;
+    },
+  };
+}
+
 function createBrowserStub({
   settings,
   windows,
@@ -321,6 +504,7 @@ function createBrowserStub({
   windowFocusedAfter = {},
   storageReadFailsFor = [],
   storageWriteFailsFor = [],
+  channel = null,
 }) {
   const storage = { ...settings };
 
@@ -359,6 +543,12 @@ function createBrowserStub({
     runtime: {
       getManifest: () => ({ version: MANIFEST_VERSION }),
       getBrowserInfo: async () => BROWSER_INFO,
+      // Where the page agent's answers land (spec 45). The bridge page is an extension
+      // page, and a content script's `runtime.sendMessage` reaches it here, `sender`
+      // included — that `sender.frameId` is how a frame names itself.
+      onMessage: {
+        addListener: (listener) => channel.addBridgeListener(listener),
+      },
     },
     windows: {
       getAll: async () => windows,
@@ -1378,6 +1568,7 @@ function createTabsStub({
   captureThrowsTimes = 0,
   captureCalls = [],
   wire = [],
+  pageAgent = null,
 } = {}) {
   const store = new Map(tabs.map((tab) => [tab.id, { ...tab }]));
   const listeners = new Set();
@@ -1391,6 +1582,11 @@ function createTabsStub({
   // One entry per `executeScript` call: the read cases prove *that* nothing was
   // injected, which only a recording can say.
   const scriptCalls = [];
+  // The page agent's half of the tab (spec 45): the realms a `{file}` injection reaches
+  // and the channel its answers come back on. Created always, used only by the cases that
+  // hand in a `pageAgent` description — `inject` fails loudly without one instead of
+  // pretending a frame answered.
+  const channel = createPageAgentChannel(pageAgent);
   let nextId = nextTabId;
   // The first `captureThrowsTimes` captures fail: the counter, not a boolean, because
   // the focus fallback needs exactly "fails once, works the second time".
@@ -1421,10 +1617,20 @@ function createTabsStub({
     calls,
     scriptCalls,
     captureCalls,
+    channel,
     executeScript: async (tabId, details) => {
       scriptCalls.push({ tabId, details });
+      // `{file}` is the page agent's way in (spec 45). A case's own `executeScript` keeps
+      // owning the `{code}` snippets, which is what the sixteen callers still send until
+      // stage 1b — the two are told apart by the details, not by a flag.
+      if (details.file !== undefined) return channel.inject(tabId, details);
       return executeScript(tabId, details);
     },
+    /**
+     * `tabs.sendMessage(id, message, {frameId})`: the message into the page realm(s) of
+     * this tab, the answers back through `runtime.sendMessage`.
+     */
+    sendMessage: (tabId, message, options) => channel.deliver(tabId, message, options),
     /**
      * `tabs.captureTab(id, {format})`: the picture the cases configure, or a refusal.
      *
@@ -1607,6 +1813,7 @@ function createSandbox({
   storageWriteFailsFor = [],
   headFetch = createHeadFetchStub(),
   encoder = createEncoderStub(),
+  injectionProbe = false,
 } = {}) {
   const clock = new FakeTimerClock();
   const consoleLines = [];
@@ -1621,6 +1828,7 @@ function createSandbox({
     windowFocusedAfter,
     storageReadFailsFor,
     storageWriteFailsFor,
+    channel: tabs.channel,
   });
   const sandbox = vm.createContext({
     browser,
@@ -1651,6 +1859,9 @@ function createSandbox({
   // Before anything of the extension runs: the slot map has to be visible from `set`
   // on, and `Map.prototype` is per realm.
   vm.runInContext(MAP_PROBE_SOURCE, sandbox, { filename: "test/map-probe.js" });
+  // The harness's door into the injection channel (spec 45). Set *before* `bridge.js`
+  // loads, because that is when the hook is read; without it a real page carries none.
+  if (injectionProbe) sandbox.__bcInjectionProbe = true;
   return { browser, sandbox, clock, consoleLines, headFetch, encoder };
 }
 
@@ -16509,4 +16720,166 @@ test("transcript_menuStaysOpenWhenItWasOpen", async () => {
   assert.equal(page.playerMenu.isOpen(), true, "the menu the operator opened stays open");
   assert.equal(page.playerMenu.settingsButton.clicks, 0);
   assert.deepStrictEqual(page.playerMenu.entryClicks, []);
+});
+
+/* ---------------------------------------------- spec 45: the injection seam */
+
+/**
+ * A started extension whose injection channel the case drives itself.
+ *
+ * No socket, no `read`: the message channel of spec 45 has no production caller until
+ * stage 1b converts the sixteen snippets, so the probe of `bridge.js` is the only door —
+ * and the four cases below are about that channel alone. The tab is the stored agent tab
+ * (`500`, `complete`), because a silent frame's `not_readable` is enriched from it.
+ */
+async function injectionProbeStarted(pageAgent) {
+  const tabs = createTabsStub({
+    tabs: [createAgentTabFixture({ status: "complete" })],
+    pageAgent,
+  });
+  const started = await startBackground({ tabs, injectionProbe: true });
+  return { tabs, ...started };
+}
+
+/** One `{op, args}` call on tab 500, in the shape stage 1b will pass to `injectPageCode`. */
+function askPageAgent(started, request = { op: "inventory" }, options = {}) {
+  return started.sandbox.__bcInjection.requestPageAnswers(500, request, options);
+}
+
+/**
+ * Settles a sandbox promise without awaiting it, so a case can assert "still open".
+ *
+ * `settled` is the test realm's own variable: the callback is the test's, and only the
+ * promise it hangs off belongs to the page.
+ */
+function trackPromise(promise) {
+  const state = { settled: false, value: null, error: null };
+  promise.then(
+    (value) => {
+      state.settled = true;
+      state.value = value;
+    },
+    (error) => {
+      state.settled = true;
+      state.error = error;
+    },
+  );
+  return state;
+}
+
+test("injection_whenAFrameStaysSilent_shouldRejectAtTheDeadline", async () => {
+  // GIVEN one frame that takes the file but never answers — the frame mid-navigation:
+  const started = await injectionProbeStarted({ frames: [{ href: AGENT_URL, silent: true }] });
+
+  // WHEN the bridge page asks that frame,
+  const call = trackPromise(askPageAgent(started));
+  await settleAsyncWork();
+
+  // THEN nothing is decided yet: no answer is silence, and silence is the deadline's job,
+  assert.deepStrictEqual(started.clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS]);
+  assert.equal(call.settled, false, "the call must wait for the deadline, not answer early");
+
+  // ... and that deadline is 5 000 ms — its own budget, under the bridge's 20 000, so the
+  // agent reads the tool's answer instead of `ExtensionTimeout`:
+  started.clock.runByDelay(INJECTION_REPLY_TIMEOUT_MS);
+  await settleAsyncWork();
+  assert.equal(call.error.code, "not_readable");
+  assert.deepStrictEqual(started.clock.pendingDelays(), [], "the deadline must not survive its call");
+});
+
+test("injection_whenSendMessageIsRejected_shouldAnswerNotReadable", async () => {
+  // GIVEN a channel that refuses the message — "Receiving end does not exist", the normal
+  // state of every frame right after a navigation:
+  const started = await injectionProbeStarted({
+    frames: [{ href: AGENT_URL }],
+    refuseSendMessage: true,
+  });
+
+  // WHEN the bridge page asks that frame,
+  const error = await askPageAgent(started).then(
+    () => null,
+    (caught) => caught,
+  );
+
+  // THEN the refusal is neither a crash nor a timeout — it is a page that cannot be read,
+  assert.equal(error.code, "not_readable");
+
+  // ... and nothing waited for an answer nobody could give:
+  assert.deepStrictEqual(started.clock.pendingDelays(), []);
+});
+
+test("injection_withTwoCallIds_shouldAnswerEachCallerOnce", async () => {
+  // GIVEN one frame and two calls opened before either answer exists — the second
+  // injection loads the same file into the same frame again (risk 2):
+  const started = await injectionProbeStarted({ frames: [{ href: AGENT_URL }] });
+
+  // WHEN both ask at once,
+  const first = askPageAgent(started);
+  const second = askPageAgent(started);
+  await settleAsyncWork();
+  const collected = inThisRealm(await Promise.all([first, second]));
+
+  // THEN each call carries its own id and got its own answer — the assignment is by
+  // `callId`, never by the order the answers happen to arrive in,
+  assert.deepStrictEqual(
+    collected.map((entry) => entry.callId),
+    [1, 2],
+  );
+  assert.deepStrictEqual(
+    collected.map((entry) => entry.answers.length),
+    [1, 1],
+  );
+  assert.deepStrictEqual(
+    collected.map((entry) => entry.answers[0].value.href),
+    [AGENT_URL, AGENT_URL],
+  );
+
+  // ... and the frame answered exactly once per id. A second dispatcher — the file run
+  // twice without the guard — would answer every call twice, and the first caller would
+  // read a duplicate it never asked for:
+  assert.deepStrictEqual(started.tabs.channel.answerCounts(), { 1: 1, 2: 1 });
+  assert.equal(started.tabs.channel.listenerCount(), 1, "the guard must keep it at one listener");
+});
+
+test("injection_withTwoFrames_shouldCollectBothAnswers", async () => {
+  // GIVEN a main frame and a child with an address of its own, and a child that answers
+  // only when the case lets it answer:
+  const started = await injectionProbeStarted({
+    frames: [{ href: AGENT_URL }, { href: "https://example.org/widget", top: false }],
+    holdAnswersFrom: [1],
+  });
+
+  // WHEN the bridge page broadcasts the call,
+  const pending = askPageAgent(started, { op: "inventory" }, { allFrames: true });
+  const call = trackPromise(pending);
+  await settleAsyncWork();
+
+  // THEN the first answer does not end the collection: the deadline is still armed and the
+  // call is still open, because `frame_ambiguous` and the frame filter of spec 24 need
+  // every frame's word,
+  assert.deepStrictEqual(started.clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS]);
+  assert.equal(call.settled, false, "one answer out of two must not end the call");
+
+  // ... until the second frame speaks too,
+  started.tabs.channel.flushHeldAnswers();
+  const collected = inThisRealm(await pending);
+
+  // THEN both answers are there, each naming the frame that said it and its own address —
+  // the frame count of the injection is what the collection expected, not a guess:
+  assert.equal(collected.answers.length, 2);
+  assert.deepStrictEqual(
+    collected.answers.map((entry) => entry.frameId),
+    [0, 1],
+  );
+  assert.deepStrictEqual(
+    collected.answers.map((entry) => entry.value.href),
+    [AGENT_URL, "https://example.org/widget"],
+  );
+  assert.deepStrictEqual(
+    collected.answers.map((entry) => entry.value.top),
+    [true, false],
+  );
+
+  // ... and the deadline that guarded the wait is gone with it:
+  assert.deepStrictEqual(started.clock.pendingDelays(), []);
 });
