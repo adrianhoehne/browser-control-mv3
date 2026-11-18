@@ -1,16 +1,21 @@
 /**
- * The manifest is the one file where the lifetime of the background page is
- * decided, and the whole point of this extension is a connection that stays up.
- * Firefox unloads an MV3 event page after 30 seconds of idling and does not
- * count an open WebSocket as activity, so the socket dies with the page.
+ * The manifest is the file that decides what the extension may do and how long its
+ * background may live — and the whole point of this extension is a connection that
+ * stays up.
  *
- * Every assertion here holds one half of that decision, with exactly one test
- * per property. Whoever switches back to MV3 has to change this file on
- * purpose — that is the whole purpose of it.
+ * The history matters for reading these assertions. Spec 02 chose MV2 with
+ * `persistent: true` because Firefox unloads an MV3 event page after 30 seconds of
+ * idling and does not count an open WebSocket as activity. Spec 42 moved the socket out
+ * of the background and into a pinned tab (`bridge.html`), which is what made the
+ * persistent background unnecessary; spec 43 then switched the manifest to MV3. The
+ * assertions below hold the new arrangement, one property each, and the ping-pong is
+ * the point: whoever changes one of these properties has to change this file on
+ * purpose.
  *
- * Since spec 42 the socket lives in a tab (`bridge.html`), so the second half of
- * the decision moved: the manifest still names one background script, the
- * coordinator, and the script order that matters is the one in the page.
+ * The frame in one sentence: `manifest_version: 3`, an event page without `persistent`,
+ * `scripting` plus `host_permissions` instead of `<all_urls>` among the permissions,
+ * `action` instead of `browser_action`, and `page-agent.js` as a web-accessible
+ * resource because the injection loads it by file name.
  */
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -20,20 +25,21 @@ const MANIFEST = JSON.parse(
   await readFile(new URL("../extension/manifest.json", import.meta.url), "utf8"),
 );
 
-test("manifest_withPersistentBackgroundRequired_shouldDeclareVersionTwo", () => {
-  // GIVEN the manifest of an extension that must keep its background page,
+test("manifest_shouldDeclareVersionThree", () => {
+  // GIVEN the manifest of an extension whose socket lives in a tab (spec 42),
   // WHEN we read the declared manifest version,
-  // THEN it has to be 2 — MV3 would unload the page after 30 seconds:
-  assert.equal(MANIFEST.manifest_version, 2);
+  // THEN it has to be 3. The reason MV2 was chosen for so long — the unloading event
+  // page — no longer applies: the connection is in the tab, not in the background:
+  assert.equal(MANIFEST.manifest_version, 3);
 });
 
-test("background_withPersistentRequired_shouldBeMarkedPersistent", () => {
-  // GIVEN a manifest version that supports a persistent background page,
-  // WHEN we read the `persistent` flag,
-  // THEN it has to be exactly `true` — there is no non-persistent MV2
-  // background worth having here, so `undefined` must fail as loudly as
-  // `false` does:
-  assert.equal(MANIFEST.background.persistent, true);
+test("manifest_shouldNotClaimAPersistentBackground", () => {
+  // GIVEN an MV3 manifest, where no such promise exists any more,
+  // WHEN we look for the `persistent` flag,
+  // THEN it must be gone — not `false`, which would read like a choice this file made.
+  // `in` rather than a truthiness check, so `false` counts as a violation too: the
+  // reason of spec 02 is *entailed*, not forgotten:
+  assert.equal("persistent" in MANIFEST.background, false);
 });
 
 test("background_scripts_shouldBeTheCoordinatorAlone", () => {
@@ -58,34 +64,98 @@ test("bridgePage_shouldLoadProtocolBeforeBridge", async () => {
   // the manifest case above — this is the order contract now, not a suggestion:
   assert.deepStrictEqual(order, ["protocol.js", "bridge.js"]);
 
-  // AND nothing is inlined: the MV2 CSP would block it, and the page would come up
+  // AND nothing is inlined: the extension CSP forbids it, and the page would come up
   // without a socket and without a word about why.
   assert.doesNotMatch(html, /<script(?![^>]*src=)/);
 });
 
-test("manifest_requestsWebRequestWithoutBlocking", () => {
+test("manifest_shouldAskForScriptingAndHostPermissions", () => {
   // GIVEN the permission set of the previous increments plus the one decision of
   // spec 34 (the operator chose to observe `api/timedtext` requests themselves on
-  // 2026-11-12, after the timeline had been measured blind — M18),
+  // 2026-11-12, after the timeline had been measured blind — M18) and the one of spec
+  // 43 (`scripting`, because the injection loads a file),
   // WHEN we read it back,
-  // THEN it has to be exactly these four entries — whoever changes this does
-  // so on purpose, which is what this test is for:
-  assert.deepStrictEqual(MANIFEST.permissions, ["tabs", "storage", "<all_urls>", "webRequest"]);
+  // THEN the permissions are exactly these four entries — whoever changes this does so
+  // on purpose, which is what this test is for:
+  assert.deepStrictEqual(MANIFEST.permissions, ["tabs", "storage", "webRequest", "scripting"]);
+
+  // ... and `<all_urls>` moved to its own key, where MV3 keeps host permissions. Not in
+  // both places: a leftover in `permissions` would ask for the same reach twice, and the
+  // second line is the one that never gets a grant:
+  assert.deepStrictEqual(MANIFEST.host_permissions, ["<all_urls>"]);
+  assert.equal(MANIFEST.permissions.includes("<all_urls>"), false);
 
   // ... and nothing may block: the extension only reads addresses, and
-  // `webRequestBlocking` would be a permission for a job nobody asked for:
+  // `webRequestBlocking` would be a permission for a job nobody asked for (MV3 has no
+  // such grant for a non-policy extension anyway):
   assert.equal(MANIFEST.permissions.includes("webRequestBlocking"), false);
 });
 
-test("manifest_underMV2_shouldNotDeclareHostPermissions", () => {
-  // GIVEN an MV2 manifest,
-  // WHEN we look for the MV3-only `host_permissions` key,
-  // THEN it must be absent: `in` rather than a truthiness check, so an empty
-  // array counts as a violation too:
-  assert.equal("host_permissions" in MANIFEST, false);
+/**
+ * The one policy directive the manifest has to state itself.
+ *
+ * MV3's default policy for extension pages upgrades insecure requests, and that upgrade
+ * reaches `ws://`: measured on 2026-11-18 with Firefox 152 and this manifest — with the
+ * default policy the socket to `ws://127.0.0.1:18810` died in the TLS handshake (close
+ * code `1015`) and the extension never connected. The local bridge speaks plain text, so
+ * the page needs its own `extension_pages` policy without that upgrade. Pinned here
+ * because the failure is silent: no log line, no error, just a bridge that never sees a
+ * connection.
+ */
+function extensionPagesPolicy() {
+  const declared = MANIFEST.content_security_policy?.extension_pages ?? "";
+  return declared.split(";").map((directive) => directive.trim());
+}
+
+test("manifest_shouldLetTheBridgePageDialAPlainWebSocket", () => {
+  // GIVEN the policy of the extension pages,
+  const directives = extensionPagesPolicy();
+
+  // WHEN we read what it allows for connections,
+  // THEN a plain `ws:` connection is allowed — the local bridge is `ws://127.0.0.1:8110`,
+  // and a `wss:`-only policy would lock out every install that has no TLS in front of it:
+  const connectSrc = directives.find((directive) => directive.startsWith("connect-src"));
+  assert.notEqual(connectSrc, undefined, "the policy has to name connect-src");
+  assert.match(connectSrc, /\bws:/, "a plain ws: target must stay reachable");
+
+  // ... the upgrade is not in it, because that is the directive that broke the dial,
+  assert.doesNotMatch(
+    MANIFEST.content_security_policy.extension_pages,
+    /upgrade-insecure-requests/,
+    "the upgrade directive turns ws:// into wss:// and the bridge never sees the socket",
+  );
+
+  // ... and the MV3 floor is kept: scripts only from the package, no `unsafe-eval`.
+  // Without `script-src 'self'` Firefox refuses the manifest outright.
+  assert.ok(directives.includes("script-src 'self'"), "MV3 requires script-src 'self'");
 });
 
-test("browserSpecificSettings_afterTheSwitchToMV2_shouldKeepTheExtensionId", () => {
+/**
+ * The file the injection loads has to be reachable for the page it is loaded into.
+ *
+ * Two failures, one test, and the second one is the expensive one: `page-agent.js`
+ * missing means every injection is refused and every tool answers `not_readable`, while
+ * `bridge.html`/`bridge.js` in the same list would make the page that carries the token
+ * and the session loadable by any web page. So the promise is checked in both
+ * directions.
+ */
+test("manifest_shouldExposeThePageAgent", () => {
+  // GIVEN the MV3 form of `web_accessible_resources`: a list of resource/match pairs,
+  const exposed = MANIFEST.web_accessible_resources;
+
+  // WHEN we read what it exposes and to whom,
+  // THEN it is exactly the page agent, matched against every origin — the injection
+  // runs in whatever page the operator's tab shows:
+  assert.deepStrictEqual(exposed, [{ resources: ["page-agent.js"], matches: ["<all_urls>"] }]);
+
+  // ... and the bridge page stays out. It carries the operator's token and its own
+  // session; a web page that could load it would read both:
+  const asText = JSON.stringify(exposed);
+  assert.equal(asText.includes("bridge.js"), false, "bridge.js must never be web-accessible");
+  assert.equal(asText.includes("bridge.html"), false, "bridge.html must never be web-accessible");
+});
+
+test("browserSpecificSettings_shouldKeepTheExtensionId", () => {
   // GIVEN the operator's stored endpoint and token, which live in
   // `storage.local` and are keyed by the extension id,
   // WHEN we read `browser_specific_settings.gecko.id`,

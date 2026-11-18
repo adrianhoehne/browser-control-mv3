@@ -28,6 +28,10 @@ const PAGE_AGENT_SOURCE = await readFile(
   new URL("../extension/page-agent.js", import.meta.url),
   "utf8",
 );
+// The one file the injection loads. Literal, because the same literal has to stand in
+// `web_accessible_resources` of the manifest — otherwise every injection is refused
+// (spec 43, criterion 2).
+const PAGE_AGENT_FILE = "page-agent.js";
 // The coordinator, for the one case that has to prove what it does *not* touch: the
 // request capture belongs to the bridge page, not to the page that keeps it alive.
 const COORDINATOR_SOURCE = await readFile(
@@ -323,11 +327,12 @@ class FakeWebSocket {
 }
 
 /**
- * The message channel of spec 45: the file a `{file}` injection loads, and the way back.
+ * The message channel of spec 45: the file a `files` injection loads, and the way back.
  *
- * `tabs.executeScript({file})` answers `undefined` and nothing else — the *length* of
- * that answer is the number of frames it reached. The answer itself comes the other way:
- * the injected page agent calls `runtime.sendMessage`, and the extension page receives it
+ * `scripting.executeScript({files})` answers one `{frameId, result}` per frame and
+ * `result` is `undefined` — the *length* of that answer is the number of frames it
+ * reached, and the answer itself never travels this way. It comes the other way: the
+ * injected page agent calls `runtime.sendMessage`, and the extension page receives it
  * on `runtime.onMessage` with `sender.frameId`. Both halves are stubbed here, once, so a
  * case only has to describe its frames.
  *
@@ -452,15 +457,30 @@ function createPageAgentChannel(config = null) {
   }
 
   /**
-   * `tabs.executeScript(id, {file})`: the file into every addressed frame, one `undefined`
-   * per frame back.
+   * `scripting.executeScript({target, files})`: the file into every addressed frame, one
+   * `{frameId, result}` per frame back.
    *
-   * The two shapes are asserted here, because they are one contract: `allFrames` without
-   * `frameId` and with `matchAboutBlank`, or the main frame alone at `frameId: 0`.
+   * The two target shapes are asserted here, because they are one contract: `allFrames`
+   * without `frameIds`, or the main frame alone as `frameIds: [0]`. The keys are pinned
+   * as a whole, so an MV2 leftover (`frameId`, `allFrames` at the top level, `runAt`,
+   * `matchAboutBlank`) fails here instead of being silently ignored by the next browser.
    */
-  function inject(tabId, details) {
-    requireConfig("a `{file}` injection");
-    currentTabId = tabId;
+  function inject(details) {
+    requireConfig("an injection of `page-agent.js`");
+    assert.deepStrictEqual(
+      Object.keys(details).sort(),
+      ["files", "target"],
+      "`scripting.executeScript` takes a `target` and `files`, nothing else",
+    );
+    // Through this realm: `details` was built in the sandbox, and `deepStrictEqual`
+    // compares prototypes. Same trap as everywhere else in this harness.
+    assert.deepStrictEqual(
+      inThisRealm(details.files),
+      [PAGE_AGENT_FILE],
+      "the one file of the page agent",
+    );
+    const target = details.target;
+    currentTabId = target.tabId;
     if (remainingInjectionRefusals > 0) {
       remainingInjectionRefusals -= 1;
       throw new Error("Missing host permission for the tab");
@@ -469,19 +489,20 @@ function createPageAgentChannel(config = null) {
       throw new Error("Missing host permission for the tab");
     }
     injectionsDone += 1;
-    if (details.allFrames === true) {
-      assert.equal(details.frameId, undefined, "`allFrames` and `frameId` exclude each other");
-      assert.equal(
-        details.matchAboutBlank,
-        true,
-        "without `matchAboutBlank` an about:blank frame is never reached",
-      );
+    if (target.allFrames === true) {
+      assert.equal(target.frameIds, undefined, "`allFrames` and `frameIds` exclude each other");
     } else {
-      assert.equal(details.frameId, 0, "without `allFrames` the injection addresses the main frame");
+      assert.deepStrictEqual(
+        inThisRealm(target.frameIds),
+        [0],
+        "without `allFrames` the injection addresses the main frame",
+      );
     }
-    const indexes = details.allFrames === true ? frames.map((_, index) => index) : [0];
+    const indexes = target.allFrames === true ? frames.map((_, index) => index) : [0];
     for (const index of indexes) runFileIn(index);
-    return indexes.map(() => undefined);
+    // `result` stays `undefined` for a `files` injection, exactly like Firefox: the
+    // answers of the ops arrive through the channel, never as a return value (spec 45).
+    return indexes.map((index) => ({ frameId: index, result: undefined }));
   }
 
   function invoke(listener, message, index) {
@@ -717,6 +738,11 @@ function createBrowserStub({
       onBeforeRequest: {
         addListener: (listener) => tabs.addRequestListener(listener),
       },
+    },
+    // The injection namespace of MV3 (spec 43): one call shape, one file. The `tabs`
+    // stub owns the recording, so `scriptCalls` stays the one place a case counts.
+    scripting: {
+      executeScript: (details) => tabs.injectFile(details),
     },
     tabs,
   };
@@ -1334,18 +1360,6 @@ function remainingText(entries) {
     .join("");
 }
 
-/**
- * The default `executeScript`: a `{code}` injection is refused loudly.
- *
- * Since spec 45 the only way into a page is the file plus the message channel, and every
- * tool takes it. A stub that still ran source text would let a leftover caller stay green
- * in this suite while the real extension injected nothing usable — so the default is the
- * loud failure, not a convenience.
- */
-function refuseSnippetInjection(tabId, details) {
-  throw new Error(`a {code} injection is no longer part of the seam: ${String(details?.code).slice(0, 40)}`);
-}
-
 /* ------------------------------------------------- screenshot fixtures */
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
@@ -1596,9 +1610,11 @@ function createEncoderStub({
  * That is what a tab shows while it is dragged into a new window, and it is the
  * state a real run answered `{"url":"about:blank","title":"(369) YouTube"}` for.
  *
- * `executeScript` is the read path's injection: it records every call in
- * `scriptCalls` and delegates to the passed function, so a case can answer with
- * an array, with `[undefined]` or with a rejection.
+ * `executeScript` replaces the `scripting.executeScript` call of the page agent — the
+ * read path's injection. Every call is recorded in `scriptCalls` first, and the answer
+ * is the passed function's: a case can answer with an array, with one
+ * `{frameId, result}` per frame, or with a rejection. The passed function sees the MV3
+ * details (`{target, files}`); a case that only wants a refusal ignores them.
  *
  * `update` has two ways through, and the one thing that tells them apart is the
  * `url` of the details: a navigation (`url` present) moves the stored page, while
@@ -1617,7 +1633,7 @@ function createTabsStub({
   updateThrowsFor = [],
   updateKeepsStatusCompleteFor = [],
   updateReportsAboutBlankFor = [],
-  executeScript = refuseSnippetInjection,
+  executeScript = null,
   captureDataUrl = ONE_BY_ONE_PNG_DATA_URL,
   captureThrowsTimes = 0,
   captureCalls = [],
@@ -1633,7 +1649,7 @@ function createTabsStub({
   // real order is "page asks first, background page loads second".
   const wireEvents = wire.map((event) => ({ ...event }));
   const wireListeners = new Set();
-  // One entry per `executeScript` call: the read cases prove *that* nothing was
+  // One entry per `scripting.executeScript` call: the cases prove *that* nothing was
   // injected, which only a recording can say.
   const scriptCalls = [];
   // The page agent's half of the tab (spec 45): the realms a `{file}` injection reaches
@@ -1672,13 +1688,21 @@ function createTabsStub({
     scriptCalls,
     captureCalls,
     channel,
-    executeScript: async (tabId, details) => {
-      scriptCalls.push({ tabId, details });
-      // `{file}` is the page agent's way in (spec 45). A case's own `executeScript` keeps
-      // owning the `{code}` snippets, which is what the sixteen callers still send until
-      // stage 1b — the two are told apart by the details, not by a flag.
-      if (details.file !== undefined) return channel.inject(tabId, details);
-      return executeScript(tabId, details);
+    /**
+     * `scripting.executeScript({target, files})`: the page agent's way in and the only
+     * one. Recorded as the details it was handed plus the tab id, which is the half most
+     * cases ask about; a case's own `executeScript` replaces the channel and is how a
+     * page that refuses injection is modelled.
+     */
+    injectFile: async (details) => {
+      // Recorded as a copy of this realm: the details were built in the sandbox, and
+      // `deepStrictEqual` on a sandbox object fails on the prototype, not on the value.
+      scriptCalls.push({
+        tabId: details?.target?.tabId,
+        details: JSON.parse(JSON.stringify(details)),
+      });
+      if (executeScript !== null) return executeScript(details);
+      return channel.inject(details);
     },
     /**
      * `tabs.sendMessage(id, message, {frameId})`: the message into the page realm(s) of
@@ -4737,9 +4761,8 @@ test("read_onANormalPage_shouldAnswerUrlTitleAndTheNormalisedTextFromTheDom", as
   // ... and the read injection really was the file, in the main frame, at the moment
   // the page is idle:
   assert.equal(tabs.scriptCalls[1].tabId, 500);
-  assert.equal(tabs.scriptCalls[1].details.file, "page-agent.js");
-  assert.equal(tabs.scriptCalls[1].details.runAt, "document_idle");
-  assert.equal(tabs.scriptCalls[1].details.frameId, 0);
+  assert.deepStrictEqual(tabs.scriptCalls[1].details.target, { tabId: 500, frameIds: [0] });
+  assert.deepStrictEqual(tabs.scriptCalls[1].details.files, [PAGE_AGENT_FILE]);
 });
 
 test("read_whenTheVisibleTextAnswers_shouldNotCopyTheBodyForTheFallback", async () => {
@@ -6274,7 +6297,7 @@ async function callPageAgentOp(page, op, args, { advanceMs = null } = {}) {
     frames: [{ href: page.url, page, clock, mutationObserver }],
     advanceClocks: false,
   });
-  channel.inject(500, { file: "page-agent.js", runAt: "document_idle", frameId: 0 });
+  channel.inject({ target: { tabId: 500, frameIds: [0] }, files: [PAGE_AGENT_FILE] });
   await channel.deliver(500, { callId: 1, op, args }, { frameId: 0 });
   if (advanceMs === null) clock.advanceToQuiescence();
   else clock.advance(advanceMs);
@@ -7558,12 +7581,16 @@ test("click_withFrame_shouldWaitAndReadTheAddressedFrameAndArmNoFallback", async
   // WHEN the bridge clicks through the widget's address,
   await sendClick(socket, 2, { selector: DEFAULT_CLICK_SELECTOR, frame: "widget" });
 
-  // THEN all three ops — click, wait, page state — went to every frame, with `frameId`
-  // out of the details and the filter in every call:
+  // THEN all three ops — click, wait, page state — went to every frame, with `frameIds`
+  // out of the target and the filter in every call:
   assert.equal(tabs.scriptCalls.length, 3);
   for (const call of tabs.scriptCalls) {
-    assert.equal(call.details.allFrames, true, "a click with `frame` must address every frame");
-    assert.equal(call.details.frameId, undefined, "`allFrames` and `frameId` exclude each other");
+    assert.equal(call.details.target.allFrames, true, "a click with `frame` must address every frame");
+    assert.equal(
+      call.details.target.frameIds,
+      undefined,
+      "`allFrames` and `frameIds` exclude each other",
+    );
   }
   assert.deepStrictEqual(tabs.channel.ops(), ["click", "settle", "read"], "the order is click, wait, page state");
   for (const call of tabs.channel.calls) {
@@ -7664,13 +7691,15 @@ test("click_withoutFrame_shouldAddressTheMainFrameOnly", async () => {
   await sendClick(socket, 2, { selector: DEFAULT_CLICK_SELECTOR });
 
   // THEN the three ops kept their order — `[0]` click, `[1]` wait, `[2]` page state — and
-  // every one of them addressed the main frame: `frameId: 0`, no `allFrames`, no
-  // `matchAboutBlank`,
+  // every one of them addressed the main frame: `frameIds: [0]`, no `allFrames`,
   assert.deepStrictEqual(tabs.channel.ops(), ["click", "settle", "read"]);
   for (const call of tabs.scriptCalls) {
-    assert.equal(call.details.frameId, 0, "a click without `frame` addresses the main frame");
-    assert.equal(call.details.allFrames, undefined, "and asks for exactly one frame");
-    assert.equal(call.details.matchAboutBlank, undefined, "the main frame needs no about:blank");
+    assert.deepStrictEqual(
+      call.details.target.frameIds,
+      [0],
+      "a click without `frame` addresses the main frame",
+    );
+    assert.equal(call.details.target.allFrames, undefined, "and asks for exactly one frame");
   }
 
   // ... so the main frame's link was the one clicked, its state is the answer, and the
@@ -8832,11 +8861,15 @@ test("type_withFrame_shouldAnswerTheStateOfTheAddressedFrame", async () => {
   clock.runNext();
   await settleAsyncWork();
 
-  // THEN both ops — typing, page state — went to every frame, `frameId` left out,
+  // THEN both ops — typing, page state — went to every frame, `frameIds` left out,
   assert.equal(tabs.scriptCalls.length, 2);
   for (const call of tabs.scriptCalls) {
-    assert.equal(call.details.allFrames, true, "a typing with `frame` must address every frame");
-    assert.equal(call.details.frameId, undefined, "`allFrames` and `frameId` exclude each other");
+    assert.equal(call.details.target.allFrames, true, "a typing with `frame` must address every frame");
+    assert.equal(
+      call.details.target.frameIds,
+      undefined,
+      "`allFrames` and `frameIds` exclude each other",
+    );
   }
 
   // ... and the answer carries address, title and text of that frame — not of the tab's
@@ -8920,9 +8953,12 @@ test("type_withoutFrame_shouldAddressTheMainFrameOnly", async () => {
   assert.equal(tabs.scriptCalls.length, 2);
   assert.deepStrictEqual(tabs.channel.ops(), ["type", "read"]);
   for (const call of tabs.scriptCalls) {
-    assert.equal(call.details.frameId, 0, "a typing without `frame` addresses the main frame");
-    assert.equal(call.details.allFrames, undefined, "and asks for exactly one frame");
-    assert.equal(call.details.matchAboutBlank, undefined, "the main frame needs no about:blank");
+    assert.deepStrictEqual(
+      call.details.target.frameIds,
+      [0],
+      "a typing without `frame` addresses the main frame",
+    );
+    assert.equal(call.details.target.allFrames, undefined, "and asks for exactly one frame");
   }
 
   // ... so the main frame's field was written once, the widget's untouched, and the answer
@@ -9974,11 +10010,11 @@ test("inspect_withASelectorOnTheLink_shouldAnswerEveryFieldOfTheContract", async
   });
 
   // ... and it came from exactly one injection, in the main frame, when the page is
-  // idle — the same three details a read records.
+  // idle — the same two fields a read records.
   assert.equal(tabs.scriptCalls.length, 1);
   assert.equal(tabs.scriptCalls[0].tabId, 500);
-  assert.equal(tabs.scriptCalls[0].details.runAt, "document_idle");
-  assert.equal(tabs.scriptCalls[0].details.frameId, 0);
+  assert.deepStrictEqual(tabs.scriptCalls[0].details.target, { tabId: 500, frameIds: [0] });
+  assert.deepStrictEqual(tabs.scriptCalls[0].details.files, [PAGE_AGENT_FILE]);
 });
 
 test("inspect_withoutIdAndWithoutHref_shouldDeliverNullInsteadOfAnEmptyString", async () => {
@@ -10905,8 +10941,12 @@ test("click_andType_travelAsOpsAndCarryNoCode", async () => {
   // THEN every injection of both tools loaded the file and nothing else — no source
   // text rides on the wire any more (spec 45, criterion 1):
   for (const call of [...clickTabs.scriptCalls, ...typeTabs.scriptCalls]) {
-    assert.equal(call.details.file, "page-agent.js");
-    assert.equal(call.details.code, undefined, "no snippet source may be injected any more");
+    assert.deepStrictEqual(call.details.files, [PAGE_AGENT_FILE]);
+    assert.deepStrictEqual(
+      Object.keys(call.details).sort(),
+      ["files", "target"],
+      "no snippet source may be injected any more",
+    );
   }
 
   // ... the click sent its selector and the frame filter, and nothing else,
@@ -11861,10 +11901,9 @@ test("eval_withTab_shouldEvaluateInThatTab", async () => {
   assert.equal(tabs.scriptCalls[0].tabId, 501);
   assert.equal(responsesById(socket).get(2).result.tabId, 501);
 
-  // ... and it went to the main frame of that tab: `frameId: 0` without `allFrames`, the
-  // same details a `read` without `frame` records (criterion 1 of spec 25),
-  assert.equal(tabs.scriptCalls[0].details.frameId, 0, "eval without `frame` addresses the main frame");
-  assert.equal(tabs.scriptCalls[0].details.allFrames, undefined, "and asks for exactly one frame");
+  // ... and it went to the main frame of that tab: `frameIds: [0]` without `allFrames`,
+  // the same target a `read` without `frame` records (criterion 1 of spec 25),
+  assert.deepStrictEqual(tabs.scriptCalls[0].details.target, { tabId: 501, frameIds: [0] });
 
   // ... the injected code really ran there (and 500 was not touched on the way),
   assert.equal(tabs.scriptCalls.length, 1);
@@ -12949,17 +12988,12 @@ test("frames_withThreeFrames_shouldListEveryAddressAndMarkTheMainFrame", async (
   assert.equal(tabs.scriptCalls.length, 1);
 
   // ... and that one injection has the shape the whole tool depends on: every frame,
-  // `about:blank` included, and *no* `frameId` — the two exclude each other in
-  // `tabs.executeScript`. Pinned as a whole object minus the file name, so a mutation run
-  // without one of the three options fails with a readable diff instead of a list of
+  // `about:blank` included, and *no* `frameIds` — the two exclude each other in
+  // `scripting.executeScript`. Pinned as the whole target plus the file list, so a
+  // mutation run without one of the parts fails with a readable diff instead of a list of
   // "the page saw only the main frame".
-  const { file, ...injectionShape } = tabs.scriptCalls[0].details;
-  assert.equal(file, "page-agent.js");
-  assert.deepStrictEqual(injectionShape, {
-    runAt: "document_idle",
-    allFrames: true,
-    matchAboutBlank: true,
-  });
+  assert.deepStrictEqual(tabs.scriptCalls[0].details.target, { tabId: 500, allFrames: true });
+  assert.deepStrictEqual(tabs.scriptCalls[0].details.files, [PAGE_AGENT_FILE]);
 });
 
 test("frames_withAnEmptyEntry_shouldNotShiftTheFilter", async () => {
@@ -13109,14 +13143,16 @@ test("read_withoutFrame_shouldInjectIntoTheMainFrameOnly", async () => {
   assert.equal(answer.ok, true);
   assert.equal(answer.result.text, "Erste Zeil");
 
-  // ... and both injections really went to the main frame: `frameId: 0`, no `allFrames`,
-  // no `matchAboutBlank` — criterion 1 of spec 24, during the increment that opened the
-  // frames.
+  // ... and both injections really went to the main frame: `frameIds: [0]`, no
+  // `allFrames` — criterion 1 of spec 24, during the increment that opened the frames.
   assert.equal(tabs.scriptCalls.length, 2);
   for (const call of tabs.scriptCalls) {
-    assert.equal(call.details.frameId, 0, "a read without `frame` addresses the main frame");
-    assert.equal(call.details.allFrames, undefined, "and asks for exactly one frame");
-    assert.equal(call.details.matchAboutBlank, undefined, "the main frame needs no about:blank");
+    assert.deepStrictEqual(
+      call.details.target.frameIds,
+      [0],
+      "a read without `frame` addresses the main frame",
+    );
+    assert.equal(call.details.target.allFrames, undefined, "and asks for exactly one frame");
   }
 
   // ... and the read call carries no filter: `want: null` is the main frame, and the page
@@ -13277,12 +13313,8 @@ test("read_withFrame_shouldSettleInTheAddressedFrameWithTheSameFilter", async ()
   assert.equal(tabs.scriptCalls.length, 2);
   assert.deepStrictEqual(tabs.channel.ops(), ["settle", "read"], "the read must settle first");
   const settleShape = { ...tabs.scriptCalls[0].details };
-  assert.deepStrictEqual(settleShape, {
-    file: "page-agent.js",
-    runAt: "document_idle",
-    allFrames: true,
-    matchAboutBlank: true,
-  });
+  assert.deepStrictEqual(settleShape.target, { tabId: 500, allFrames: true });
+  assert.deepStrictEqual(settleShape.files, [PAGE_AGENT_FILE]);
   assert.equal(tabs.channel.calls[0].message.args.want, "widget");
 
   // ... the read itself equally so, with the filter in its own message — the proving
@@ -13372,13 +13404,9 @@ test("inspect_withFrame_shouldAnswerTheElementsOfTheAddressedFrame", async () =>
   // ... and the single injection really addressed every frame: without the switch the
   // widget would never have answered at all,
   assert.equal(tabs.scriptCalls.length, 1);
-  const { file, ...injectionShape } = tabs.scriptCalls[0].details;
-  assert.equal(file, "page-agent.js");
-  assert.deepStrictEqual(injectionShape, {
-    runAt: "document_idle",
-    allFrames: true,
-    matchAboutBlank: true,
-  });
+  assert.deepStrictEqual(tabs.scriptCalls[0].details.target.allFrames, true);
+  assert.equal(tabs.scriptCalls[0].details.target.frameIds, undefined);
+  assert.deepStrictEqual(tabs.scriptCalls[0].details.files, [PAGE_AGENT_FILE]);
 
   // ... and the substring travelled to the page, where the filter compares it,
   assert.equal(tabs.channel.calls[0].message.args.want, "widget");
@@ -13444,13 +13472,15 @@ test("inspect_withoutFrame_shouldInjectIntoTheMainFrameOnly", async () => {
   assert.equal(answer.ok, true);
   assert.equal(answer.result.url, AGENT_URL);
 
-  // ... and the injection addressed exactly one frame: `frameId: 0`, no `allFrames`, no
-  // `matchAboutBlank` — criterion 1 of spec 25, during the increment that opened the
-  // frames,
+  // ... and the injection addressed exactly one frame: `frameIds: [0]`, no `allFrames`
+  // — criterion 1 of spec 25, during the increment that opened the frames,
   assert.equal(tabs.scriptCalls.length, 1);
-  assert.equal(tabs.scriptCalls[0].details.frameId, 0, "inspect without `frame` addresses the main frame");
-  assert.equal(tabs.scriptCalls[0].details.allFrames, undefined, "and asks for exactly one frame");
-  assert.equal(tabs.scriptCalls[0].details.matchAboutBlank, undefined, "the main frame needs no about:blank");
+  assert.deepStrictEqual(
+    tabs.scriptCalls[0].details.target.frameIds,
+    [0],
+    "inspect without `frame` addresses the main frame",
+  );
+  assert.equal(tabs.scriptCalls[0].details.target.allFrames, undefined, "and asks for exactly one frame");
 
   // ... and the call carries `null` as its filter, the main-frame answer of
   // `isAddressedFrame` — one shape for both callers instead of two requests.
@@ -13580,13 +13610,9 @@ test("eval_withFrame_shouldRunTheCodeInTheAddressedFrame", async () => {
 
   // ... the injection really addressed every frame, so both realms were asked,
   assert.equal(tabs.scriptCalls.length, 1);
-  const { file, ...injectionShape } = tabs.scriptCalls[0].details;
-  assert.equal(file, "page-agent.js");
-  assert.deepStrictEqual(injectionShape, {
-    runAt: "document_idle",
-    allFrames: true,
-    matchAboutBlank: true,
-  });
+  assert.equal(tabs.scriptCalls[0].details.target.allFrames, true);
+  assert.equal(tabs.scriptCalls[0].details.target.frameIds, undefined);
+  assert.deepStrictEqual(tabs.scriptCalls[0].details.files, [PAGE_AGENT_FILE]);
   assert.equal(tabs.channel.calls[0].message.args.want, "widget", "the filter travels to the page");
 
   // ... both frame clocks were seen and both are empty: the deadline timer of the frame
@@ -14351,16 +14377,26 @@ async function sendTranscriptAndWaitForTheWire(socket, id, clock, params = {}) {
  * The stub is as small as `background.js` allows: one normal window, one tab to create.
  * It answers the shape of every call the coordinator makes and nothing more, so a new
  * browser API in the coordinator fails here instead of working only in Firefox.
+ *
+ * `manifestVersion` is the one thing a case varies, and both toolbar namespaces are in
+ * the stub so that the choice is observable: the coordinator has to call the one the
+ * manifest version names, and a wrong pick would otherwise only show up as a toolbar
+ * button that never answers a click (spec 43, criterion 3). The recorded calls live in
+ * `toolbar`.
  */
-async function startCoordinatorWithoutWebRequest() {
+async function startCoordinatorWithoutWebRequest({ manifestVersion = 3 } = {}) {
   const created = [];
   const reads = { webRequest: 0 };
+  // One record per namespace, same shape for both: what was set and how often somebody
+  // registered for the click. Counted instead of ignored, because "the right one was
+  // used" and "both were used" must not look alike.
+  const toolbar = { action: newToolbarRecord(), browserAction: newToolbarRecord() };
   const browser = {
     runtime: {
       getURL: (path) => `moz-extension://coordinator/${path}`,
       // The coordinator reads the manifest version to pick `browserAction` or `action`
       // (spec 44), and it listens to the page's report about the socket.
-      getManifest: () => ({ version: MANIFEST_VERSION, manifest_version: 2 }),
+      getManifest: () => ({ version: MANIFEST_VERSION, manifest_version: manifestVersion }),
       onStartup: { addListener: () => {} },
       onMessage: { addListener: () => {} },
       sendMessage: async () => undefined,
@@ -14373,11 +14409,8 @@ async function startCoordinatorWithoutWebRequest() {
         set: async () => {},
       },
     },
-    browserAction: {
-      setIcon: async () => {},
-      setTitle: async () => {},
-      onClicked: { addListener: () => {} },
-    },
+    action: toolbarNamespaceFor(toolbar.action),
+    browserAction: toolbarNamespaceFor(toolbar.browserAction),
     windows: {
       get: async () => {
         throw new Error("no such window");
@@ -14410,7 +14443,34 @@ async function startCoordinatorWithoutWebRequest() {
   const sandbox = vm.createContext({ browser, console: captureConsole([]) });
   vm.runInNewContext(COORDINATOR_SOURCE, sandbox, { filename: "extension/background.js" });
   await settleAsyncWork();
-  return { reads, created };
+  return { reads, created, toolbar };
+}
+
+/** An empty record for one toolbar namespace: icon paths, titles, click registrations. */
+function newToolbarRecord() {
+  return { icons: [], titles: [], clickListeners: 0 };
+}
+
+/**
+ * One toolbar namespace as the coordinator sees it, recording into `record`.
+ *
+ * Defined as a function on purpose, once per namespace: a shared closure would record
+ * both namespaces into the same list and make the wrong pick look right.
+ */
+function toolbarNamespaceFor(record) {
+  return {
+    setIcon: async ({ path }) => {
+      record.icons.push(path);
+    },
+    setTitle: async ({ title }) => {
+      record.titles.push(title);
+    },
+    onClicked: {
+      addListener: () => {
+        record.clickListeners += 1;
+      },
+    },
+  };
 }
 
 /**
@@ -15624,6 +15684,48 @@ test("transcript_captureAndWaiter_shouldLiveInTheSameContext", async () => {
   assert.equal(page.fetched.length, 1);
   assert.equal(page.fetched[0].includes("expire=100"), true, page.fetched[0]);
   assert.equal(clock.pendingDelays().includes(TRANSCRIPT_CAPTION_DEADLINE_MS), false);
+});
+
+/**
+ * The toolbar namespace moves with the manifest version, and nothing else does.
+ *
+ * Under MV3 the button lives in `browser.action`; `browser.browserAction` is not an alias
+ * there, it is simply absent. The coordinator would then set an icon nobody sees and
+ * register a click nobody can make — silently, because both calls are in a `try` that
+ * only warns. So the stub carries both namespaces, and this case proves that exactly one
+ * of them is used, the one the manifest version names (spec 43, criterion 3).
+ */
+test("action_namespace_shouldFollowTheManifestVersion", async () => {
+  // GIVEN a manifest version and a browser that offers both namespaces,
+  for (const [manifestVersion, used, unused] of [
+    [3, "action", "browserAction"],
+    [2, "browserAction", "action"],
+  ]) {
+    // WHEN the coordinator starts and applies the state of the toolbar,
+    const coordinator = await startCoordinatorWithoutWebRequest({ manifestVersion });
+
+    // THEN the namespace of *this* version got the icon, the title and the click
+    // listener — the icon is the offline one, because the switch is on and no socket has
+    // reported yet,
+    assert.deepStrictEqual(
+      coordinator.toolbar[used].icons,
+      ["icons/bridge-offline.svg"],
+      `manifest ${manifestVersion} must set the icon through ${used}`,
+    );
+    assert.equal(coordinator.toolbar[used].titles.length, 1, `and the title through ${used}`);
+    assert.equal(
+      coordinator.toolbar[used].clickListeners,
+      1,
+      `and the click through ${used}`,
+    );
+
+    // ... and the other one was never touched: one namespace, not both, not `||`.
+    assert.deepStrictEqual(
+      coordinator.toolbar[unused],
+      newToolbarRecord(),
+      `manifest ${manifestVersion} must not touch ${unused}`,
+    );
+  }
 });
 
 /**

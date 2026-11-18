@@ -1,6 +1,6 @@
 ---
 description: Das Manifest auf MV3 — scripting statt executeScript, host_permissions statt permissions, und eine Messung, die belegt, dass die Verbindung im Tab wirklich hält.
-status: proposed
+status: active
 ---
 
 # Das Manifest auf MV3
@@ -23,7 +23,10 @@ von „funktioniert" auf „funktioniert nicht".
   Messbeleg (30,0 s) bleibt stehen, die Behauptung „persistent löst das" wird zu
   „der Tab löst das".
 - **Gemessen:** 8 h Leerlauf, Tab-Neustart, Tab-Discard, Browser-Neustart,
-  Mitschnitt nach dem Einschlafen des Hintergrunds.
+  Mitschnitt nach dem Einschlafen des Hintergrunds. **Die 8-h-Messung ist per
+  Betreiberentscheid (2026-11-18) offen** und steht als offener Punkt unter
+  `## Bekannte Lücken`; die übrigen Werkzeug- und Rechtefragen sind mit der
+  Handprobe belegt.
 
 ## Non-goals
 
@@ -93,6 +96,14 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
    ändert sich mit: `browser.browserAction.setIcon` ist unter MV3 `undefined`,
    das Icon bliebe stumm und kein Test merkte es. `test/manifest.test.js` bindet
    den Schlüssel an `manifest_version`.
+5. **Die CSP der Erweiterungsseiten muss der Manifest selbst nennen** — ein
+   Befund aus der Handprobe, der in dieser Spec nicht stand. MV3s
+   Vorgabe-Policy lädt unsichere Anfragen hoch, und das trifft `ws://`: mit der
+   Vorgabe starb der Socket zu `ws://127.0.0.1:18810` im TLS-Handshake
+   (Close-Code `1015`), die Bridge sah **keine** Verbindung und keine Zeile
+   sagte warum. `content_security_policy.extension_pages` steht deshalb im
+   Manifest, ohne `upgrade-insecure-requests` und mit `connect-src 'self' ws:
+   wss:`; ein Manifest-Fall pinnt es, weil der Fehler stumm ist.
 
 ## Risiken
 
@@ -105,6 +116,12 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
    antworten `not_readable` — der Betreiber sieht das in Kriterium 6.
    **`bridge.html` und `bridge.js` gehören nie dorthin** — sie tragen Token und
    Sitzung, und ein `"resources": ["*"]` machte sie für jede Webseite ladbar.
+3. **Die CSP ist der zweite stumme Fehler dieser Umstellung** (2026-11-18 in der
+   Handprobe gefunden, siehe `## Was die Umstellung im Code bedeutet`, Punkt 5):
+   MV3s Vorgabe-Policy hebt `ws://` auf `wss://` an, der Socket scheitert mit
+   `1015`, und weder Bridge noch Konsole sagen warum. Wer die Policy wieder
+   entfernt oder `upgrade-insecure-requests` hinzufügt, macht die lokale
+   Installation unbrauchbar.
 3. **Die Eventpage schläft weiter** — sie darf es. Jeder Zustand, der einen
    Schlaf überleben muss, gehört in `storage.local` oder in den Tab; ein
    In-Memory-Feld im Hintergrund ist ab hier ein Fehler.
@@ -117,11 +134,12 @@ braucht die Berechtigung nicht und erreicht dieselben Werkzeuge über
 ## Touch boundary
 
 **Erlaubt:** `extension/manifest.json`, `extension/background.js`,
-`extension/bridge.js` (Injection-Aufrufe), `extension/page-agent.js`,
-`test/manifest.test.js`, `test/extension.test.js`, `test/ci/e2e.test.js`,
-`docs/02`, `docs/43`, `docs/README.md`, `docs/PROJECT-STATE.md`, `CHANGELOG.md`.
-`docs/36`, `docs/40` und `docs/42` gehören zu `docs/42` und werden hier **nicht**
-angefasst.
+`extension/bridge.js` (Injection-Aufrufe), `test/manifest.test.js`,
+`test/extension.test.js`, `docs/02`, `docs/43`, `docs/README.md`,
+`docs/PROJECT-STATE.md`, `CHANGELOG.md`, `INSTALL.md`. `INSTALL.md` steht seit dem
+Umsetzen hier: die Zeile „the add-on has to be MV3 first“ ist mit dieser Spec
+falsch geworden. `docs/36`, `docs/40` und `docs/42` gehören zu `docs/42` und
+werden hier **nicht** angefasst.
 
 **Nicht:** `bridge-rs/**`, `test/fixtures/**`, `scripts/parity/**`,
 `extension/options.*`, `deploy/**`.
@@ -134,8 +152,10 @@ angefasst.
 | `test/manifest.test.js` | `manifest_shouldNotClaimAPersistentBackground` | kein `persistent` — der Grund von `docs/02` ist entfallen, nicht vergessen |
 | `test/manifest.test.js` | `manifest_shouldAskForScriptingAndHostPermissions` | `scripting` in `permissions`, `<all_urls>` in `host_permissions`, nicht mehr in `permissions` |
 | `test/manifest.test.js` | `manifest_shouldExposeThePageAgent` | `page-agent.js` steht in `web_accessible_resources`, und **nicht** `bridge.html`/`bridge.js` |
-| `test/extension.test.js` | die 16 Aufrufer gegen `scripting` gestubbt | die Werkzeuge antworten unverändert, `{frameId, result}` wird gelesen |
-| `test/extension.test.js` | `frames_withEmptyResultEntries_shouldNotShiftTheFilter` | der Frame-Filter entscheidet nach Inhalt, nicht nach Position |
+| `test/manifest.test.js` | `manifest_shouldLetTheBridgePageDialAPlainWebSocket` | die `extension_pages`-Policy erlaubt `ws:` und enthält kein `upgrade-insecure-requests` — ohne das stirbt der Socket im TLS-Handshake (`1015`, Befund der Handprobe) |
+| `test/extension.test.js` | die 16 Aufrufer gegen `scripting` gestubbt | die Werkzeuge antworten unverändert; gelesen wird `injected.length` (die Zahl der erreichten Rahmen), **nicht** `result` — bei `files` ist es `undefined` |
+| `test/extension.test.js` | `action_namespace_shouldFollowTheManifestVersion` | der Stub kennt beide Namespaces; der Koordinator benutzt genau den der `manifest_version` |
+| `test/extension.test.js` | `frames_withAnEmptyEntry_shouldNotShiftTheFilter` | der Frame-Filter entscheidet nach Inhalt, nicht nach Position |
 
 ## Acceptance criteria
 
@@ -210,12 +230,26 @@ Beweis: Kriterien 6, 7, 8, 9 mit Zeitstempeln.
 
 ## Bekannte Lücken
 
-- **Nichts ist gemessen.** Der Tab ist gebaut, das Manifest nicht.
-- **Die Eventpage darf schlafen — ob sie es tut, entscheidet Firefox.** Kriterium
-  8 prüft die Folge (Verbindung bleibt), nicht den Schlaf selbst.
+- **Die 8-Stunden-Messung steht aus — Betreiberentscheid (2026-11-18).** Kriterium 7
+  ist **offen**: gebaut und belegt ist, dass die Werkzeuge unter MV3 antworten
+  (Kriterien 1–5, Handprobe auf Port 18810/18811); nicht gemessen ist, ob die
+  Verbindung acht Stunden hält. Wer die Zahl braucht, fährt Kriterium 7 selbst.
+- **Die Eventpage darf schlafen — ob sie es tut, entscheidet Firefox.** Kriterien 8
+  und 9 prüfen die Folge (die Verbindung bleibt, der Mitschnitt überlebt), nicht den
+  Schlaf selbst.
+- **`about:blank`-Rahmen sind nicht gemessen.** MV2 hatte dafür `matchAboutBlank`;
+  die `scripting`-API kennt den Schlüssel nicht, und ob Firefox solche Rahmen mit
+  `allFrames` erreicht, sagt diese Spec nicht zu. Die Sammlung zählt die
+  **erreichten** Rahmen (`injected.length`), ein nicht erreichter Rahmen bleibt
+  stumm, statt den Aufruf scheitern zu lassen.
 - **`web_accessible_resources` ist der Preis für `files`.** Der Eintrag macht
   `page-agent.js` für Webseiten ladbar (nicht die Brücke, siehe Risiko 2) — das
   ist bewusst und steht im Manifest-Test.
+- **Die `extension_pages`-Policy ist breiter als die Vorgabe.** `connect-src
+  'self' ws: wss:` erlaubt jede `ws`/`wss`-Adresse, nicht nur den eingestellten
+  Endpunkt; eine Policy je Endpunkt kann ein statisches Manifest nicht
+  ausdrücken. Der Socket-Ziel bleibt trotzdem die Betreiber-Einstellung —
+  entschieden wird sie in den Optionen, nicht von der Seite.
 
 ## Open questions
 
@@ -244,9 +278,25 @@ Verdict.
 
 ## Log
 
+- **2026-11-18, umgesetzt (Stufen 1 und 2):** Manifest auf MV3, Injection auf
+  `browser.scripting.executeScript`, beide Injection-Kommentare mitgeschrieben,
+  `action_namespace_shouldFollowTheManifestVersion` in `test/extension.test.js`,
+  vier neue Fälle in `test/manifest.test.js`, `docs/02` mit dem einen „gilt bis“,
+  `INSTALL.md` ohne die MV3-Vorbedingung. **Nicht gemessen:** Kriterium 7 (8 h),
+  Kriterien 8 und 9 — Betreiberentscheid, siehe `## Bekannte Lücken`.
+- **2026-11-18, Befund aus der Handprobe und behoben:** mit der Vorgabe-CSP von
+  MV3 kam keine Verbindung zustande — Firefox hebt `ws://` auf `wss://` an, der
+  Socket schloss mit `1015` (TLS-Handshake), die Bridge loggte nichts. Beleg:
+  zwei Läufe ohne CSP-Policy, beide `/socket-close-1015`; mit
+  `content_security_policy.extension_pages = "script-src 'self'; object-src
+  'self'; connect-src 'self' ws: wss:"` stand `extension connected` nach 6,5 s im
+  Bridge-Log. Die Handprobe danach: `browser_open_tab` ⇒ `tabId 3`,
+  `https://example.com/`; `browser_read` auf denselben Tab ⇒ 917 Zeichen Text,
+  `via: innerText`, kein `not_readable` — `scripting` und `host_permissions`
+  greifen also wirklich.
 - **2026-11-17, Betreiberentscheid:** `scripting` wird genommen. Ohne sie fielen
   `read`, `click`, `type`, `inspect`, `eval`, `frames` und `transcript` weg, dazu
   das `settle` von `navigate` und `open_tab`. „Ich will auf Features nicht
-  verzichten."
+  verzichten.“
 - **2026-11-17, Abspaltung:** war Stufe 2 der gemeinsamen MV3-Spec; nach dem
   Review-Block geteilt (Roadmap 27+28).

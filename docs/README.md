@@ -133,7 +133,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `40-ci-ablauf.md` | Zwei Prüfungen statt einer: Unit-Tests ohne Browser bei jedem Push, dazu ein Blackbox-Workflow auf Windows — Firefox starten, XPI installieren, über MCP eine Seite öffnen, Beweis ist der Beacon der Seite selbst; dann Zip-Bau und Release | `active` |
 | `41-anleitungen.md` | Die zwei Nutzertexte im portablen Zip — `FIREFOX.md` (XPI laden, Endpunkt und Token, Warnung vor der Temporär-Eigenschaft) und `CLIENTS.md` (pi, Codex, OpenCode plus generisches Muster); Englisch nach STE100 als Schreibregel, ohne Lint | `active` |
 | `42-socket-im-tab.md` | Der Socket zieht aus dem Hintergrund in einen eigenen Tab (Roadmap 26) — die Voraussetzung für MV3; mit dem Umbau der Injection-Naht (`scripting` kennt kein `code`) und dem Ende des Wartens über zwei Kontexte | `proposed` |
-| `43-manifest-mv3.md` | Das Manifest auf MV3 (Roadmap 27+28): `scripting`, `host_permissions`, `docs/02` bewusst umgestellt — und danach 8 h Messung statt Behauptung | `proposed` |
+| `43-manifest-mv3.md` | Das Manifest auf MV3 (Roadmap 27+28): `scripting`, `host_permissions`, `docs/02` bewusst umgestellt — gebaut und im Browser belegt; die 8-h-Messung (Kriterium 7) bleibt auf Betreiberentscheid offen | `active` |
 | `44-schalter.md` | Der Schalter in der Symbolleiste: drei Icons (Brücke, gelber Blitz, überkreuzt), Vorgabe aus, `goodbye` an die Bridge vor dem Schließen (Roadmap 32) | `proposed` |
 | `45-injection-naht.md` | Die Injection-Naht (abgespalten von `docs/42`): Quelltext raus, `page-agent.js` plus `callId`-Nachrichten; die Frame-Inventur entsteht aus Selbstmeldungen, mit Frist und definiertem Verhalten für stumme und abgelehnte Frames | `active` |
 

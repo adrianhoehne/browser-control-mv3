@@ -329,8 +329,9 @@ dotfiles out, and refuses to write an archive Firefox would reject.
 3. Restart Firefox: the add-on is still there, and so are endpoint and token.
 
 **Release Firefox has no such switch.** A permanent install there needs a
-signature from AMO (`web-ext sign --channel=unlisted`), and the add-on has to be
-MV3 first — see `docs/ROADMAP.md`, rows 23, 24 and 26–28.
+signature from AMO (`web-ext sign --channel=unlisted`); the manifest has been
+MV3 since `docs/43`, so that is no longer the blocker — see `docs/ROADMAP.md`,
+rows 23 and 24.
 
 ## 5. Check it end to end
 

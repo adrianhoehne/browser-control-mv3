@@ -2094,9 +2094,9 @@
    * Reads the page of the agent tab — the tab the agent opened, not whichever one
    * the operator happens to be looking at.
    *
-   * A missing tab is decided *before* the injection: `executeScript` without a
-   * tab id would have nothing to run against, and a silent fallback to another
-   * tab would read a page nobody asked for.
+   * A missing tab is decided *before* the injection: `scripting.executeScript`
+   * without a tab id would have nothing to run against, and a silent fallback to
+   * another tab would read a page nobody asked for.
    *
    * The wait comes first and never blocks the answer: a tab that reports
    * `loading` is not settled by definition, and asking it anyway would only cost a
@@ -2248,9 +2248,9 @@
   /**
    * The file that carries the helpers and the dispatcher into the page (spec 45).
    *
-   * It has to be in `web_accessible_resources`: `tabs.executeScript({file})` resolves
-   * the name against the extension package, and MV2 refuses a file the manifest does
-   * not expose.
+   * It has to be in `web_accessible_resources`: `scripting.executeScript({files})`
+   * resolves the name against the extension package, and a file the manifest does not
+   * expose is refused (manifest, spec 43).
    */
   const PAGE_AGENT_FILE = "page-agent.js";
 
@@ -2316,9 +2316,11 @@
   /**
    * One call's answers, gathered until the expected number is in.
    *
-   * `expectedCount` is the frame count of the injection: `tabs.executeScript` with
-   * `{file, allFrames}` answers one entry per frame it reached, so the *length* of that
-   * result is how many answers this call may expect.
+   * `expectedCount` is the frame count of the injection: `scripting.executeScript`
+   * answers one entry per frame it reached, so the *length* of that result is how many
+   * answers this call may expect. The entries themselves carry `{frameId, result}` and
+   * `result` is `undefined` for a `files` injection — the answers come back over the
+   * channel below, never as a return value.
    *
    * Three rules the shape carries (spec 45, `## Die Naht`):
    *
@@ -2390,27 +2392,29 @@
   }
 
   /**
-   * The `executeScript` details of the page agent — the same two modes, one file.
+   * The `scripting.executeScript` details of the page agent — the same two modes, one file.
    *
-   * `{file}` hands back `undefined` and nothing else: the result of this injection is
-   * only good for its *length*, which is the number of frames that received the file.
+   * `target` names the frames, `files` the one file: every frame as a broadcast, or the
+   * main frame alone. `frameIds` and `allFrames` exclude each other in this API exactly
+   * as `frameId` and `allFrames` did in the old one.
    */
-  function pageAgentDetails(allFrames) {
-    return allFrames
-      ? { file: PAGE_AGENT_FILE, runAt: "document_idle", allFrames: true, matchAboutBlank: true }
-      : { file: PAGE_AGENT_FILE, runAt: "document_idle", frameId: 0 };
+  function pageAgentDetails(tabId, allFrames) {
+    return {
+      target: allFrames ? { tabId, allFrames: true } : { tabId, frameIds: [0] },
+      files: [PAGE_AGENT_FILE],
+    };
   }
 
   /**
-   * `tabs.executeScript` for one detail set, with the three codes a refusal can mean.
+   * `scripting.executeScript` for one detail set, with the three codes a refusal can mean.
    *
    * The single injection call of this file lives here on purpose: a page that refuses
-   * injection is refused for every snippet, and a second call site would be a second
-   * opinion about what that means.
+   * injection is refused for every call, and a second call site would be a second opinion
+   * about what that means.
    */
   async function injectScript(tabId, details, { head = true } = {}) {
     try {
-      return await browser.tabs.executeScript(tabId, details);
+      return await browser.scripting.executeScript(details);
     } catch (error) {
       // The rejection texts for `about:`, `view-source:`, the PDF viewer and AMO
       // are no contract; parsing them would break on the next browser version.
@@ -2469,12 +2473,12 @@
    * answers.
    *
    * The injection comes first and the message second: a frame that does not run the file
-   * yet would drop the message, and `executeScript` is what guarantees the listener is in
-   * place before anybody speaks.
+   * yet would drop the message, and `scripting.executeScript` is what guarantees the
+   * listener is in place before anybody speaks.
    */
   async function askPageAgent(tabId, request, { head = true, allFrames = false } = {}) {
     const callId = takeCallId();
-    const injected = await injectScript(tabId, pageAgentDetails(allFrames), { head });
+    const injected = await injectScript(tabId, pageAgentDetails(tabId, allFrames), { head });
     const collection = createReplyCollection(Array.isArray(injected) ? injected.length : 0);
     pendingReplies.set(callId, collection);
     try {

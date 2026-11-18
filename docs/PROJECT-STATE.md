@@ -8,6 +8,39 @@ Log oder einer Spec widerspricht, gilt der Beleg und diese Datei ist falsch.
 
 **Eine Übergabe-Datei gibt es nicht mehr.** Bis 2026-11-12 lag hier `docs/HANDOVER.md` (Stand, Entscheidungen, Betrieb); für die Veröffentlichung ist sie entfallen, weil sie Betriebsdaten trug. Der Stand steht in dieser Datei, das Verfahren in `CONTRIBUTING.md`, die Einrichtung in `INSTALL.md`.
 
+## Stand (2026-11-18): Spec 43 (Manifest auf MV3) ist `active`
+
+**Das Manifest ist MV3, die Werkzeuge antworten im echten Firefox.** `scripting`
+statt `tabs.executeScript`, `host_permissions` statt `<all_urls>` in `permissions`,
+`action` statt `browser_action`, Hintergrund als Eventpage ohne `persistent`,
+`page-agent.js` als MV3-`web_accessible_resources`. Gemessen wurde am 2026-11-18
+mit Firefox 152 (headless, web-ext) gegen einen eigenen Bridge-Prozess auf
+18810/18811: `extension connected` nach 6,5 s, `browser_open_tab` ⇒ `tabId 3`,
+`https://example.com/`, `browser_read` ⇒ 917 Zeichen `innerText`, kein
+`not_readable`.
+
+- **Ein Befund, der in keiner Spec stand:** mit der Vorgabe-CSP von MV3 kam
+  **keine** Verbindung zustande. Firefox lädt `ws://` auf `wss://` hoch, der
+  Socket schloss mit `1015` (TLS-Handshake), und weder Bridge noch Konsole sagten
+  warum. Im Manifest steht deshalb
+  `content_security_policy.extension_pages = "script-src 'self'; object-src
+  'self'; connect-src 'self' ws: wss:"`; ein Manifest-Fall pinnt es
+  (`manifest_shouldLetTheBridgePageDialAPlainWebSocket`).
+- **Tests:** `test/manifest.test.js` trägt die vier MV3-Pins plus den CSP-Pin;
+  `test/extension.test.js` stubbte die Injection auf `browser.scripting`
+  (`injectFile`, `{target, files}`, ein `{frameId, result}` je Rahmen) und hat
+  `action_namespace_shouldFollowTheManifestVersion`. 447 Fälle dort, 524 in
+  `npm test`.
+- **Offen beim Betreiber — Betreiberentscheid (2026-11-18):** die 8-h-Messung
+  (Kriterium 7 von `docs/43`); dazu Kriterien 8 und 9 (Schlaf der Eventpage,
+  Mitschnitt nach dem Schlaf) und Kriterium 6 (`permissions.contains` in der
+  Konsole der Erweiterung). Die Handprobe belegt, dass Rechte und Injection
+  greifen; sie belegt **nicht** acht Stunden.
+- **Beweise:** Kriterium 1 ⇒ `3 false true true true false`; `grep -Fc
+  'browser.tabs.executeScript('` in `bridge.js`/`background.js` ⇒ 0; `grep -Fc
+  'browser.scripting.executeScript(' extension/bridge.js` ⇒ 1; `npm test` 524
+  Fälle `# fail 0`; `npm run check` 0; Parität 7/7.
+
 ## Stand (2026-11-18): Spec 30 (Prozess und Konsole) ist `active`
 
 **Der Windows-Betrieb, Teil 1b, ist gebaut — im Rust-Port.** Die Spec war am 2026-11-06
@@ -85,7 +118,7 @@ schaltet aus — und sagt vorher Servus.
   E2E-Seam patcht beide Dateien und zählt **je Datei 1** (`state=1`).
 - **Der Klick lebt im Koordinator**, der Namespace hängt an der
   `manifest_version` (`browserAction` unter MV2, `action` unter MV3); ein Fall
-  fährt beide Richtungen. `extension.test.js` und `test/bridge-tab.test.js`
+  fährt beide Richtungen. Seit `docs/43` ist `action` der laufende Zweig. `extension.test.js` und `test/bridge-tab.test.js`
   brauchten dafür `storage.local`, `runtime.sendMessage`, `runtime.onMessage`
   und den Action-Stub.
 - **Ausschalten in der Reihenfolge:** `goodbye` auf die Leitung, `close(1000)`,
@@ -543,7 +576,7 @@ flowchart TB
 
     subgraph FF["Firefox – Betreiber-Rechner"]
         direction TB
-        subgraph BGI["bridge.js (Brücken-Tab, MV2)"]
+        subgraph BGI["bridge.js (Brücken-Tab, MV3)"]
             CONN["Verbindungsschicht<br/>Socket, Backoff, hello/welcome"]
             DISP["Dispatch<br/>answerRequest"]
             TABV["Tab-Verwaltung<br/>Liste, Limit 5"]
@@ -556,7 +589,7 @@ flowchart TB
         STORE[("storage.local<br/>Endpunkt, Token, Tab-Liste")]
     end
 
-    APIS["browser.* API<br/>tabs, storage, executeScript"]
+    APIS["browser.* API<br/>tabs, storage, scripting"]
     PAGE["Seite im Agenten-Tab"]
 
     PI -->|"HTTP POST /mcp, JSON-RPC, Bearer"| HTTPE
@@ -626,7 +659,7 @@ Komponente.
 | Dienst | systemd-User-Unit `browser-control.service`, Start über `bridge/bridge.mjs` | besitzt den Prozess und beide Ports; `port-owner.mjs` nennt bei `EADDRINUSE` den Besitzer |
 | Caddy | `wss://example.com/browser-control/ws` | TLS-Ende, Weiterleitung an `127.0.0.1:8110`; liegt **außerhalb** der Basic-Auth, weil ein Browser-WebSocket keinen `Authorization`-Header setzen kann |
 | Brücken-Tab | `extension/bridge.html` + `extension/bridge.js` | hält den Socket (wählt sich **raus**, Reconnect mit Backoff), beantwortet Anfragen, hält den Warte-Slot **je Tab**, nutzt `tabs`/`executeScript`, sammelt den `webRequest`-Mitschnitt |
-| Koordinator | `extension/background.js` (MV2, `persistent: true`) | legt genau einen angepinnten Brücken-Tab an und hält ihn; kein Socket, kein Zustand über den Tab hinaus |
+| Koordinator | `extension/background.js` (MV3-Eventpage, ohne `persistent`) | legt genau einen angepinnten Brücken-Tab an und hält ihn; kein Socket, kein Zustand über den Tab hinaus |
 | Optionsseite | `extension/options.{html,js}` → `storage.local` | Endpunkt, Token, Schalter `allowPasswordFields` / `allowEval` / `allowScreenshot` (alle Default aus) |
 | Die Seite selbst | Betreiber-Tab | dort läuft der injizierte Code (Lesen, Klicken, Tippen, `eval`) |
 
@@ -742,7 +775,7 @@ Im Code:
 | Teil | Dateien | Zustand |
 |---|---|---|
 | Bridge (Node ≥ 22, keine Abhängigkeiten) | `bridge/{protocol,websocket,config,bridge,hub}.mjs` | lauscht auf `BC_BIND`, prüft Token, fragt `status`, loggt auf stderr |
-| Extension (Firefox MV2, persistenter Background) | `extension/{manifest.json,protocol.js,background.js,bridge.html,bridge.js,options.html,options.js}` | der Brücken-Tab hält die Verbindung (WSS, Reconnect mit Backoff), der Hintergrund hält den Tab; Optionsseite für Endpunkt und Token |
+| Extension (Firefox MV3, Eventpage) | `extension/{manifest.json,protocol.js,background.js,bridge.html,bridge.js,options.html,options.js}` | der Brücken-Tab hält die Verbindung (WSS, Reconnect mit Backoff), der Hintergrund hält den Tab; Optionsseite für Endpunkt und Token |
 | Prüfungen | `test/*.test.js`, `test/fixtures/fake-extension.mjs` | 587 Fälle, `npm test` grün (damals 243), ohne Browser und ohne Netz |
 
 Caddy und Token-Datei sind eingerichtet, die Extension läuft als temporäre
@@ -890,6 +923,9 @@ verhandeln; wenn eine davon falsch ist, gehört das in eine Spec mit
   die Verbindung (`1001`), und die Extension kommt nicht von selbst zurück.
   Inkrement 2 (Spec 02) stellt den Background deshalb auf MV2 mit
   `persistent: true` um — umgesetzt, das Code-Review-Gate ist passiert.
+  **Überholt, nicht widerlegt:** `docs/43` hat das Manifest wieder auf MV3
+  gestellt, weil der Socket seit `docs/42` im Brücken-Tab liegt und der
+  Hintergrund nicht mehr die Verbindung trägt.
 - **Spec 02 ist `active` und gemessen** (2026-10-23): `persistent: true` beendet
   den 30-Sekunden-Abbruch — die Verbindung hielt 10 min 31 s ohne
   Trennungszeile (`connected` 1, `disconnected` 0, genau eine Verbindung auf

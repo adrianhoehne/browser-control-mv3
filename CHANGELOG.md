@@ -5,6 +5,37 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+**Spec 43 (Manifest auf MV3) ist `active`** — das Manifest steht auf MV3, die
+Werkzeuge antworten im echten Firefox.
+
+- **Manifest:** `manifest_version: 3`, Hintergrund als Eventpage ohne
+  `persistent`, `permissions: ["tabs","storage","webRequest","scripting"]` plus
+  `host_permissions: ["<all_urls>"]`, `action` statt `browser_action`, und
+  `web_accessible_resources` in MV3-Form (`[{resources: ["page-agent.js"],
+  matches: ["<all_urls>"]}]`) — `bridge.html`/`bridge.js` bleiben ausdrücklich
+  draußen.
+- **Injection:** `browser.tabs.executeScript` ist durch
+  `browser.scripting.executeScript({target: {tabId, frameIds|[allFrames]},
+  files: ["page-agent.js"]})` ersetzt. Gelesen wird nur `injected.length`; die
+  Antworten laufen weiter über den `callId`-Kanal (`docs/45`).
+- **Befund und Fix, der in keiner Spec stand:** mit der Vorgabe-CSP von MV3 kam
+  keine Verbindung zustande — Firefox lädt `ws://` auf `wss://` hoch, der Socket
+  schloss mit `1015`, die Bridge loggte nichts. Das Manifest trägt jetzt
+  `content_security_policy.extension_pages` mit `connect-src 'self' ws: wss:`
+  und ohne `upgrade-insecure-requests`; ein Manifest-Fall pinnt es.
+- **Tests:** vier MV3-Pins und der CSP-Pin in `test/manifest.test.js`,
+  `action_namespace_shouldFollowTheManifestVersion` in `test/extension.test.js`,
+  dessen Injection-Stub auf `browser.scripting` umgestellt ist. `npm test` 524
+  Fälle `# fail 0`, `npm run check` 0, Parität 7/7.
+- **Gemessen am 2026-11-18** (Firefox 152 headless, web-ext, eigener
+  Bridge-Prozess auf 18810/18811): `extension connected` nach 6,5 s,
+  `browser_open_tab` ⇒ `tabId 3`, `https://example.com/`; `browser_read` ⇒ 917
+  Zeichen `innerText`, kein `not_readable`. **Offen (Betreiberentscheid):** die
+  8-h-Messung (Kriterium 7 von `docs/43`) sowie Kriterien 6, 8 und 9.
+- **Docs:** `docs/02` trägt den einen Satz „gilt bis `docs/43`“ (Messbeleg
+  30,0 s bleibt stehen), `INSTALL.md` hat die überholte Zeile „the add-on has to
+  be MV3 first" verloren.
+
 **Spec 30 (Windows-Betrieb, Teil 1b) ist `active`** — zwei Lücken im Rust-Port
 geschlossen, der Rest war schon da.
 
