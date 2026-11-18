@@ -1,6 +1,6 @@
 ---
 description: Der Schalter in der Symbolleiste — drei Icons (Brücke, gelber Blitz, überkreuzt), Vorgabe aus, und ein goodbye an die Bridge, bevor der Tab verschwindet.
-status: proposed
+status: active
 ---
 
 # Der Schalter

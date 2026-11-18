@@ -1,6 +1,6 @@
 ---
 description: Die Injection-Naht — Quelltext raus, Datei plus Nachrichten; 16 Aufrufstellen antworten danach unverändert, und die Frame-Inventur entsteht aus Selbstmeldungen.
-status: proposed
+status: active
 ---
 
 # Die Injection-Naht

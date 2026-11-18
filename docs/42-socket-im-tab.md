@@ -1,6 +1,6 @@
 ---
 description: Der Socket zieht aus dem Hintergrund in einen eigenen Tab — Voraussetzung für MV3; dazu der Umbau der Injection-Naht.
-status: proposed
+status: active
 ---
 
 # Der Socket zieht in den Tab
