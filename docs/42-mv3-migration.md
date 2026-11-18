@@ -286,7 +286,7 @@ difference too"). Ohne den Typ auf beiden Seiten wird CI rot.
 | `docs/02-persistenter-background.md` | `## Non-goals` („Kein Socket im Tab") | **überholt**: der Socket im Tab ist jetzt das Design. Der Satz wird zu „erledigt durch `docs/42`" |
 | `docs/02-persistenter-background.md` | `## Ziel`, `## Testing`, Kriterien | der persistente MV2-Hintergrund ist **nicht mehr** die Lösung; die Kriterien werden auf „der Brücken-Tab hält die Verbindung" umgeschrieben |
 | `docs/34-spurendatei-beobachten.md` | `## Bekannte Lücken` | die Mitschrift lebt jetzt im Eventpage-Hintergrund und kann mit ihm einschlafen — offener Punkt, gemessen in Stufe 3 |
-| `docs/40-ci-ablauf.md` | `## Der E2E-Ablauf`, Ankertabelle | die zwei Anker liegen nach der Migration in `extension/bridge.js`. **Ein dritter kommt dazu:** der E2E muss den Zustand auf `on` setzen — die Vorgabe ist `off`, sonst verbindet die Test-Kopie nie |
+| `docs/40-ci-ablauf.md` | `## Der E2E-Ablauf`, Ankertabelle | die zwei Anker liegen dann in `extension/bridge.js`. Ein dritter kommt dazu: der E2E setzt `on`, weil die Vorgabe `off` ist |
 | `docs/39-portables-paket.md`, `docs/41-anleitungen.md` | `FIREFOX.md` | die Anleitung bekommt einen Schritt: **Icon anklicken**, sonst ist die Erweiterung nach der Installation bewusst aus; der Anleitungstext zählt danach einen Schritt mehr |
 
 ## Bekannte Lücken
