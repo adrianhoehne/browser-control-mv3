@@ -83,6 +83,16 @@ Host-Berechtigung hat — deshalb braucht der Mitschnitt keinen zweiten Kontext.
 existiert, und öffnet ihn wieder, wenn er verschwindet. Er hält **keine**
 Sitzung und **keinen** Zustand, der einen Tab überlebt.
 
+**Der Brücken-Tab erscheint nicht in `browser_status`.** Die Statusliste filtert
+jede URL, die mit `browser.runtime.getURL("bridge.html")` beginnt — sonst sieht
+der Agent einen Tab, den er nicht anfassen darf, und das lädt zum Probieren ein.
+Filtern ist **paritätssicher:** die eingefrorenen Artefakte kommen von der
+Fixture, nicht aus der Erweiterung, und enthalten keinen solchen Tab; ein neues
+Feld im Status wäre es nicht. Ansprechen kann er ihn ohnehin nicht:
+`resolveAgentTab` akzeptiert nur Ids aus der Agenten-Tab-Liste, dort steht er
+nie — `read`, `eval`, `click`, `screenshot` und `close_tab` antworten
+`no_agent_tab`.
+
 **Der Tab ist angepinnt und landet im zuletzt benutzten Fenster.**
 `tabs.create({url, pinned: true, windowId})` — ein Aufruf, nicht `create` plus
 `update`. Die `windowId` merkt sich der Koordinator vom letzten Brücken-Tab; ist
@@ -246,6 +256,13 @@ YouTube-Seite lief in `BC_CALL_TIMEOUT_MS` (20 s, Vorgabe) und antwortete nicht;
 der zweite war sofort da. Das ist älter als dieser Umbau, aber jetzt zum ersten
 Mal gemessen.
 
+13. **Der Brücken-Tab bleibt unsichtbar.** `browser_status` listet keinen Tab,
+    dessen Url `bridge.html` enthält: über MCP aufrufen und
+    `grep -c 'bridge.html'` auf die Antwort ⇒ **0**.
+14. **Der Brücken-Tab ist unantastbar.** `browser_read` mit seiner Tab-Id ⇒
+    `no_agent_tab`; `browser_close_tab` auf ihn ⇒ `no_agent_tab` (er ist kein
+    Agenten-Tab).
+
 ## Dev plan
 
 **Stufe 1 — der Tab hält den Socket, das Manifest bleibt MV2**
@@ -353,6 +370,9 @@ neu.
 ## Log
 
 - **2026-11-17, Betreiberentscheid:** Branch `mv3`, Spec zuerst.
+- **2026-11-18, Lücke geschlossen:** bei der Teilung war verlorengegangen, dass
+  der Brücken-Tab in `browser_status` sichtbar ist. Kriterien 13 und 14
+  ergänzt; gebaut wird es zusammen mit `docs/44`.
 - **2026-11-18, Messung durchgeführt:** Kriterien 9, 10 und 12 sind mit einem
   sichtbaren Firefox auf bigdelli gelaufen (Dienst, echter Token, Repo-Kopie mit
   eingebautem Token). Die Zahlen stehen unter `## Die Messung`.
