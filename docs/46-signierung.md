@@ -132,7 +132,7 @@ portablen Zips.
    doppelklicken, installieren, Firefox beenden und starten ⇒ die Erweiterung ist
    **noch da**, der Brücken-Tab erscheint, die Bridge loggt `extension
    connected`. Damit ist Kriterium 11 aus `docs/42` erstmals messbar.
-6. **Die Anleitung ist umgestellt.** `docs/portable/FIREFOX.md` nennt den
+6. **Die Anleitung nennt den Doppelklick.** `docs/portable/FIREFOX.md` nennt den
    Doppelklick und **nicht** mehr `about:debugging`;
    `grep -c 'about:debugging' docs/portable/FIREFOX.md` ⇒ **0** (oder nur in
    einem Absatz „wenn du keine signierte Datei hast").
@@ -173,7 +173,7 @@ erfüllt".
 - **`unlisted` aktualisiert sich nicht selbst.** Jede neue Version installiert
   der Nutzer per Doppelklick. Das steht in der Anleitung.
 - **Das Review kann dauern.** Bei `<all_urls>` und `scripting` prüft Mozilla
-  möglicherweise von Hand; die Wartezeit ist nicht planbar.
+  vielleicht von Hand; die Wartezeit ist nicht planbar.
 - **Die exakte Form der Daten-Erklärung ist ungemessen.** Sie wird beim Bauen
   ermittelt und nachgetragen.
 
