@@ -256,11 +256,11 @@ Windows answer at all, the second on purpose:
   its client leaves, and one that keeps running on a null device). `scripts/parity.sh`
   cannot see the difference, because it only ever runs on Linux.
 
-Ctrl+Break is **not** wired up: `bridge/bridge.mjs` handles `SIGTERM` and `SIGINT` and
-nothing else, and a second exit path that nothing measures is a second exit path that can
-rot. The line for the one signal Windows produces is `received SIGINT`, not
-`received SIGTERM` — claiming a signal the platform does not have would be a lie in the
-journal.
+Ctrl+Break is wired up since `docs/30`: `tokio::signal::windows::ctrl_break` runs next to
+`ctrl_c` and ends the same way, because the operator starts the bridge from a console and
+`Strg+Untbr` is the second signal that console produces. The line for a console interrupt
+is `received SIGINT`, not `received SIGTERM` — claiming a signal the platform does not
+have would be a lie in the journal.
 
 ### Installing the start path
 

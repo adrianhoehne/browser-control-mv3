@@ -8,6 +8,32 @@ Log oder einer Spec widerspricht, gilt der Beleg und diese Datei ist falsch.
 
 **Eine Übergabe-Datei gibt es nicht mehr.** Bis 2026-11-12 lag hier `docs/HANDOVER.md` (Stand, Entscheidungen, Betrieb); für die Veröffentlichung ist sie entfallen, weil sie Betriebsdaten trug. Der Stand steht in dieser Datei, das Verfahren in `CONTRIBUTING.md`, die Einrichtung in `INSTALL.md`.
 
+## Stand (2026-11-18): Spec 30 (Prozess und Konsole) ist `active`
+
+**Der Windows-Betrieb, Teil 1b, ist gebaut — im Rust-Port.** Die Spec war am 2026-11-06
+gegen die Node-Bridge geschrieben worden; deren Dateien sind mit `docs/38` gelöscht.
+Deshalb wurde vor dem Bau jeder Ziel-Punkt und jedes Kriterium gegen den Rust-Stand
+geprüft (`docs/30`, `## Prüfung gegen den Rust-Stand`). Gebaut wurden die zwei Dinge, die
+wirklich fehlten:
+
+- **`Strg+Untbr` beendet die Bridge** wie `Strg+C`: `ctrl_break` neben `ctrl_c`
+  (`bridge-rs/src/main.rs:422`–`:423`), dieselbe Zeile `received SIGBREAK, shutting
+  down`, derselbe Exit-0-Pfad. `docs/38` Stufe 3 hatte den Signal bewusst weggelassen, um
+  zeichengleich zur Vorlage zu bleiben.
+- **Das MCP über stdio schweigt in einer Konsole:** `main.rs:129` startet den Dienst nur
+  bei `!stdio::stdin_is_a_console()` (`stdio.rs:186`, `std::io::IsTerminal`). Pipe,
+  Socketpair und `/dev/null` — pi, Paritäts-Treiber, systemd — sind unverändert.
+
+**Schon mit `docs/38` Stufe 3 erfüllt** und nur noch nachgeprüft: Portbesitzer auf
+Windows (`GetExtendedTcpTable`), Startzeilen, Exit 1/2, die Besitzerzeile, der
+Dienst-Ersatz (Task Scheduler). **Überholt** sind Kriterium 3 (die Node-Skip-Zählung) und
+Kriterium 6 (die zwei `INSTALL.md`-Empfehlungszeilen, mit `docs/41` neu geschrieben).
+
+**Offen beim Betreiber:** die Messung auf einem Windows-Rechner — `Strg+C`/`Strg+Untbr`
+kommen an, stdout bleibt 0 Byte, `tools/list` antwortet (`INSTALL.md` § 10). Der Windows-Bau
+ist kompiliert und lint-frei, nicht gelaufen. **Belege:** Parität 7/7, `cargo test` 283
+Fälle 0 failed, `npm test` 522 Fälle `# fail 0`, `npm run check` 0.
+
 ## Stand (2026-11-18): Spec 28 (Log-Hygiene) ist `active`
 
 **Die Whitelist für den Debug-Block ist abgeschlossen** — Code seit 2026-10-30
@@ -440,6 +466,7 @@ Node läuft — der Windows-Lauf selbst ist Kriterium 2 von Spec 30.
 Prozess und Konsole auf Windows (`SIGBREAK`, stilles stdout im Terminal,
 `portInUseLine`, Amendments an `docs/18`). Sie entstand am 2026-11-06 durch Teilung
 einer dreifach geblockten Spec; die Blocker (N1, N2) sind dort eingearbeitet.
+**Überholt 2026-11-18:** gebaut im Rust-Port, `docs/30` ist `active` (Abschnitt oben).
 
 **Spec 28 (Log-Hygiene) ist weiterhin `proposed`** — Code fertig, beide
 Code-Reviews `✅`, offen: Amendments in `docs/05`, `docs/07`, `docs/08`, `docs/09`,
@@ -451,6 +478,8 @@ die veralteten Verweise auf die gelöschten Redaktionshelfer und die Live-Messun
 Offen im Betriebsteil: der Windows-Rechner für die Messungen aus Spec 30, und die
 90-Sekunden-Frist der Abnahme (`test/mcp.test.js` lief am 2026-11-06 in 61,4 s von
 90 — 1,47 ×, die Begründung in `CONTRIBUTING.md` rechnet mit 1,5 ×).
+**Überholt 2026-11-18:** `test/mcp.test.js` ist mit der Node-Bridge gelöscht, die Frist
+betrifft die Bridge nicht mehr; offen bleibt allein die Windows-Messung.
 
 ## Stand (2026-10-28)
 

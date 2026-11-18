@@ -5,6 +5,29 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
+**Spec 30 (Windows-Betrieb, Teil 1b) ist `active`** — zwei Lücken im Rust-Port
+geschlossen, der Rest war schon da.
+
+- **`Strg+Untbr` beendet die Bridge** wie `Strg+C`: `ctrl_break` neben `ctrl_c`
+  (`bridge-rs/src/main.rs`), dieselbe Zeile `received SIGBREAK, shutting down`, Exit 0.
+  `docs/38` Stufe 3 hatte den Signal bewusst weggelassen, um zeichengleich zur gelöschten
+  Node-Vorlage zu bleiben — der Paritätsmaßstab läuft auf Linux und sieht keinen der
+  beiden Handgriffe.
+- **Das MCP über stdio schweigt in einer Konsole:** `stdio::serve` startet nur noch, wenn
+  stdin keine Konsole ist (`std::io::IsTerminal`, `bridge-rs/src/stdio.rs`). Pipe,
+  Socketpair und `/dev/null` (pi, Paritäts-Treiber, systemd) sind unverändert; in einem
+  Terminal hätte die Vorlage den ersten Tastendruck als Parse-Fehler auf stdout
+  beantwortet.
+- **Überholt:** Kriterium 3 (Skip-Zählung der Node-Tests) und Kriterium 6 (zwei
+  `INSTALL.md`-Empfehlungszeilen) haben kein Subjekt mehr; Kriterium 4 ist gegen
+  `GetExtendedTcpTable` nachgeprüft. Die Amendments an `docs/18` sind fallengelassen — der
+  Absatz beschreibt eine gelöschte Datei.
+- **Beweise:** `cargo build`/`cargo clippy` für `x86_64-pc-windows-gnu` ⇒ 0, Parität 7/7,
+  `cargo test` 283 Fälle 0 failed, `npm test` 522 Fälle `# fail 0`, `npm run check` 0.
+- **Offen beim Betreiber:** die Windows-Messung (`Strg+C`/`Strg+Untbr` im echten
+  Konsolenfenster, stdout 0 Byte, `tools/list`) und der Nachtrag in `docs/38` Stufe 3 und
+  `bridge-rs/README.md`, die den `Ctrl+Break` noch als „nicht verdrahtet" führen.
+
 **Spec 28 (Log-Hygiene) ist abgeschlossen und `active`** — kein Code, eine
 Dokumentation: die Whitelist für den Debug-Block war seit 2026-10-30 gebaut,
 jetzt sind die Amendments nachgezogen, die bekannten Lücken gegen den Rust-Port
