@@ -49,6 +49,7 @@ Reload.
 
 - **Kein `manifest_version: 3`.** Das ist `docs/43`.
 - **Kein Schalter, keine Icons, kein `goodbye`.** Das ist `docs/44`.
+- **Kein Umbau der Injection-Naht.** Das ist `docs/45`.
 - **Keine neue Berechtigung.** `tabs`, `storage`, `<all_urls>`, `webRequest`
   bleiben, wie sie sind.
 - **Keine Änderung an der Bridge** — weder Protokoll noch Logzeile noch
@@ -98,28 +99,12 @@ Weil `query` und `create` nicht atomar sind, braucht der Koordinator einen
 Tab, stirbt der Timer mit ihm. Ein Hintergrund, der weiterverbindet, wäre der
 Fehler von `docs/02` in neuem Gewand.
 
-## Der Umbau der Injection-Naht
+## Die Injection-Naht ist eine eigene Spec
 
-`injectPageCode` reicht heute `{ code, runAt, allFrames, matchAboutBlank }` an
-`browser.tabs.executeScript`. `pageSnippetCode` baut diesen `code` aus einer
-Funktion plus den drei Helfern als **Text**.
-
-**MV3s `scripting.executeScript` kennt kein `code`.** Die Schnittstelle trägt
-`func`, `args` und `files` (MDN, `scripting.ScriptInjection`); Funktionen reisen
-in `args` nicht mit. Damit ist `pageSnippetCode` nicht „umgestellt", sondern
-**ersetzt**:
-
-- eine **Content-Script-Datei** `page-agent.js` mit den drei Helfern und einem
-  Dispatcher,
-- geladen als Datei (`tabs.executeScript({file})` unter MV2, `scripting.executeScript({files})` unter MV3); `func` scheidet aus: sonst reisen die drei Helfer wieder als Text mit,
-- der Aufruf übergibt `{callId, op, args}` als Nachricht; die Antwort kommt als
-  Nachricht zurück (`{callId, ok, value}`), **nicht** als Rückgabewert — bei
-  `{file}` ist `result` `undefined`.
-
-**Diese Arbeit ist der Kern des Inkrements** und bekommt deshalb eine eigene
-Stufe mit eigenem Beweis: alle 16 Aufrufstellen müssen danach unverändert
-antworten, und `framesOf`/der Frame-Filter (`docs/24`) entscheiden weiterhin
-nach **Inhalt**, nicht nach Position.
+`pageSnippetCode` baut heute Quelltext, und `scripting.executeScript` kennt kein
+`code`. Dieser Umbau — 16 Aufrufstellen, drei Helfer, `callId`-Nachrichten — ist
+`docs/45-injection-naht.md`. Er läuft **nach** dieser Spec, weil die 16 Aufrufer
+dann in `bridge.js` liegen.
 
 ## Risiken
 
@@ -173,7 +158,7 @@ nach **Inhalt**, nicht nach Position.
 | `test/bridge-tab.test.js` | `bridgeTab_shouldNeverUseAPrivateWindow` | ein privates Fenster ist keine Adresse |
 | `test/bridge-tab.test.js` | `bridgeTab_shouldNeverLandInAContainer` | der Tab entsteht im Default-Container (`cookieStoreId === "firefox-default"`) |
 | `test/bridge-tab.test.js` | `bridgeTab_whenTheWindowIsGone_shouldOpenANewOne` | gemerkte `windowId` weg ⇒ neues Fenster |
-| `test/extension.test.js` | die 16 Injection-Aufrufer, Harness auf `page-agent.js` umgestellt | die Werkzeuge antworten unverändert |
+| `test/extension.test.js` | die 16 Aufrufer, Harness auf den Tab umgestellt | die Werkzeuge antworten unverändert (die Naht selbst ist `docs/45`) |
 | `test/extension.test.js` | `transcript_captureAndWaiter_shouldLiveInTheSameContext` | Listener und Wartender im selben Kontext (kein Promise über den Worker) |
 | `test/manifest.test.js` | die zwei `background.js`-Leser auf die neue Datei | `ALLOW_EVAL`/`ALLOW_SCREENSHOT` werden weiter gepinnt |
 | `test/ci/e2e.test.js` | `e2e_seamPatch_shouldFindBothLines` (Pfad **und** Inhalt) | der Seam findet seine zwei Zeilen in `bridge.js` |
@@ -201,7 +186,8 @@ nach **Inhalt**, nicht nach Position.
    `cookieStoreId === "firefox-default"`; und `bridgeTab_whenTheWindowIsGone_shouldOpenANewOne`
    ⇒ der neue Tab entsteht in einem neuen Fenster.
 6. **Die Werkzeuge antworten unverändert.** `npm test` ⇒ `# fail 0`,
-   `# cancelled 0`; `node --test test/bridge-tab.test.js` ⇒ `# fail 0`.
+   `# cancelled 0`; `node --test test/bridge-tab.test.js` ⇒ `# fail 0`. Die
+   Injection-Naht prüft `docs/45` mit eigenen Kriterien.
 7. **Der Seam findet seine Zeilen.** `node scripts/e2e/build-test-extension.mjs
    --self-check --source extension` ⇒ Exit **0**, und die Ausgabe nennt
    **`endpoint=1`** und **`token=1`** (gezählt je für sich, nicht als ein
@@ -255,59 +241,11 @@ ist `npm run test:ci` rot, weil `checkSeams` seine zwei Zeilen nicht mehr findet
 
 `docs/36` (Kriterium 1 pinnt die Endpunkt-Zeile in `background.js`) und `docs/40`
 (Ankertabelle) ziehen **im selben Commit** mit um — der Seam-Fall liest den Pfad.
+Die Injection-Naht folgt als `docs/45`.
 
 Beweis: Kriterien 1, 2, 4, 6, 7, 8.
 
-**Stufe 2 — die Injection-Naht**
-
-Dateien: `extension/page-agent.js` (neu, die drei Helfer und der Dispatcher),
-`extension/background.js`/`bridge.js` (`injectPageCode` und
-`pageSnippetCode`-Aufrufer), `test/extension.test.js` (die 16 Aufrufstellen).
-
-Der Umbau läuft **noch unter MV2**: `browser.tabs.executeScript(tabId, {file:
-"page-agent.js", runAt: "document_idle", allFrames, matchAboutBlank})` plus eine
-`{op, args}`-Nachricht an den Dispatcher. Der **API-Tausch** auf
-`browser.scripting` samt `scripting`-Berechtigung gehört zu `docs/43` — hier
-verbietet das Non-Goal „keine neue Berechtigung" ihn.
-
-**Der Rückgabewert fällt dabei weg.** `tabs.executeScript({code})` gab den Wert
-der Funktion zurück, `{file}` gibt `undefined` — die Antwort kommt deshalb als
-Nachricht: der Aufrufer schickt `{callId, op, args}` per `tabs.sendMessage` an
-den Frame, der Dispatcher antwortet mit `{callId, ok, value}` und die Seite
-ordnet die Antwort über `callId` zu.
-
-**Für die Frame-Inventur ist das eine Vereinfachung:** statt eines Arrays in
-unversprochener Reihenfolge (heute entscheidet `framesOf` nach *Inhalt*, weil
-`tabs.executeScript` mit `allFrames` nicht sortiert liefert) meldet sich jeder
-Frame selbst, und `sender.frameId` steht in der Nachricht.
-
-**Drei Dinge, die die Naht deshalb festlegen muss:**
-
-1. **Die Frame-Liste kommt aus den Selbstmeldungen.** Ein Aufruf schickt
-   `{op: "inventory"}` ohne `frameId` an den Tab; jeder Frame antwortet, und die
-   Liste entsteht aus den Antworten. Es gibt keine Frame-Liste aus der Injection
-   mehr — `framesOf` darf deshalb kein Array erwarten, sonst wirft es sofort
-   `frames_failed`.
-2. **Die Frist ist `PROTOCOL.CALL_TIMEOUT_MS`** (dieselbe wie für den
-   Werkzeugaufruf). Ein stummer Frame hängt sonst bis zum Bridge-Timeout, und der
-   Agent sieht `ExtensionTimeout` statt einer Antwort. Der Fall heißt
-   `injection_whenAFrameStaysSilent_shouldRejectAtTheDeadline`.
-3. **Ein abgelehntes `tabs.sendMessage`** („Could not establish connection.
-   Receiving end does not exist") ist **kein** Fehler, sondern der Normalfall
-   nach jeder Navigation im Frame. Er wird wie ein stummer Frame behandelt:
-   Werkzeug ⇒ `not_readable`, Inventur ⇒ `frames_failed`. Der Filter nach Inhalt
-   bleibt, weil genau dieser Fall Einträge leer lässt.
-
-Was diese Stufe liefert: **kein Quelltext mehr auf der Leitung.** Die drei
-Helfer reisen als Datei, nicht als Text; `pageSnippetCode` verschwindet.
-
-Beweis: Kriterium 6 mit den 16 Aufrufern; `grep -Fc 'pageSnippetCode('
-extension/bridge.js` ⇒ **0** und `grep -Fc 'pageSnippetCode('
-extension/background.js` ⇒ **0** (beide Dateien, weil der Werkzeugpfad nach
-Stufe 1 in `bridge.js` liegt — ein `grep 'code:'` zählt 30 Treffer, davon
-Fehlercodes, und wäre nie grün).
-
-**Stufe 3 — der Mitschnitt zieht mit**
+**Stufe 2 — der Mitschnitt zieht mit**
 
 Dateien: `extension/bridge.js` (Listener und Wartender), `extension/background.js`
 (Listener raus), `test/extension.test.js` (`transcript_captureAndWaiter_…`),
@@ -315,7 +253,7 @@ Dateien: `extension/bridge.js` (Listener und Wartender), `extension/background.j
 
 Beweis: Kriterien 12, 13; und die bestehenden Transkript-Fälle bleiben grün.
 
-**Stufe 4 — die Messung**
+**Stufe 3 — die Messung**
 
 Dateien: `docs/42` (Messwerte), `docs/PROJECT-STATE.md`.
 
@@ -365,6 +303,10 @@ neu.
 ## Log
 
 - **2026-11-17, Betreiberentscheid:** Branch `mv3`, Spec zuerst.
+- **2026-11-17, Teilung (dritter Block):** die Injection-Naht wird
+  `docs/45-injection-naht.md`. `docs/42` behält Tab, Koordinator, Mitschnitt und
+  die Messung — das ist der Umbau, den ein Tag trägt; die Naht ist ein eigener
+  Umbau mit eigenem Beweis.
 - **2026-11-17, Betreiberentscheid:** der Brücken-Tab ist **angepinnt**.
 - **2026-11-17, Betreiberentscheid (Merge):** alle drei Inkremente
   (`docs/42`, `docs/43`, `docs/44`) landen **gemeinsam** auf `main` — der

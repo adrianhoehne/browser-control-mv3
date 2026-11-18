@@ -1,0 +1,192 @@
+---
+description: Die Injection-Naht — Quelltext raus, Datei plus Nachrichten; 16 Aufrufstellen antworten danach unverändert, und die Frame-Inventur entsteht aus Selbstmeldungen.
+status: proposed
+---
+
+# Die Injection-Naht
+
+Abgespalten von `docs/42` nach dem dritten Review-Block (2026-11-17). `docs/42`
+bringt den Socket in einen Tab; **diese Spec ersetzt, wie Code in die Seite
+kommt.** Sie läuft nach `docs/42`, weil die 16 Aufrufer danach in `bridge.js`
+liegen.
+
+**Warum das ein eigenes Inkrement ist:** `pageSnippetCode` baut heute
+**Quelltext** und schickt ihn als `code` an `browser.tabs.executeScript`. Das
+ist mehr als eine Umbenennung — es ist ein anderer Weg in die Seite, mit einem
+anderen Rückweg, und es berührt 16 Aufrufstellen.
+
+## Ziel
+
+- **Kein Quelltext mehr auf der Leitung.** Die drei Helfer (`describeElement`,
+  `isVisible`, `isAddressedFrame`) reisen als **Datei** (`page-agent.js`), nicht
+  als eingebetteter Text; `pageSnippetCode` verschwindet.
+- **Die Antwort kommt als Nachricht.** `{file}` liefert `undefined`; der
+  Aufrufer schickt `{callId, op, args}` per `tabs.sendMessage`, der Dispatcher
+  antwortet mit `{callId, ok, value}`, die Seite ordnet über `callId` zu.
+- **Die Frame-Inventur entsteht aus Selbstmeldungen.** Jeder Frame antwortet
+  selbst, `sender.frameId` steht in der Nachricht — der Inhaltsfilter bleibt,
+  weil ein Frame stumm bleiben darf.
+- **Alle 16 Aufrufer antworten unverändert.** Dieselben Werkzeugergebnisse,
+  dieselben Fehlercodes, dieselben deutschen Sätze.
+- **Noch MV2.** Die Umstellung auf `scripting` ist `docs/43`; hier bleibt es bei
+  `browser.tabs.executeScript({file})`.
+
+## Non-goals
+
+- **Kein `scripting`, keine neue Berechtigung.** Das ist `docs/43`.
+- **Kein Umzug des Sockets, keine Tab-Verwaltung.** Das ist `docs/42`.
+- **Kein Schalter, keine Icons.** Das ist `docs/44`.
+- **Kein neues Werkzeug, kein neues Argument.** Die dreizehn Werkzeuge bleiben
+  dreizehn, ihre Argumente bleiben.
+- **Keine Änderung an der Bridge.**
+
+## Das Inventar (aus dem Code gelesen, 2026-11-17)
+
+| Was | Stand |
+|---|---|
+| `injectPageCode` | **eine** Definition (2185), **16** echte Aufrufe (2039, 2086, 2943, 3128, 3304, 3357, 3717, 4726, 5450, 6718, 6720, 6736, 6747, 6821, 6840, 6866) |
+| `pageSnippetCode` | baut Quelltext: `(() => { ${PAGE_HELPERS_CODE} … return (${source.toString()})(${argumentList}); })()`; Helfer als Text mit (2229–2233, 2830) |
+| Aufrufer je Werkzeug | `readAgentTabPage`, `settleAgentTab`, `clickAgentTab`, `clickResult`, `typeAgentTab`, `typeResult`, `inspectAgentTab`, `evalAgentTab`, `framesAgentTab` (4×), `transcriptAgentTab`, `seekAndReadTranscriptFile`, `restoreTranscriptPlayer` |
+| `framesOf` | entscheidet nach **Inhalt**, weil `tabs.executeScript` mit `allFrames` in unversprochener Reihenfolge liefert |
+| Fristen | `PROTOCOL.CALL_TIMEOUT_MS` gilt für den Werkzeugaufruf über die Bridge |
+
+## Die Naht
+
+**Aufrufer:** `injectPageCode(tabId, {op, args, allFrames})` injiziert
+`page-agent.js` per `{file, runAt: "document_idle", allFrames, matchAboutBlank}`
+und schickt danach die Nachricht. Es wartet auf die Antwort mit derselben
+`callId`; ein zweiter Aufruf derselben Seite erhält eine eigene `callId`.
+
+**Dispatcher (`page-agent.js`):** hört auf `runtime.onMessage`, prüft `op`,
+führt die Funktion mit `args` aus, antwortet `{callId, ok, value}` oder
+`{callId, ok: false, error}`. Er kennt seine eigene `frameId` nicht — sie steht
+beim Empfänger in `sender.frameId`.
+
+**Drei Fälle, die die Naht festlegen muss** (aus dem Review von `docs/42`):
+
+1. **Die Frame-Liste kommt aus den Selbstmeldungen.** Ein Aufruf schickt
+   `{op: "inventory"}` ohne `frameId` an den Tab; jeder Frame antwortet, die
+   Liste entsteht aus den Antworten. `framesOf` darf **kein** Array aus der
+   Injection erwarten, sonst wirft es sofort `frames_failed`.
+2. **Die Frist ist `PROTOCOL.CALL_TIMEOUT_MS`**, dieselbe wie für den
+   Werkzeugaufruf. Ein stummer Frame hängt sonst bis zum Bridge-Timeout, und der
+   Agent sieht `ExtensionTimeout` statt einer Antwort.
+3. **Ein abgelehntes `tabs.sendMessage`** („Could not establish connection.
+   Receiving end does not exist") trifft nach jeder Navigation einen Frame. Es
+   ist **kein** Fehler, sondern wird wie ein stummer Frame behandelt: Werkzeug ⇒
+   `not_readable`, Inventur ⇒ `frames_failed`.
+
+## Risiken
+
+1. **`page-agent.js` läuft in der isolierten Welt.** Es sieht das DOM, aber
+   keine Seitenvariablen — genau wie heute der injizierte Quelltext. Kein
+   Verhaltensunterschied, aber es muss im Kommentar stehen, damit niemand
+   später „warum kein `window.x`?" fragt.
+2. **Doppelte Injection.** Zwei Aufrufe kurz hintereinander laden die Datei
+   zweimal; der zweite Dispatcher überschreibt den ersten. Der Guard ist die
+   `callId`: jede Antwort gehört genau einem Aufruf, und ein zweiter Listener
+   darf keine fremde `callId` bedienen.
+3. **`about:`, `view-source:`, AMO und der PDF-Viewer** lassen keine Injection
+   zu. Heute fängt `injectPageCode` den Fehler und übersetzt ihn in
+   `not_readable`/`frames_failed`; das muss unverändert bleiben.
+4. **Der Harness.** `test/extension.test.js` (16 343 Zeilen) stubbt
+   `tabs.executeScript` mit `{code}`; nach dem Umbau braucht er `{file}` plus
+   einen Nachrichtenkanal. Das ist der größte Einzelposten dieser Spec.
+5. **Die zwei Kommentare**, die `tabs.executeScript` mit `code` erklären
+   (2176, 5395), beschreiben danach einen Weg, den es nicht mehr gibt.
+
+## Touch boundary
+
+**Erlaubt:** `extension/page-agent.js` (neu), `extension/bridge.js` (die 16
+Aufrufer, `injectPageCode`, `framesOf`), `extension/background.js` (nur falls
+Reste dort liegen), `extension/manifest.json` (nur `web_accessible_resources`
+für `page-agent.js`), `test/extension.test.js`, `test/bridge-tab.test.js`
+(Nachrichtenkanal im Stub), `docs/45`, `docs/README.md`,
+`docs/PROJECT-STATE.md`, `CHANGELOG.md`.
+
+**Nicht:** `bridge-rs/**`, `extension/options.*`, `test/fixtures/**`,
+`scripts/parity/**`, `docs/42` (außer dem Verweis), `deploy/**`.
+
+## Testing
+
+| Datei | Fall | Was er beweist |
+|---|---|---|
+| `test/extension.test.js` | die 16 Aufrufer gegen `{file}` plus Nachrichtenkanal | die Werkzeuge antworten unverändert |
+| `test/extension.test.js` | `injection_whenAFrameStaysSilent_shouldRejectAtTheDeadline` | die Frist ist `PROTOCOL.CALL_TIMEOUT_MS`, kein Hängen bis zum Bridge-Timeout |
+| `test/extension.test.js` | `injection_whenSendMessageIsRejected_shouldAnswerNotReadable` | ein abgelehnter Kanal ist `not_readable`, kein Absturz |
+| `test/extension.test.js` | `injection_withTwoCallIds_shouldAnswerEachCallerOnce` | Antworten werden über `callId` zugeordnet, nicht über Reihenfolge |
+| `test/extension.test.js` | `frames_inventory_shouldComeFromSelfReports` | die Inventur entsteht aus Antworten mit `sender.frameId` |
+| `test/extension.test.js` | `frames_withAnEmptyEntry_shouldNotShiftTheFilter` | der Inhaltsfilter bleibt (Einträge dürfen leer sein) |
+
+## Acceptance criteria
+
+1. **Kein Quelltext mehr.** `grep -Fc 'pageSnippetCode(' extension/bridge.js`
+   ⇒ **0** und `grep -Fc 'pageSnippetCode(' extension/background.js` ⇒ **0**;
+   `grep -Fc 'PAGE_HELPERS_CODE' extension/bridge.js extension/background.js`
+   ⇒ **0** in beiden.
+2. **Der Aufrufer lädt die Datei, er baut nichts.** `grep -Fc 'page-agent.js'
+   extension/bridge.js` ⇒ **≥ 1**; `test -f extension/page-agent.js` ⇒ **0**.
+3. **Alle 16 Aufrufer antworten.** `npm test` ⇒ `# fail 0`, `# cancelled 0`.
+4. **Die drei Randfälle haben Fälle.** `node --test --test-reporter=tap
+   test/extension.test.js 2>&1 | grep -cE '^ok [0-9]+ - injection_'` ⇒ **≥ 3**
+   (stummer Frame, abgelehnter Kanal, zwei `callId`).
+5. **Die Inventur kommt aus Selbstmeldungen.** `frames_inventory_shouldComeFromSelfReports`
+   ⇒ grün, und `framesOf` bekommt kein Array aus der Injection mehr
+   (`grep -Fc 'executeScript' extension/bridge.js` ⇒ **1**, die eine
+   Aufrufstelle).
+6. **Die Parität bleibt.** `scripts/parity.sh --impl rust --check` ⇒ `7/7 wie
+   erwartet`, `--self-test` ⇒ `7/7 rot wie erwartet`.
+7. **Der Fehlerpfad ist unverändert.** `about:debugging` öffnen und `read`
+   aufrufen ⇒ `not_readable` mit demselben deutschen Satz wie vorher
+   (`test/extension.test.js` deckt ihn; hier als Sichtprüfung des Betreibers).
+
+## Dev plan
+
+**Stufe 1 — `page-agent.js` und der Nachrichtenkanal**
+
+Dateien: `extension/page-agent.js` (neu), `extension/bridge.js`
+(`injectPageCode`, `callId`-Zuordnung), `extension/manifest.json`
+(`web_accessible_resources`), `test/extension.test.js` (Stub: `{file}` plus
+Kanal).
+
+`page-agent.js` trägt die drei Helfer und den Dispatcher; die Seite schickt
+`{callId, op, args}` und wartet auf `{callId, ok, value}` mit
+`PROTOCOL.CALL_TIMEOUT_MS`.
+
+Beweis: Kriterien 1, 2, 3, 4, 5.
+
+**Stufe 2 — die Frame-Inventur auf Selbstmeldungen**
+
+Dateien: `extension/bridge.js` (`framesAgentTab`, `framesOf`),
+`test/extension.test.js` (die zwei Frame-Fälle).
+
+Beweis: Kriterium 5 und `frames_withAnEmptyEntry_shouldNotShiftTheFilter`.
+
+**Stufe 3 — Messung am echten Browser**
+
+Dateien: `docs/45` (Messwerte), `docs/PROJECT-STATE.md`.
+
+Beweis: Kriterium 6 und die Sichtprüfung in Kriterium 7.
+
+## Bekannte Lücken
+
+- **Nichts ist gemessen.** Es gibt keine `page-agent.js` im Baum; die 16
+  Aufrufstellen und die drei Helfer stammen aus dem Code.
+- **Die isolierte Welt ist eine Grenze, kein Fehler.** Seitenvariablen bleiben
+  unsichtbar — wie heute.
+- **`func` wurde verworfen**, weil die Helfer sonst wieder als Text reisen
+  (Entscheidung aus `docs/43`).
+
+## Open questions
+
+**Keine.**
+
+## Review
+
+### Runde 1 — steht aus
+
+## Log
+
+- **2026-11-17, Abspaltung:** war Stufe 2 von `docs/42`; nach dem dritten
+  Review-Block geteilt (Betreiberentscheid „B"). Die Naht ist ein eigener
+  Umbau: 16 Aufrufstellen, drei Helfer, ein Nachrichtenkanal mit Frist.
