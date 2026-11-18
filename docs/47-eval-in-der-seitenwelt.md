@@ -161,7 +161,7 @@ Beweis: Kriterien 5, 6.
 
 | Dokument | Abschnitt | was gilt |
 |---|---|---|
-| `docs/25-frame-handeln.md` (führt `browser_eval` mit `frame` ein) | `## Ziel`, `## Bekannte Lücken` | „läuft in der isolierten Welt und sieht keine Seitenvariablen" ist **überholt**; neu: es läuft in der Seitenwelt, weil MV3 es anders nicht zulässt, und der Schalter ist die Zustimmung |
+| `docs/25-frame-handeln.md` (führt `browser_eval` mit `frame` ein) | `## Ziel`, `## Bekannte Lücken` | „läuft in der isolierten Welt" ist **überholt**. Neu: es läuft in der Seitenwelt, weil MV3 es anders nicht zulässt; der Schalter ist die Zustimmung |
 | `README.md` | Rechtetabelle | der Satz zu `scripting` bekommt „im Seitenkontext" dazu |
 
 ## Bekannte Lücken
