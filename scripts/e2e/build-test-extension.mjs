@@ -9,9 +9,11 @@
  * would type are replaced here, in a **copy**, with the anchors counted first
  * (`docs/40`, step 3).
  *
- * Only `<copy>/background.js` is patched and counted. `options.js` carries the
- * same endpoint anchor, so a count over the whole folder would report 2 and a
- * patch would hit the wrong file.
+ * Only `<copy>/bridge.js` is patched and counted. `options.js` carries the same
+ * endpoint anchor, so a count over the whole folder would report 2 and a patch
+ * would hit the wrong file. Since spec 42 the socket lives in the bridge tab, so
+ * that is where the endpoint and the token are read — `background.js` is the
+ * coordinator and carries neither.
  *
  * The count is `grep -Fc`, one per anchor, and it must be exactly 1. `-F`
  * matters: the second anchor contains `[` and `]`, which `grep` would read as a
@@ -29,7 +31,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const DEFAULT_SOURCE = path.join(REPO_ROOT, "extension");
-const BACKGROUND = "background.js";
+const SEAM_FILE = "bridge.js";
 const MANIFEST = "manifest.json";
 
 /** The port the E2E run owns; 8110 belongs to the operator's service. */
@@ -84,9 +86,15 @@ function seamAnchors(token) {
   }));
 }
 
-/** Counts both anchors in `<sourceDir>/background.js`; throws `seam moved` if any is off. */
+/**
+ * Counts both anchors in `<sourceDir>/bridge.js`; throws `seam moved` if any is off.
+ *
+ * Which file that is, is part of the seam: when the socket moved from
+ * `background.js` into the bridge tab (`docs/42`), the two lines moved with it, and
+ * a counter aimed at the old file would report 0 hits for both anchors.
+ */
 export function checkSeams(sourceDir, { token = "<token>" } = {}) {
-  const file = path.join(sourceDir, BACKGROUND);
+  const file = path.join(sourceDir, SEAM_FILE);
   if (!existsSync(file)) {
     throw new Error(`no ${file} — is --source pointing at the extension folder?`);
   }
@@ -120,7 +128,7 @@ export function buildTestExtension({ sourceDir = DEFAULT_SOURCE, targetDir, toke
   const counts = checkSeams(sourceDir, { token });
   cpSync(sourceDir, targetDir, { recursive: true });
 
-  const file = path.join(targetDir, BACKGROUND);
+  const file = path.join(targetDir, SEAM_FILE);
   let source = readFileSync(file, "utf8");
   for (const seam of seamAnchors(token)) {
     // Exactly one occurrence, so `replaceAll` is the same edit as "replace the
@@ -191,7 +199,7 @@ function main() {
     const counts = checkSeams(options.source, { token: options.token ?? "<token>" });
     process.stdout.write(
       `seams ok: endpoint=${counts.endpoint} token=${counts.token} in ` +
-        `${path.join(options.source, BACKGROUND)}\n`,
+        `${path.join(options.source, SEAM_FILE)}\n`,
     );
     return 0;
   }

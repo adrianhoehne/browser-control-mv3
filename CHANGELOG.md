@@ -5,7 +5,29 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
-Nichts offen.
+**Der Socket zieht in einen eigenen Tab** — Stufe 1 von `docs/42`, die
+Voraussetzung für MV3. Der Code der bisherigen Hintergrundseite lebt jetzt als
+`extension/bridge.js` in einem angepinnten Erweiterungs-Tab; `background.js` ist
+nur noch der Koordinator, der genau diesen Tab anlegt und hält. Das Manifest
+bleibt MV2 mit `persistent: true`, die Injection-Naht (`docs/45`) ist unberührt,
+und die Werkzeuge, ihre Argumente und ihre deutschen Sätze sind unverändert.
+
+- **`extension/bridge.html` + `extension/bridge.js` (neu):** Socket, Sitzung,
+  Tab-Store, Werkzeugausführung **und** der `webRequest`-Mitschnitt. Die Datei
+  ist die umbenannte `background.js` — 7 032 Zeilen unverändert, nur der Kopf
+  nennt den neuen Ort.
+- **`extension/background.js` (jetzt Koordinator):** ein `tabs.create` mit
+  `pinned: true` und der gemerkten `windowId`, ein Single-Flight-Guard gegen zwei
+  gleichzeitige Anläufe, Neuanlage bei `tabs.onRemoved`, Reload bei
+  `changeInfo.discarded` und Ersatz, wenn der Tab weg-navigiert wurde. Kein
+  privates Fenster, kein Container, kein Socket, kein Backoff.
+- **`extension/manifest.json`:** nur noch ein Hintergrundskript.
+- **E2E-Seam und Tests:** der Seam (`scripts/e2e/build-test-extension.mjs`,
+  `docs/40`) patcht `bridge.js`; `test/bridge-tab.test.js` trägt neun Fälle für
+  den Koordinator; `test/extension.test.js` fährt die Werkzeuge unverändert
+  gegen `bridge.js`.
+- **Ungemessen:** die 30-Minuten-Messung, Tab-Schließen im echten Browser und
+  der Browser-Neustart (Kriterien 9–13) folgen in Stufe 3 beim Betreiber.
 
 ## [0.5.1] — 2026-11-17
 

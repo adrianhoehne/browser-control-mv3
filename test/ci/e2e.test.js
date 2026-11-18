@@ -72,9 +72,10 @@ test("e2e_seamPatch_shouldFindBothLines", (t) => {
   // THEN it finds each exactly once — and so does a real build into a copy,
   const patch = buildCopy(target, token);
 
-  // ... whose background.js carries the rewritten endpoint and the token fallback,
-  // with the token as a *fallback*: a stored token keeps winning.
-  const patched = readFileSync(path.join(target, "background.js"), "utf8");
+  // ... whose bridge.js carries the rewritten endpoint and the token fallback,
+  // with the token as a *fallback*: a stored token keeps winning. That file and not
+  // `background.js`: since spec 42 the socket and the settings live in the bridge tab.
+  const patched = readFileSync(path.join(target, "bridge.js"), "utf8");
 
   // AND the tracked file is untouched by all of it: the patch only ever writes
   // inside the copy, and a dirty `extension/` would make every later diff a lie.
@@ -93,7 +94,7 @@ test("e2e_seamPatch_withRenamedAnchor_shouldReportSeamMoved", (t) => {
   const directory = scratch(t);
   const copy = path.join(directory, "ext");
   cpSync(EXTENSION, copy, { recursive: true });
-  renameEndpointAnchor(path.join(copy, "background.js"));
+  renameEndpointAnchor(path.join(copy, "bridge.js"));
 
   // WHEN the self-check runs against that copy,
   const result = selfCheck(copy);

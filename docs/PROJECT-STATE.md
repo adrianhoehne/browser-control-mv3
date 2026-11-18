@@ -371,7 +371,7 @@ mit mehreren Rahmen läuft.
 
 Ein Werkzeugaufruf von pi bis in die Seite hat sechs Stationen, und der Rückweg
 läuft dieselbe Strecke. Was hier steht, ist aus dem Code gelesen (`bridge/*.mjs`,
-`extension/background.js`, `extension/manifest.json`, `~/.pi/agent/mcp.json`) —
+`extension/bridge.js`, `extension/manifest.json`, `~/.pi/agent/mcp.json`) —
 nicht aus den Specs. Die Bilder sind Mermaid: sie rendern auf GitHub und in jedem
 Markdown-Betrachter mit Diagramm-Unterstützung, und wer nur Text sieht, liest die
 Tabellen daneben. Widerspricht eine Spec dieser Darstellung, gilt der Code und die
@@ -402,7 +402,7 @@ flowchart TB
 
     subgraph FF["Firefox – Betreiber-Rechner"]
         direction TB
-        subgraph BGI["background.js (MV2, persistent)"]
+        subgraph BGI["bridge.js (Brücken-Tab, MV2)"]
             CONN["Verbindungsschicht<br/>Socket, Backoff, hello/welcome"]
             DISP["Dispatch<br/>answerRequest"]
             TABV["Tab-Verwaltung<br/>Liste, Limit 5"]
@@ -448,7 +448,7 @@ Die drei Schnittstellen, an denen etwas kaputtgehen kann:
 |---|---|---|
 | pi ↔ `http-transport.mjs` | JSON-RPC 2.0 über `POST /mcp`, Bearer-Token | 1 MiB Body |
 | `mcp.mjs` ↔ `hub.mjs` | `request(method, params)` als Promise im selben Prozess | 20 s Frist, `HubRequestError` |
-| `Caddy` ↔ `background.js` | eigenes Textprotokoll, Version 1, `hello`/`welcome`/`request`/`response` | 5 MiB Nachricht, 5 s bis `hello` |
+| `Caddy` ↔ `bridge.js` | eigenes Textprotokoll, Version 1, `hello`/`welcome`/`request`/`response` | 5 MiB Nachricht, 5 s bis `hello` |
 
 Wer was allein entscheidet:
 
@@ -458,14 +458,18 @@ Wer was allein entscheidet:
   (`DEBUG_WHITELIST`). Nur dort, nicht in den elf `#report…`-Zweigen (gezählt:
   `git grep -nE '^  #report[A-Za-z]+\(' bridge/hub.mjs` ⇒ 12 Definitionen, eine davon
   `#reportResult`).
-- **`background.js`** — welche Tabs Agenten-Tabs sind (Liste in `storage.local`) und
-  wer den Warte-Slot eines Tabs hält. Die Bridge weiß davon nichts.
+- **`bridge.js`** (seit `docs/42`; vorher `background.js`) — welche Tabs
+  Agenten-Tabs sind (Liste in `storage.local`) und wer den Warte-Slot eines Tabs
+  hält. Die Bridge weiß davon nichts.
+- **`background.js`** — nur noch der Koordinator: legt den Brücken-Tab an
+  (`bridge.html`, angepinnt, gemerktes Fenster) und legt ihn neu an, wenn er
+  geschlossen, verworfen oder weg-navigiert wurde. Kein Socket, kein Backoff.
 - **`protocol.mjs` / `protocol.js`** — die Zahlen und Typen des Drahtprotokolls,
-  doppelt vorhanden, weil der MV2-Background kein ES-Modul importieren kann;
-  `test/protocol.test.js` ist die Klammer.
+  doppelt vorhanden, weil ein klassisches Erweiterungsskript kein ES-Modul
+  importieren kann; `test/protocol.test.js` ist die Klammer.
 
-Nicht im Plan: die Testdoppelung (`test/fixtures/fake-extension.mjs` ersetzt
-`background.js` in den Tests) und das Dienstverhalten (`RestartPreventExitStatus=2`
+Nicht im Plan: die Testdoppelung (`test/fixtures/fake-extension.mjs` ersetzt den
+Brücken-Tab in den Tests) und das Dienstverhalten (`RestartPreventExitStatus=2`
 für das fehlende Token, Exit 1 für einen belegten Port) — beides Betrieb, nicht
 Komponente.
 
@@ -480,7 +484,8 @@ Komponente.
 | WebSocket-Rahmen | `bridge/websocket.mjs` | Handshake und Framing ohne Abhängigkeit, **5 MiB** Nachrichtengrenze |
 | Dienst | systemd-User-Unit `browser-control.service`, Start über `bridge/bridge.mjs` | besitzt den Prozess und beide Ports; `port-owner.mjs` nennt bei `EADDRINUSE` den Besitzer |
 | Caddy | `wss://example.com/browser-control/ws` | TLS-Ende, Weiterleitung an `127.0.0.1:8110`; liegt **außerhalb** der Basic-Auth, weil ein Browser-WebSocket keinen `Authorization`-Header setzen kann |
-| Extension-Background | `extension/background.js` (MV2, `persistent: true`) | wählt sich **raus**, Reconnect mit Backoff, beantwortet Anfragen, hält den Warte-Slot **je Tab**, nutzt `tabs`/`executeScript` |
+| Brücken-Tab | `extension/bridge.html` + `extension/bridge.js` | hält den Socket (wählt sich **raus**, Reconnect mit Backoff), beantwortet Anfragen, hält den Warte-Slot **je Tab**, nutzt `tabs`/`executeScript`, sammelt den `webRequest`-Mitschnitt |
+| Koordinator | `extension/background.js` (MV2, `persistent: true`) | legt genau einen angepinnten Brücken-Tab an und hält ihn; kein Socket, kein Zustand über den Tab hinaus |
 | Optionsseite | `extension/options.{html,js}` → `storage.local` | Endpunkt, Token, Schalter `allowPasswordFields` / `allowEval` / `allowScreenshot` (alle Default aus) |
 | Die Seite selbst | Betreiber-Tab | dort läuft der injizierte Code (Lesen, Klicken, Tippen, `eval`) |
 
@@ -494,7 +499,7 @@ echte Extension.
 ```mermaid
 sequenceDiagram
     autonumber
-    participant BG as Background (background.js)
+    participant BG as Brücken-Tab (bridge.js)
     participant CAD as Caddy (443, WS-Pfad)
     participant HUB as Hub (hub.mjs, Port 8110)
 
@@ -525,7 +530,7 @@ sequenceDiagram
     participant HTTPE as http-transport.mjs
     participant TOOL as mcp.mjs (Werkzeuge)
     participant HUB as hub.mjs
-    participant BG as background.js
+    participant BG as bridge.js
     participant PAGE as Seite im Tab
 
     PI->>HTTPE: POST /mcp, tools/call browser_read
@@ -548,7 +553,7 @@ sequenceDiagram
 Zwei Dinge, die man am Diagramm leicht falsch annimmt:
 
 - **Der Warte-Slot für `click`/`type` sitzt nicht in der Bridge**, sondern in der
-  Extension (`extension/background.js`, eine Kette je Tab). Ein neuer Aufruf im
+  Extension (`extension/bridge.js`, eine Kette je Tab). Ein neuer Aufruf im
   **selben** Tab beendet den älteren mit `superseded`; andere Tabs sind unberührt.
   Im Diagramm wäre das ein Pfeil innerhalb der Extension, nicht zwischen Bridge
   und Extension. Der Hub kennt keine Werkzeugsemantik — nur Anfrage-Ids, Fristen und
@@ -596,7 +601,7 @@ Im Code:
 | Teil | Dateien | Zustand |
 |---|---|---|
 | Bridge (Node ≥ 22, keine Abhängigkeiten) | `bridge/{protocol,websocket,config,bridge,hub}.mjs` | lauscht auf `BC_BIND`, prüft Token, fragt `status`, loggt auf stderr |
-| Extension (Firefox MV2, persistenter Background) | `extension/{manifest.json,protocol.js,background.js,options.html,options.js}` | wählt sich per WSS raus, Reconnect mit Backoff, Optionsseite für Endpunkt und Token |
+| Extension (Firefox MV2, persistenter Background) | `extension/{manifest.json,protocol.js,background.js,bridge.html,bridge.js,options.html,options.js}` | der Brücken-Tab hält die Verbindung (WSS, Reconnect mit Backoff), der Hintergrund hält den Tab; Optionsseite für Endpunkt und Token |
 | Prüfungen | `test/*.test.js`, `test/fixtures/fake-extension.mjs` | 587 Fälle, `npm test` grün (damals 243), ohne Browser und ohne Netz |
 
 Caddy und Token-Datei sind eingerichtet, die Extension läuft als temporäre

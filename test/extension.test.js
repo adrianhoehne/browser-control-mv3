@@ -1,13 +1,18 @@
 /**
  * The extension half that can run without Firefox: `protocol.js` and
- * `background.js` in a VM context whose browser APIs, WebSocket and timers are
+ * `bridge.js` in a VM context whose browser APIs, WebSocket and timers are
  * stubs.
+ *
+ * `bridge.js` is the page of the bridge tab (spec 42); `background.js` only keeps
+ * that tab alive, and is driven by `test/bridge-tab.test.js`. The stubs here are
+ * the same ones the code saw when it was still the background page — the move
+ * into a tab did not change a single API call.
  *
  * Tested is the wire behaviour — the `hello` frame, the answers to `status` and
  * `navigate`, the window and tab filters, the wait for a page and the reconnect
- * delays. The stubs are deliberately complete and small: everything the
- * background page is allowed to touch appears in `createSandbox()`, so a newly
- * added browser API fails loudly here instead of working only in Firefox.
+ * delays. The stubs are deliberately complete and small: everything the bridge
+ * page is allowed to touch appears in `createSandbox()`, so a newly added browser
+ * API fails loudly here instead of working only in Firefox.
  */
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -15,7 +20,7 @@ import test from "node:test";
 import vm from "node:vm";
 
 const PROTOCOL_SOURCE = await readFile(new URL("../extension/protocol.js", import.meta.url), "utf8");
-const BACKGROUND_SOURCE = await readFile(new URL("../extension/background.js", import.meta.url), "utf8");
+const BACKGROUND_SOURCE = await readFile(new URL("../extension/bridge.js", import.meta.url), "utf8");
 // The options page has no DOM harness (spec 36, `## Bekannte Lücken`), so its half of
 // the endpoint default is read as source text. Read once, at load: neither file changes
 // while the suite runs.
@@ -96,7 +101,7 @@ class FakeTimerClock {
    */
   armedDelays = [];
 
-  // Arrow field: the background page receives `setTimeout` detached from any
+  // Arrow field: the bridge page receives `setTimeout` detached from any
   // object, so `this` has to be bound here.
   setTimeout = (callback, delayMs) => {
     const id = this.#nextId;
@@ -145,7 +150,7 @@ class FakeTimerClock {
 }
 
 /**
- * The parts of `AbortController` the background page uses, plus test hooks.
+ * The parts of `AbortController` the bridge page uses, plus test hooks.
  *
  * `signal` is an empty object: the fake `fetch` never listens to it, so the only
  * thing a case can prove about the controller is that it was created and aborted.
@@ -193,7 +198,7 @@ function headReply(ok, contentType) {
 }
 
 /**
- * The `fetch` the background page sees, with no network behind it.
+ * The `fetch` the bridge page sees, with no network behind it.
  *
  * `answer` is called with `{ url, options, calls }` for every request, `calls`
  * holding this one last, and may return a reply, throw or return a promise that
@@ -238,7 +243,7 @@ function assertDialableUrl(url) {
 }
 
 /**
- * The parts of `WebSocket` the background page uses, plus test hooks.
+ * The parts of `WebSocket` the bridge page uses, plus test hooks.
  *
  * `send` parses the frame immediately: the assertions then compare objects of
  * the test's own realm, which keeps `deepStrictEqual` free of the cross-realm
@@ -1294,7 +1299,7 @@ function createEncoderStub({
         assert.equal(
           tagName,
           "canvas",
-          `the background page has no <${tagName}> to create — only the encode canvas`,
+          `the bridge page has no <${tagName}> to create — only the encode canvas`,
         );
         return createCanvasElement();
       },
@@ -1304,7 +1309,7 @@ function createEncoderStub({
         if (key in target) return target[key];
         // Symbols are not property access in any sense this page has to refuse.
         if (typeof key !== "string") return undefined;
-        throw new Error(`the background page must not touch document.${key}`);
+        throw new Error(`the bridge page must not touch document.${key}`);
       },
     },
   );
@@ -1488,7 +1493,7 @@ function createTabsStub({
      * Registers the `webRequest` observer and hands it the requests recorded so far.
      *
      * Replaying is the fixture's licence, not the browser's: a real tab asks for its
-     * track file while the background page is already up. Without the replay every case
+     * track file while the bridge page is already up. Without the replay every case
      * would have to emit its addresses *after* the load.
      */
     addRequestListener: (listener) => {
@@ -1528,7 +1533,7 @@ function captureConsole(lines) {
 /**
  * A value read back out of the stub store, moved into this realm.
  *
- * What the background page writes carries *its* realm's prototypes, and
+ * What the bridge page writes carries *its* realm's prototypes, and
  * `deepStrictEqual` compares prototypes too — the same JSON round trip `runPageCode`
  * makes, for the same reason.
  */
@@ -1539,7 +1544,7 @@ function inThisRealm(value) {
 /**
  * Records every `Map.prototype.set`/`delete` of the sandbox realm in `__bcMapOps`.
  *
- * `background.js` is an IIFE: the slot map is closure state and no assertion outside
+ * `bridge.js` is an IIFE: the slot map is closure state and no assertion outside
  * the sandbox can reach it. The probe therefore has to sit *inside* the realm, on the
  * prototypes, before `background.js` loads — a patch in this realm would be a
  * different `Map` and would see nothing.
@@ -1636,9 +1641,9 @@ function createSandbox({
 }
 
 /**
- * Runs `protocol.js` and then `background.js` the way the manifest lists them.
+ * Runs `protocol.js` and then `bridge.js` the way `bridge.html` lists them.
  *
- * The order matters: `background.js` reads `globalThis.BC_PROTOCOL` at load and
+ * The order matters: `bridge.js` reads `globalThis.BC_PROTOCOL` at load and
  * refuses to run without it.
  */
 async function startBackground(options = {}) {
@@ -1646,16 +1651,16 @@ async function startBackground(options = {}) {
   FakeAbortController.reset();
   const { browser, sandbox, clock, consoleLines, headFetch, encoder } = createSandbox(options);
   vm.runInNewContext(PROTOCOL_SOURCE, sandbox, { filename: "extension/protocol.js" });
-  vm.runInNewContext(BACKGROUND_SOURCE, sandbox, { filename: "extension/background.js" });
+  vm.runInNewContext(BACKGROUND_SOURCE, sandbox, { filename: "extension/bridge.js" });
   await settleAsyncWork();
   return { browser, clock, consoleLines, sandbox, headFetch, encoder };
 }
 
 /**
- * The keys each `Map` of the background page holds, recomputed from the probe.
+ * The keys each `Map` of the bridge page holds, recomputed from the probe.
  *
  * It answers two questions at once and refuses to answer only one: *which keys are in
- * the slot map*, and *how many maps the background page builds at all*. The second
+ * the slot map*, and *how many maps the bridge page builds at all*. The second
  * half is the loud one — a slot map that gained a sibling would otherwise pass
  * unnoticed, so the message names the number of receivers. Scoped per case: every
  * `started` carries its own trace, and cases without slot work cannot skew a count.
@@ -1692,7 +1697,7 @@ function slotMapKeys(started) {
 }
 
 /**
- * Lets the background page's promise chains finish.
+ * Lets the bridge page's promise chains finish.
  *
  * `setImmediate` runs after the microtask queue has drained, so two rounds cover
  * even a chain of two awaits without guessing how many awaits the implementation
@@ -1708,7 +1713,7 @@ async function settleAsyncWork() {
 
 async function openSocket() {
   const socket = FakeWebSocket.latest();
-  assert.notEqual(socket, undefined, "the background page did not dial the endpoint");
+  assert.notEqual(socket, undefined, "the bridge page did not dial the endpoint");
   socket.open();
   await settleAsyncWork();
   return socket;
@@ -1952,7 +1957,7 @@ function responsesById(socket) {
   );
 }
 
-/** Sends one `navigate` request and lets the background page work through it. */
+/** Sends one `navigate` request and lets the bridge page work through it. */
 async function sendNavigate(socket, id, params) {
   socket.receive({ type: "request", id, method: "navigate", params });
   await settleAsyncWork();
@@ -2014,7 +2019,7 @@ test("startBackground_withoutEndpointAndToken_shouldNotOpenConnection", async ()
   // GIVEN a fresh install with an empty storage,
   const { clock, consoleLines } = await startBackground({ settings: {} });
 
-  // WHEN the background page starts,
+  // WHEN the bridge page starts,
   await settleAsyncWork();
 
   // THEN it must neither dial nor schedule a retry — the operator has to fill in
@@ -2036,7 +2041,7 @@ test("startBackground_withEndpointButNoToken_shouldNotOpenConnection", async () 
   // GIVEN an endpoint without a token,
   const { clock } = await startBackground({ settings: { endpoint: ENDPOINT } });
 
-  // WHEN the background page starts,
+  // WHEN the bridge page starts,
   await settleAsyncWork();
 
   // THEN a connection without credentials would be closed by the bridge with
@@ -2049,7 +2054,7 @@ test("endpoint_withoutAStoredValue_shouldDialTheLoopbackDefault", async () => {
   // GIVEN a fresh install that has entered the token and nothing else,
   const { browser, clock, consoleLines } = await startBackground({ settings: { token: TOKEN } });
 
-  // WHEN the background page starts,
+  // WHEN the bridge page starts,
   await settleAsyncWork();
 
   // THEN it dials the default endpoint instead of staying silent — the bridge on the
@@ -2072,7 +2077,7 @@ test("endpoint_withoutAStoredValue_shouldDialTheLoopbackDefault", async () => {
 });
 
 /**
- * The dial address of a background page that has only a token — the observed value, not
+ * The dial address of a bridge page that has only a token — the observed value, not
  * a literal, because the two guards below compare against it.
  */
 async function dialAddressWithoutAStoredEndpoint() {
@@ -2086,7 +2091,7 @@ test("endpoint_default_matchesTheBridgesDefaultPort", async () => {
   // GIVEN a fresh install that has entered the token and nothing else,
   const dialledAddress = await dialAddressWithoutAStoredEndpoint();
 
-  // WHEN we read the address the background page dialled and the bridge's defaults,
+  // WHEN we read the address the bridge page dialled and the bridge's defaults,
   const dialled = new URL(dialledAddress);
 
   // THEN they have to be the same listener. This is the drift guard: changing one side
@@ -2126,7 +2131,7 @@ test("endpoint_withAStoredValue_shouldDialThatValue", async () => {
   const storedEndpoint = "wss://bridge.example.test/browser-control/ws";
   await startBackground({ settings: { endpoint: storedEndpoint, token: TOKEN } });
 
-  // WHEN the background page starts,
+  // WHEN the bridge page starts,
   await settleAsyncWork();
 
   // THEN the stored value is dialled. The default fills an empty field; it does not
@@ -2140,7 +2145,7 @@ test("connect_withUnparseableEndpoint_shouldReportOnceAndScheduleReconnect", asy
     settings: { endpoint: "not a url", token: TOKEN },
   });
 
-  // WHEN the background page tries to dial,
+  // WHEN the bridge page tries to dial,
   await settleAsyncWork();
 
   // THEN the synchronous `SyntaxError` of `new WebSocket(...)` must not end the
@@ -2461,7 +2466,7 @@ test("status_whenTheSettingsReadFails_shouldStillAnswer", async () => {
 /* ------------------------------------------------- storage: agent tab list */
 
 /**
- * Sends one `status` request and lets the background page work through it.
+ * Sends one `status` request and lets the bridge page work through it.
  *
  * The migration cases need the browser stub next to the answer, which is why they
  * build their own background instead of going through `requestStatusIdOne`.
@@ -5862,7 +5867,7 @@ test("read_inArticleMode_withAWindow_shouldSliceTheFilteredText", async () => {
  * The settle snippet exactly as it reaches a page.
  *
  * Read off a real `read` run instead of being rebuilt here: the string is assembled
- * inside the background page, and a copy in the test would only pin the copy. The
+ * inside the bridge page, and a copy in the test would only pin the copy. The
  * marker is what tells the two injections of a read apart.
  */
 async function settleSnippetCode() {
@@ -6222,7 +6227,7 @@ function createClickTabs({
   });
 }
 
-/** Sends one `click` request and lets the background page work through it. */
+/** Sends one `click` request and lets the bridge page work through it. */
 async function sendClick(socket, id, params) {
   socket.receive({ type: "request", id, method: "click", params });
   await settleAsyncWork();
@@ -7449,7 +7454,7 @@ function createTypeTabs({
   });
 }
 
-/** Sends one `type` request and lets the background page work through it. */
+/** Sends one `type` request and lets the bridge page work through it. */
 async function sendType(socket, id, params) {
   socket.receive({ type: "request", id, method: "type", params });
   await settleAsyncWork();
@@ -8941,7 +8946,7 @@ function querySelectorAllInPage(page, selector) {
 }
 
 /**
- * Sends one `inspect` request and lets the background page work through it.
+ * Sends one `inspect` request and lets the bridge page work through it.
  *
  * Unused until stage 2b, and that is deliberate: the harness is complete before the
  * behaviour it measures exists.
@@ -8952,7 +8957,7 @@ async function sendInspect(socket, id, params) {
 }
 
 /**
- * Sends one `eval` request and lets the background page work through it.
+ * Sends one `eval` request and lets the bridge page work through it.
  *
  * `params` stays overridable and not defaulted, because "the caller forgot `code`" is
  * a case of its own and `{}` is one of its shapes.
@@ -11589,7 +11594,7 @@ test("eval_whenThePageIsInternal_shouldAnswerNotReadableWithKindAndUrl", async (
  * The extension's own deadline for `eval`, quoted from `background.js`.
  *
  * `EVAL_TIMEOUT_MS` (2 000) plus 500 ms of air for a throttled page timer. It lives
- * inside the background page's IIFE and no assertion outside the sandbox can read it,
+ * inside the bridge page's IIFE and no assertion outside the sandbox can read it,
  * so this pin is the number the guard case names.
  */
 const EVAL_GUARD_MS = 2500;
@@ -11656,7 +11661,7 @@ async function evalOnce(params, page = DEFAULT_READ_PAGE, { advanceMs = null } =
  * No timer may outlive a call — neither the extension's guard nor a page deadline.
  *
  * Stated once and called from every case that runs code: a guard that survives its
- * call keeps the background page busy, and a page timer that survives its deadline is
+ * call keeps the bridge page busy, and a page timer that survives its deadline is
  * the throttling the guard exists for, just in the other realm.
  */
 function assertNoTimerLeft(clock, pageClocks) {
@@ -13567,7 +13572,7 @@ function transcriptResourceOf(track, expire) {
 const TRANSCRIPT_TAB_ID = 500;
 
 /**
- * The background page's wait for the wire after a jump (spec 34), driven by the cases.
+ * The bridge page's wait for the wire after a jump (spec 34), driven by the cases.
  *
  * The 3000 is a copy of `TRANSCRIPT_CAPTION_DEADLINE_MS` in `extension/background.js`, and
  * that is deliberate: the cases fire the deadline by name, and a helper that imported the
@@ -14033,7 +14038,7 @@ function createTranscriptModelPage({
  * of its `fetch`. The clock is shared, so the injections of one call run on one timeline and
  * a case can read that timeline (`clock.now()`) afterwards.
  *
- * The page's `wire` becomes the tab's request wire *before* the background page loads
+ * The page's `wire` becomes the tab's request wire *before* the bridge page loads
  * (`createTabsStub`), and `page.emitRequest` is the page's handle on it afterwards: the
  * player of a jump asks again, and that request reaches the observer the same way a real
  * one does (spec 34).

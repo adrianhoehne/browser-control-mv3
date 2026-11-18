@@ -7,6 +7,10 @@
  * Every assertion here holds one half of that decision, with exactly one test
  * per property. Whoever switches back to MV3 has to change this file on
  * purpose — that is the whole purpose of it.
+ *
+ * Since spec 42 the socket lives in a tab (`bridge.html`), so the second half of
+ * the decision moved: the manifest still names one background script, the
+ * coordinator, and the script order that matters is the one in the page.
  */
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -32,13 +36,31 @@ test("background_withPersistentRequired_shouldBeMarkedPersistent", () => {
   assert.equal(MANIFEST.background.persistent, true);
 });
 
-test("background_scripts_shouldLoadProtocolBeforeBackground", () => {
-  // GIVEN two classic scripts that share one global, both plain `script` tags,
-  // WHEN the browser loads them in manifest order,
-  // THEN `protocol.js` has to come first: `background.js` reads
-  // `BrowserControlProtocol` at top level. `deepStrictEqual` and not
-  // `includes`, because the order is the contract:
-  assert.deepStrictEqual(MANIFEST.background.scripts, ["protocol.js", "background.js"]);
+test("background_scripts_shouldBeTheCoordinatorAlone", () => {
+  // GIVEN the coordinator, which only opens the bridge tab and knows nothing about
+  // the wire protocol,
+  // WHEN we read the script list,
+  // THEN it is that one file. `deepStrictEqual` and not `includes`, because an
+  // extra entry is a second page in the background that nobody asked for (spec 42):
+  assert.deepStrictEqual(MANIFEST.background.scripts, ["background.js"]);
+});
+
+test("bridgePage_shouldLoadProtocolBeforeBridge", async () => {
+  // GIVEN the page that holds the socket, which is where the two classic scripts
+  // moved to,
+  const html = await readFile(new URL("../extension/bridge.html", import.meta.url), "utf8");
+
+  // WHEN we read the order it loads them in,
+  const order = [...html.matchAll(/<script[^>]*src="([^"]+)"/g)].map((match) => match[1]);
+
+  // THEN `protocol.js` has to come first: `bridge.js` reads `globalThis.BC_PROTOCOL`
+  // at load and refuses to run without it. `deepStrictEqual` for the same reason as
+  // the manifest case above — this is the order contract now, not a suggestion:
+  assert.deepStrictEqual(order, ["protocol.js", "bridge.js"]);
+
+  // AND nothing is inlined: the MV2 CSP would block it, and the page would come up
+  // without a socket and without a word about why.
+  assert.doesNotMatch(html, /<script(?![^>]*src=)/);
 });
 
 test("manifest_requestsWebRequestWithoutBlocking", () => {
@@ -99,7 +121,7 @@ test("optionsJs_forThePasswordSwitch_shouldNameTheSameKeyLiteralAsTheCheckbox", 
   const source = await readFile(new URL("../extension/options.js", import.meta.url), "utf8");
 
   // WHEN we read the literal it stores under,
-  // THEN it must be the one the background page reads and the one the checkbox
+  // THEN it must be the one the bridge page reads and the one the checkbox
   // carries — the mistyped-key bug this test exists for:
   assert.match(source, /const ALLOW_PASSWORD_FIELDS = "allowPasswordFields";/);
   // Pinned at the assignment, not somewhere in the file: `.checked` also appears
@@ -171,7 +193,7 @@ test("optionsJs_forTheEvalSwitch_shouldNameTheSameKeyLiteralAsTheCheckbox", asyn
   const source = await readFile(new URL("../extension/options.js", import.meta.url), "utf8");
 
   // WHEN we read the literal it stores under,
-  // THEN it must be the one the background page reads and the one the checkbox
+  // THEN it must be the one the bridge page reads and the one the checkbox
   // carries:
   assert.match(source, /const ALLOW_EVAL = "allowEval";/);
   // Both halves, because they fail differently: a submit path that stored
@@ -190,10 +212,10 @@ test("optionsJs_forTheEvalSwitch_shouldNameTheSameKeyLiteralAsTheCheckbox", asyn
   );
 });
 
-test("backgroundJs_forTheEvalSwitch_shouldReadTheSameKeyLiteralAsTheCheckbox", async () => {
-  // GIVEN the background page, which is the side that refuses the call,
+test("bridgeJs_forTheEvalSwitch_shouldReadTheSameKeyLiteralAsTheCheckbox", async () => {
+  // GIVEN the bridge page, which is the side that refuses the call,
   const source = await readFile(
-    new URL("../extension/background.js", import.meta.url),
+    new URL("../extension/bridge.js", import.meta.url),
     "utf8",
   );
 
@@ -259,7 +281,7 @@ test("optionsJs_forTheScreenshotSwitch_shouldNameTheSameKeyLiteralAsTheCheckbox"
   const source = await readFile(new URL("../extension/options.js", import.meta.url), "utf8");
 
   // WHEN we read the literal it stores under,
-  // THEN it must be the one the background page reads and the one the checkbox
+  // THEN it must be the one the bridge page reads and the one the checkbox
   // carries — both halves, because they fail differently: a submit path that stored
   // `readFieldValue(…)` would save `"on"`, and a load path without the key would
   // leave the box unticked (or ticked when it must not be):
@@ -276,10 +298,10 @@ test("optionsJs_forTheScreenshotSwitch_shouldNameTheSameKeyLiteralAsTheCheckbox"
   );
 });
 
-test("backgroundJs_forTheScreenshotSwitch_shouldReadTheSameKeyLiteralAsTheCheckbox", async () => {
-  // GIVEN the background page, which is the side that refuses the call,
+test("bridgeJs_forTheScreenshotSwitch_shouldReadTheSameKeyLiteralAsTheCheckbox", async () => {
+  // GIVEN the bridge page, which is the side that refuses the call,
   const source = await readFile(
-    new URL("../extension/background.js", import.meta.url),
+    new URL("../extension/bridge.js", import.meta.url),
     "utf8",
   );
 

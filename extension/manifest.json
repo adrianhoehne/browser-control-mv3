@@ -4,7 +4,7 @@
   "version": "0.5.1",
   "description": "Steuert den sichtbaren, eingeloggten Firefox über die Bridge auf dem Server.",
   "background": {
-    "scripts": ["protocol.js", "background.js"],
+    "scripts": ["background.js"],
     "persistent": true
   },
   "permissions": ["tabs", "storage", "<all_urls>", "webRequest"],

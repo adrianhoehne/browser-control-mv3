@@ -77,7 +77,7 @@ PING 2026-11-17T15:15:48.205Z                     (die Seite selbst, 4 s später
 2. **Token erzeugen** (32 Bytes Zufall, 64 Hex) in eine Datei; `BC_TOKEN_FILE`
    darauf zeigen. `E2E_TOKEN_FILE` benennt sie.
 3. **Test-Kopie der Erweiterung bauen** (Verzeichnis, **kein Zip**): `extension/`
-   kopieren, dann **zwei Ersetzungen** in `<kopie>/background.js` — gepatcht und
+   kopieren, dann **zwei Ersetzungen** in `<kopie>/bridge.js` — gepatcht und
    gezählt wird **nur diese Datei**; `options.js` trägt denselben
    Endpunkt-Anker und würde jede Zählung über den ganzen Ordner zur Lüge
    machen — beide mit gezähltem Anker
@@ -92,6 +92,12 @@ PING 2026-11-17T15:15:48.205Z                     (die Seite selbst, 4 s später
    Die zweite Zeile steht in `readSettings`; sie ist eine Ersetzung, keine
    Einfügung — deshalb funktioniert `grep -c` für beide. Die ausgelieferte
    Erweiterung bleibt unverändert.
+
+   **Warum `bridge.js` und nicht `background.js`:** seit `docs/42` hält der
+   Brücken-Tab den Socket und liest die Einstellungen; `background.js` ist der
+   Koordinator, der diesen Tab anlegt und hält, und kennt weder Endpunkt noch
+   Token. Ein Anker, der weiter in `background.js` gesucht wird, wäre kein
+   Seam-Treffer, sondern ein `seam moved`.
 4. **Bridge starten:** `BC_BIND=127.0.0.1:18810 BC_HTTP_PORT=18811
    <binary> --http`, Ausgabe in eine Logdatei, **stdin auf `ignore`** (unter
    POSIX `< /dev/null`). Sonst beendet ein Pipe-EOF die Bridge mit 0
@@ -240,7 +246,7 @@ keinen Browser und ist als `e2e_seamPatch_shouldFindBothLines` gepinnt.
    nicht bestehen, indem sie nur „ok" antwortet.
 3. **Der Seam ist gepinnt.** `node scripts/e2e/run.mjs --self-check --source
    extension` ⇒ Exit 0; auf einer **Kopie** mit `sed -i
-   's/DEFAULT_ENDPOINT/ENDPOINT/g' <kopie>/background.js` ⇒ Exit 1 mit
+   's/DEFAULT_ENDPOINT/ENDPOINT/g' <kopie>/bridge.js` ⇒ Exit 1 mit
    `seam moved`. Die getrackte Datei bleibt unangetastet:
    `test -z "$(git status --porcelain extension/)"` ⇒ Exit **0**.
 4. **Unit und E2E sind getrennt.** `grep -c 'scripts/e2e/run.mjs'

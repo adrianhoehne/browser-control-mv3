@@ -272,14 +272,33 @@ Beweis: Kriterien 9, 10, 11 mit Zeitstempeln aus dem Bridge-Log.
 
 ## Bekannte Lücken
 
-- **Nichts davon ist gemessen.** Es gibt keine Tab-Variante im Baum; die 30,0 s
-  stammen aus `docs/02`, die 16 Aufrufstellen aus dem Code.
+- **Die Tab-Variante ist gebaut, aber nicht gemessen.** Stufe 1 steht: der Code
+  liegt als `extension/bridge.js` im Baum, `background.js` ist der Koordinator,
+  und die neun Tab-Fälle laufen im Stub-Harness. Die 30,0 s stammen weiter aus
+  `docs/02`, die 16 Aufrufstellen aus dem Code; Kriterien 9–13 entscheidet der
+  Betreiber nach Stufe 3.
 - **Tab-Discard ist eine Vermutung mit Vorsicht.** Dass ein angepinnter Tab
   seltener verworfen wird, ist **nicht belegt** — die Spec pinnt ihn trotzdem
   (Sichtbarkeit, Betreiberentscheid), und Kriterium 3 erzwingt das Verwerfen
   über `tabs.discard`, statt auf die Vermutung zu bauen.
 - **Die Injection-Naht ist ein Umbau, keine Umbenennung.** 16 Aufrufstellen und
   drei Helfer, die bisher als Text mitreisen.
+
+## Bekannte Lücken (nach Stufe 1, 2026-11-17)
+
+- **Sitzungswiederherstellung kann zwei Tabs erzeugen.** `runtime.onStartup`
+  kann feuern, **bevor** Firefox den wiederhergestellten Brücken-Tab anzeigt; der
+  Koordinator legt dann ein Fenster und einen zweiten Tab an, und der ältere
+  Socket bekommt `4409`. Kriterium 11 (Stufe 3) misst das; ob ein
+  Nachlauf-Fenster (`setTimeout` vor dem `query`) reicht, entscheidet die
+  Messung.
+- **Zwei Texte sagen noch „background".** `STARTUP_LOG_LINE` („bc: background
+  page started") bleibt, solange `INSTALL.md:442` sie zitiert — `INSTALL.md`
+  gehört zu `docs/44`. `scripts/e2e/run.mjs` druckt in seiner
+  `--self-check`-Meldung noch `background.js` (gehört zu `docs/40`).
+- **`bridge.js` ist eine 7 000-Zeilen-IIFE.** Der Umzug hat die Form nicht
+  geändert, nur den Ort; ein Aufteilen nach Zuständigkeit (Socket, Tab-Store,
+  Werkzeuggruppen) wäre ein eigener Umbau.
 
 ## Open questions
 
@@ -317,3 +336,13 @@ neu.
   MV2 genauso) und `goodbye` gehört zu Roadmap 32.
 - **2026-11-17, Vorgeschichte:** `docs/02` hat MV2 gewählt und den Socket im Tab
   als Kandidaten für eine eigene Spec benannt.
+- **2026-11-18, Stufe 1 gebaut:** die 7 032 Zeilen von
+  `extension/background.js` zogen nach `extension/bridge.js` — unverändert bis
+  auf den Kopf, der den neuen Ort nennt; `bridge.html` lädt `protocol.js` und
+  `bridge.js`. Der neue `background.js` ist der Koordinator: ein `tabs.create`
+  mit `pinned: true` und gemerkter `windowId`, Single-Flight-Guard, Neuanlage bei
+  `onRemoved`, `changeInfo.discarded` (Reload) und Navigation weg (`query` findet
+  ihn nicht mehr). Kein Socket, kein Backoff, kein Timer. Der Mitschnitt zog im
+  selben Schritt mit — Stufe 2 bleibt als eigener Beweis (Kriterium 12/13) offen.
+  Der Seam (`docs/40`) zeigt jetzt auf `bridge.js`; `test/bridge-tab.test.js`
+  trägt neun Fälle. Nicht committet, Kriterien 9–13 ungemessen.

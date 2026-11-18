@@ -61,9 +61,11 @@ Aus den Dateien gelesen, nicht geschätzt:
 
 - `bridge/config.mjs` bindet per Default `127.0.0.1:8110`; die Bridge sucht
   **keinen** freien Port und beendet sich mit `1`, wenn der belegt ist.
-- `extension/background.js` liest `endpoint` und `token` aus `storage.local`;
+- `extension/bridge.js` liest `endpoint` und `token` aus `storage.local`;
   ist einer davon leer, schreibt es **eine** Warnung (`missing settings`) und
-  verbindet **nicht**. Es gibt heute keinen Default.
+  verbindet **nicht**. Es gibt heute keinen Default. (Das war bis `docs/42` die
+  Datei `extension/background.js`; mit dem Socket zog die Zeile in den
+  Brücken-Tab. Das Kriterium 1 pinnt sie deshalb in `bridge.js`.)
 - `extension/options.js` schreibt beim Speichern `readFieldValue("endpoint").trim()`;
   ein leeres Feld speichert damit `""`.
 - `extension/options.html` trägt heute den Platzhalter
@@ -85,9 +87,9 @@ Aus den Dateien gelesen, nicht geschätzt:
 
 1. **Der Standard ist `ws://127.0.0.1:8110`, genau einmal je Datei.** Beweis —
    der Name **und** der Wert, zeilenweise gepinnt:
-   `grep -Fc 'const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";' extension/background.js`
+   `grep -Fc 'const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";' extension/bridge.js`
    ⇒ **1**; dieselbe Zeile für `extension/options.js` ⇒ **1**; dazu
-   `grep -Fc 'ws://127.0.0.1:8110' extension/background.js` ⇒ **1** (die Adresse
+   `grep -Fc 'ws://127.0.0.1:8110' extension/bridge.js` ⇒ **1** (die Adresse
    wird in der Datei nicht wiederholt — auch nicht in einem Kommentar, sonst
    zählt der Beweis zwei Zeilen und wäre falsch-rot). Die Zeile wird **wörtlich**
    gepinnt, einschließlich doppelter Anführungszeichen und eines Leerzeichens um
@@ -154,7 +156,8 @@ TAP-Kommentar den Treffer nicht verschluckt; `grep -c` mit `0` Treffern endet mi
 Exit 1 — das ist dort das Ergebnis, nicht der Fehler.
 
 **1. Hintergrund: der Standard greift vor der Leer-Prüfung.** (Umsetzer)
-`extension/background.js`: `const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";`
+`extension/background.js` — die Datei heißt seit `docs/42` `extension/bridge.js`,
+dort steht die Zeile: `const DEFAULT_ENDPOINT = "ws://127.0.0.1:8110";`
 neben `ENDPOINT_KEY`/`TOKEN_KEY` — der Kommentar darüber nennt
 `bridge/config.mjs` (`DEFAULT_BIND`) und Spec 36, wiederholt die Adresse aber
 **nicht**. In `connect()` direkt nach dem `readSettings`-`try/catch` und **vor**
@@ -329,7 +332,7 @@ Stand 2026-11-15, vor der Umsetzung:
   wollte die Zeile behalten. Beim nächsten Inkrement streichen — zusammen mit
   dem Log-Text „Endpunkt oder Token fehlt", der nur noch den Token meint.
 - **Zwei Trimmen (N2, 2026-11-15).** `options.js` trimmt den gespeicherten
-  Endpunkt, `background.js` nicht: ein handgepflegter Wert aus Leerzeichen wird
+  Endpunkt, `bridge.js` nicht: ein handgepflegter Wert aus Leerzeichen wird
   im Feld als Standard gezeigt und beim Verbinden verworfen. Über die
   Optionsseite nicht erreichbar (sie trimmt beim Speichern).
 - **`endpoint_withAStoredValue…` zählt die Sockets nicht (N3).** Eine doppelte
