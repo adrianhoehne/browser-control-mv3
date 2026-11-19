@@ -3562,6 +3562,231 @@
    * would claim an execution stopped that is still running. Two calls in one tab just
    * both run.
    */
+  /**
+   * The one `func` of `eval` (specs 47 and 49): it travels as source into the page's own
+   * world, so it can close over nothing of this module and carries its helpers itself.
+   *
+   * `args` is `[code, limits, want]` — every number the page needs arrives as an
+   * argument, because a closure over this module's constants would not survive the trip.
+   * Answers one `outcome` in every case and never a rejection: the caller's vocabulary is
+   * the wire protocol's codes.
+   */
+  async function evalInPage(args) {
+    const code = args[0];
+    const limits = args[1];
+    const want = args[2];
+    const hrefOf = () => String(location.href);
+    // The frame filter of spec 25, and the first thing that runs on purpose: a frame that
+    // was not addressed runs no code at all — `eval` may change the page, and no call may
+    // change a frame it did not name.
+    if (want !== null && want !== undefined && !hrefOf().toLowerCase().includes(want)) {
+      return { outcome: "not_the_frame", href: hrefOf() };
+    }
+
+    /**
+     * The hit's own address, on every answer below.
+     *
+     * Unconditionally, like the op it replaces: a refusal without one turns two throwing
+     * frames into `frame_ambiguous` with `candidates: [null, null]`, because the extension
+     * builds those candidates out of exactly this field.
+     */
+    function frameFields() {
+      return { href: hrefOf() };
+    }
+
+    /**
+     * A selector that finds this element and nothing else — the same preference chain
+     * `inspect` uses, so both tools describe one element the same way.
+     */
+    function selectorOf(element) {
+      const tag = String(element.tagName).toLowerCase();
+
+      function quotedValue(name) {
+        const value = element.getAttribute(name);
+        if (typeof value !== "string" || value === "" || value.indexOf('"') !== -1) return null;
+        return value.replace(/\r\n?|\n/g, " ").slice(0, limits.valueLimit);
+      }
+
+      function isTheOnlyMatch(candidate) {
+        try {
+          const matches = document.querySelectorAll(candidate);
+          return matches.length === 1 && matches[0] === element;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      function classNames() {
+        const className = element.getAttribute("class");
+        if (typeof className !== "string") return [];
+        return className
+          .split(/\s+/)
+          .filter((name) => name !== "")
+          .slice(0, limits.classLimit);
+      }
+
+      function positionOf(target) {
+        const parent = target.parentElement;
+        if (parent === null || parent === undefined) return 1;
+        const name = String(target.tagName);
+        let position = 0;
+        for (const sibling of parent.children) {
+          if (String(sibling.tagName) === name) position += 1;
+          if (sibling === target) break;
+        }
+        return position;
+      }
+
+      function pathOf() {
+        const steps = [];
+        let current = element;
+        while (current !== null && current !== undefined) {
+          const name = String(current.tagName).toLowerCase();
+          if (name === "html" || name === "body") steps.unshift(name);
+          else steps.unshift(`${name}:nth-of-type(${positionOf(current)})`);
+          current = current.parentElement;
+        }
+        return steps.join(" > ");
+      }
+
+      if (typeof element.id === "string" && element.id !== "") {
+        const candidate = `${tag}#${element.id}`;
+        if (isTheOnlyMatch(candidate)) return candidate;
+      }
+      const testId = quotedValue("data-testid");
+      if (testId !== null) {
+        const candidate = `[data-testid="${testId}"]`;
+        if (isTheOnlyMatch(candidate)) return candidate;
+      }
+      const label = quotedValue("aria-label");
+      if (label !== null) {
+        const candidate = `${tag}[aria-label="${label}"]`;
+        if (isTheOnlyMatch(candidate)) return candidate;
+      }
+      const name = quotedValue("name");
+      if (name !== null) {
+        const candidate = `${tag}[name="${name}"]`;
+        if (isTheOnlyMatch(candidate)) return candidate;
+      }
+      const classes = classNames();
+      if (classes.length > 0) {
+        const candidate = `${tag}${classes.map((className) => `.${className}`).join("")}`;
+        if (isTheOnlyMatch(candidate)) return candidate;
+      }
+      return pathOf();
+    }
+
+    /**
+     * One value, as data JSON can carry.
+     *
+     * `undefined` becomes `null` by hand: `JSON.stringify({a: undefined})` drops the key,
+     * and a missing key is a different statement than `"a": null`. `ancestors` is the
+     * path, not every object ever seen, so a reference shared twice is duplicated (like
+     * `JSON.stringify` would) while a real cycle is refused.
+     */
+    function serialize(value) {
+      function walk(current, ancestors) {
+        if (current === null || current === undefined) return null;
+        const type = typeof current;
+        if (type === "function") return "[function]";
+        if (type === "symbol") return "[symbol]";
+        if (type === "bigint") return current.toString();
+        if (type !== "object") return current;
+        if (typeof current.nodeType === "number") {
+          // Only an element has a tag and a selector; a text node has neither, and
+          // inventing one would be a second format.
+          if (current.nodeType !== 1) return { kind: "node", nodeType: current.nodeType };
+          return {
+            kind: "node",
+            tag: String(current.tagName).toLowerCase(),
+            selector: selectorOf(current),
+          };
+        }
+        if (ancestors.has(current)) throw new Error("circular result");
+        ancestors.add(current);
+        try {
+          if (Array.isArray(current)) return current.map((entry) => walk(entry, ancestors));
+          const mapped = {};
+          for (const key of Object.keys(current)) mapped[key] = walk(current[key], ancestors);
+          return mapped;
+        } finally {
+          ancestors.delete(current);
+        }
+      }
+      return walk(value, new WeakSet());
+    }
+
+    /** Whether the code produced something we should wait for. */
+    function isThenable(value) {
+      return value !== null && typeof value === "object" && typeof value.then === "function";
+    }
+
+    /**
+     * Waits for `thenable`, but not longer than `limits.timeoutMs`.
+     *
+     * Answers the caller's marker object, so "time ran out" cannot be confused with a
+     * code that answered nothing, and always disarms the timer.
+     */
+    async function withinDeadline(thenable, deadline) {
+      let timerId = null;
+      try {
+        return await Promise.race([
+          thenable,
+          new Promise((resolve) => {
+            timerId = setTimeout(() => resolve(deadline), limits.timeoutMs);
+          }),
+        ]);
+      } finally {
+        clearTimeout(timerId);
+      }
+    }
+
+    /** The page's own words for a throw, cut to what a caller can read. */
+    function messageOf(error) {
+      const raw = error?.message ?? error;
+      return String(raw).slice(0, limits.messageLimit);
+    }
+
+    // The window of `elapsedMs`: from immediately before the code is called to after its
+    // result is mapped. A number taken outside this window would be no measurement.
+    const startedAt = Date.now();
+    // A value no code can reach: the locals of this function are invisible to
+    // `new Function`, which compiles in the page's global scope.
+    const deadline = { deadline: true };
+
+    let produced;
+    try {
+      produced = new Function(code)();
+      if (isThenable(produced)) {
+        produced = await withinDeadline(produced, deadline);
+        if (produced === deadline) return { outcome: "timeout", ...frameFields() };
+      }
+    } catch (error) {
+      return { outcome: "threw", message: messageOf(error), ...frameFields() };
+    }
+
+    let json;
+    try {
+      json = JSON.stringify(serialize(produced));
+    } catch (error) {
+      return { outcome: "unserializable", ...frameFields() };
+    }
+
+    // Measured after the mapping, before the size check: the mapping is what the code
+    // cost the page, the check is our bookkeeping.
+    const elapsedMs = Date.now() - startedAt;
+    // A refusal, never a cut: half a JSON is no answer.
+    if (json.length > limits.resultLimit) return { outcome: "too_large", ...frameFields() };
+    return {
+      outcome: "ok",
+      url: location.href,
+      title: document.title,
+      elapsedMs,
+      json,
+      ...frameFields(),
+    };
+  }
+
   async function evalAgentTab(params) {
     if (!(await evalAllowed())) {
       throw new EvalError(EVAL_NOT_ALLOWED_CODE, EVAL_NOT_ALLOWED_MESSAGE);
