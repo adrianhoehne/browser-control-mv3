@@ -112,8 +112,11 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 
 **Kriterien 1–4 entscheidet der Umsetzer**, ohne Browser.
 
-1. **Ein Serialisierer.** `grep -c 'function serialize' extension/page-agent.js`
-   ⇒ **0**, in `extension/bridge.js` ⇒ **1**.
+1. **Ein Serialisierer, und kein toter Aufrufer.**
+   `grep -c 'function serialize' extension/page-agent.js` ⇒ **0**, in
+   `extension/bridge.js` ⇒ **1**; `grep -c 'evalPageSource' extension/page-agent.js`
+   ⇒ **0**. Sonst bleibt ein Rumpf stehen, der `serialize` aufruft und nie
+   läuft, und `npm test` wie `node --check` merken es nicht.
 2. **Der Kanal ist frei.** In `eval_withReturnDocumentTitle_shouldAnswerTheTitle`
    ist `tabs.channel.calls.length` ⇒ **0**, und der Inject-Aufruf trägt `func`.
 3. **Der Vertrag steht.** `injection_forEval_shouldCarryArgsFuncTarget` ⇒ grün;
@@ -140,8 +143,10 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 
 Dateien: `extension/bridge.js` (der eigenständige `func` mit Frame-Filter, den
 fünf `limits`, Serialisierer, DOM-Formen; der Aufruf auf `:3597` wird ein
-direkter `injectScript`-Aufruf), `extension/page-agent.js` (`eval`-Op und
-`serialize` löschen), `test/extension.test.js` (die 23 Kanal-Fälle auf den
+direkter `injectScript`-Aufruf), `extension/page-agent.js` (`eval`-Op, `serialize`, `evalPageSource` `:1432`
+samt `isThenable` `:1507` und `withinDeadline` `:1519` löschen — sie rufen sich
+gegenseitig und `:1568` ruft das gelöschte `serialize`; auf der Brückenseite wird
+`evalPageRequest` `:3684` genauso arbeitslos), `test/extension.test.js` (die 23 Kanal-Fälle auf den
 `func`-Zweig aus `docs/47`).
 
 **Voraussetzung: `docs/47` Stufe 2** (der Transport — `runFuncIn` async, `inject`
@@ -178,7 +183,8 @@ Beweis: keiner in Code — die Suite aus Stufe 1 bleibt grün.
 - **Der Wächter-Fall muss umgebaut werden.**
   `eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard`
   (`:12286`) hängt an `silent`-Frames und den zwei `INJECTION_REPLY_TIMEOUT_MS`
-  (`:12308-12316`). Beides fällt mit dem Kanal weg. Der Haken ist da —
+  (`:12321`, `:12325`, mit der Schleife `:12322-12328` und den
+  Doppelantwort-Pins `:12329-12330`). Beides fällt mit dem Kanal weg. Der Haken ist da —
   `neverAnswer` (`test/extension.test.js:559`) —, Stufe 1 stellt den Fall darauf
   um und prüft, dass `EVAL_GUARD_MS` greift, wenn das Promise nie aufgelöst
   wird. Bis dahin ist die Wächter-Frist unbelegt.
@@ -196,7 +202,7 @@ Beweis: keiner in Code — die Suite aus Stufe 1 bleibt grün.
 
 ## Review
 
-### Runde 1 dieses Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧
+### Runde 2 dieses Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧
 
 Vier Blocker: alle Testzeilen waren um 54 verrutscht (die Spec war gegen den
 Baum **vor** `35be904` geschrieben, das den Harness-Fall einfügte), und Kriterium
@@ -252,7 +258,7 @@ und die Doku.
 (`:1791`); die Zahlen sind 5 + 2; `evalResultOf` `:3633` und das Parsen `:3658`;
 der `func` ist ein Funktionswert, der als Quelltext reist.
 
-### Runde 1 dieses Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧
+### Runde 2 dieses Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧
 
 Der vierte Rutsch derselben Art: `50c5569` (der Transport in `docs/47`) schob
 jede Testzeile um **+12**, und die Spec war gegen den Stand davor geschrieben —
@@ -269,6 +275,20 @@ jetzt der **Fall-Umbau** (`silent` und die zwei `INJECTION_REPLY_TIMEOUT_MS`
 fallen weg, `neverAnswer` `:559` tritt an ihre Stelle); und das fehlende
 Amendment steht in der Tabelle — `docs/47 ## Bekannte Lücken` („der
 `func`-Zweig ist ungenutzt") wird mit Stufe 1 falsch.
+
+### Runde 2 dieses Zuschnitts — Nachtrag
+
+Zwei Blocker: das Löschen von „`eval`-Op und `serialize`" ließ `evalPageSource`
+(`:1432`) mit `isThenable` und `withinDeadline` stehen, deren Rumpf auf `:1568`
+das gelöschte `serialize` aufrief — Kriterium 1 wäre grün geworden, obwohl die
+Datei einen toten Aufruf trägt; und der Lücken-Bereich `:12308-12316` zeigte auf
+die Stelle, die **bleiben** muss (die `eval_timeout`-Assertion der
+`frame`-Variante), statt auf `:12321`/`:12325` mit der Schleife und den
+Doppelantwort-Pins.
+
+**Übernommen:** die drei Funktionen stehen in der Stufe-1-Datei-Liste,
+Kriterium 1 prüft außerdem `grep -c 'evalPageSource'` ⇒ 0, `evalPageRequest`
+(`:3684`) ist als arbeitslos benannt, und der Bereich ist `:12317-12330`.
 
 ## Log
 
