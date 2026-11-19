@@ -1,6 +1,6 @@
 ---
 description: Der Harness kann einen func in zwei Welten je Frame ausführen — testbare Infrastruktur, kein sichtbares Verhalten.
-status: proposed
+status: active
 ---
 
 # Der Func-Runner im Harness
@@ -127,6 +127,13 @@ geteilten Hälfte neu, weil ihr Umfang ein anderer ist.
 
 ## Log
 
+- **2026-11-19, gebaut und gemessen:** der `func`-Zweig steht in `inject()`, der
+  Pin ist die Vereinigung, `inject_withAFunc_shouldRunItInThePageWorldRealm` ist
+  grün. Belege: `# tests 539, # fail 0, # cancelled 0, # skipped 0`;
+  `npm run check` 0 (23 Dateien); `git diff --stat extension/` leer. Der Fall
+  beweist beides: der `func` schreibt `globalThis.__bcProbe` und liest sie im
+  nächsten Aufruf wieder (42), die isolierte Welt desselben Frames sieht
+  `undefined`.
 - **2026-11-19, Teilung:** dritter Block des geteilten `docs/47`; der Schnitt
   folgt dem Reviewer — Harness-Infrastruktur hier, Vertrag und Umzug in
   `docs/49`.

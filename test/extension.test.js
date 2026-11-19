@@ -388,6 +388,8 @@ function createPageAgentChannel(config = null) {
   // are read off it, which is how a case states "the read settled before it read".
   const calls = [];
   const realms = new Map();
+  // The page's own world, one per frame, built only when a `func` injection asks for it.
+  const pageRealms = new Map();
   const heldAnswers = [];
   let currentTabId = null;
   // `refuseInjection` is the page that refuses every file; the counter is the one refusal
@@ -457,6 +459,42 @@ function createPageAgentChannel(config = null) {
   }
 
   /**
+   * The page's own world: a second context for the same frame, separate from the isolated
+   * one `realmOf` builds. A `func` injection runs here and nowhere else. The fixture is
+   * shared — same `page`, same URL, the same DOM — the globals are not, which is the
+   * whole difference the two worlds are about.
+   */
+  function pageRealmOf(index) {
+    const existing = pageRealms.get(index);
+    if (existing !== undefined) return existing;
+    const frame = frames[index];
+    const clock = frame.clock ?? createPageClock();
+    const mutationObserver = frame.mutationObserver ?? createMutationObserverStub(clock);
+    const page = frame.page ?? { url: frame.href, inFrame: frame.top === false };
+    const { context } = pageContextOf(page, { clock, mutationObserver });
+    vm.createContext(context);
+    const realm = { context };
+    pageRealms.set(index, realm);
+    return realm;
+  }
+
+  /**
+   * The `func` into the page's world through its **source**, never through the value: a
+   * function handed over as a value would keep this realm's globals and the case would
+   * prove the sandbox instead of the injection. `args` travel as JSON for the same
+   * reason, and the result comes back the same way.
+   */
+  function runFuncIn(index, func, args) {
+    const { context } = pageRealmOf(index);
+    const pageFunction = vm.runInContext(`(${func.toString()})`, context, {
+      filename: "injected:func.js",
+    });
+    const values = args === undefined ? [] : JSON.parse(JSON.stringify(args));
+    const value = pageFunction(...values);
+    return JSON.parse(JSON.stringify(value === undefined ? null : value));
+  }
+
+  /**
    * `scripting.executeScript({target, files})`: the file into every addressed frame, one
    * `{frameId, result}` per frame back.
    *
@@ -467,18 +505,26 @@ function createPageAgentChannel(config = null) {
    */
   function inject(details) {
     requireConfig("an injection of `page-agent.js`");
+    // Two shapes, one pin: the file injection the ops travel on, and the `func`
+    // injection of `eval` (specs 47 and 49). Whichever arrived, the keys are exactly its
+    // own — an MV2 leftover fails here instead of being ignored by the next browser.
+    const carriesAFunc = details.func !== undefined;
     assert.deepStrictEqual(
       Object.keys(details).sort(),
-      ["files", "target"],
-      "`scripting.executeScript` takes a `target` and `files`, nothing else",
+      carriesAFunc ? ["args", "func", "target"] : ["files", "target"],
+      carriesAFunc
+        ? "a `func` injection takes `args`, `func` and `target`, nothing else"
+        : "`scripting.executeScript` takes a `target` and `files`, nothing else",
     );
-    // Through this realm: `details` was built in the sandbox, and `deepStrictEqual`
-    // compares prototypes. Same trap as everywhere else in this harness.
-    assert.deepStrictEqual(
-      inThisRealm(details.files),
-      [PAGE_AGENT_FILE],
-      "the one file of the page agent",
-    );
+    if (carriesAFunc === false) {
+      // Through this realm: `details` was built in the sandbox, and `deepStrictEqual`
+      // compares prototypes. Same trap as everywhere else in this harness.
+      assert.deepStrictEqual(
+        inThisRealm(details.files),
+        [PAGE_AGENT_FILE],
+        "the one file of the page agent",
+      );
+    }
     const target = details.target;
     currentTabId = target.tabId;
     if (remainingInjectionRefusals > 0) {
@@ -499,6 +545,14 @@ function createPageAgentChannel(config = null) {
       );
     }
     const indexes = target.allFrames === true ? frames.map((_, index) => index) : [0];
+    // The one real difference between the shapes: a `func` answers through its return
+    // value, one entry per frame, and the file injection through the channel.
+    if (carriesAFunc) {
+      return indexes.map((index) => ({
+        frameId: index,
+        result: runFuncIn(index, details.func, details.args),
+      }));
+    }
     for (const index of indexes) runFileIn(index);
     // `result` stays `undefined` for a `files` injection, exactly like Firefox: the
     // answers of the ops arrive through the channel, never as a return value (spec 45).
@@ -17003,6 +17057,46 @@ async function injectionStarted(pageAgent) {
   const started = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
   return { tabs, ...started };
 }
+
+test("inject_withAFunc_shouldRunItInThePageWorldRealm", async () => {
+  // GIVEN a tab with one main frame, injected the ordinary way — so the isolated world
+  // of that frame exists and has run the page agent,
+  const page = { ...DEFAULT_READ_PAGE };
+  const tabs = createTabsStub({ pageAgent: { frames: [{ href: page.url, page, top: true }] } });
+  await tabs.injectFile({ files: [PAGE_AGENT_FILE], target: { tabId: 500, frameIds: [0] } });
+
+  // WHEN a `func` writes a variable onto the page's global and reads it back,
+  const [first] = await tabs.injectFile({
+    args: [],
+    func: function () {
+      globalThis.__bcProbe = 42;
+      return globalThis.__bcProbe;
+    },
+    target: { tabId: 500, frameIds: [0] },
+  });
+
+  // THEN it ran, and the answer is its return value — one entry per frame, like
+  // `executeScript` answers a `func`,
+  assert.equal(first.frameId, 0);
+  assert.equal(first.result, 42);
+
+  // ... the variable stayed in the page's world, so the next injection still reads it,
+  const [second] = await tabs.injectFile({
+    args: [],
+    func: function () {
+      return globalThis.__bcProbe;
+    },
+    target: { tabId: 500, frameIds: [0] },
+  });
+  assert.equal(second.result, 42);
+
+  // ... and the isolated world of the same frame does not see it, so the two realms are
+  // really two — the claim every later case about the page world rests on,
+  assert.equal(
+    vm.runInContext("typeof globalThis.__bcProbe", tabs.channel.realms.get(0).context),
+    "undefined",
+  );
+});
 
 test("injection_whenAFrameStaysSilent_shouldRejectAtTheDeadline", async () => {
   // GIVEN one frame that takes the file but never answers — the frame mid-navigation:
