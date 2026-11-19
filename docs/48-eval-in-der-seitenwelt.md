@@ -155,6 +155,22 @@ Beweis: Kriterien 5, 6, 7 und `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlo
 
 ## Log
 
+- **2026-11-19, Firefox-Berechtigungen gemessen** (gehört hierher, weil beide
+  Schalter `eval` und die Injektion betreffen):
+  - **Run in Private Windows = Allow:** ohne Wirkung. Private Fenster sind an drei
+    Stellen bewusst ausgeschlossen (`background.js:453`, `:466`,
+    `bridge.js:942`); `browser_status` zeigt sie auch mit Recht nicht.
+  - **Run on sites with restrictions = Allow**, gesetzt und **Firefox neu
+    gestartet:** `read`, `inspect`, `eval` und `click` antworten auf
+    `https://addons.mozilla.org/de/firefox/` weiter mit `page_not_readable`.
+    `navigate` funktioniert (keine Injektion nötig). Der Schalter wirkt für
+    dieses Add-on nicht.
+  - Vermutung, nicht gemessen: Firefox erzwingt seine Liste der eingeschränkten
+    Domains unabhängig vom Schalter für MV3-Add-ons, die das Recht nicht als
+    `optional_permissions` deklarieren.
+
+## Log
+
 - **2026-11-19, gebaut und am laufenden Browser gemessen.** `world: "MAIN"` in der
   Injektion, `EVAL_CSP_CODE`/`EVAL_CSP_MESSAGE` benannt, Harness pinnt `world`.
   Gegen den Dienst (`wss://`, Tab 10 = Google-Suche, Tab 9 = GitHub):
@@ -174,6 +190,22 @@ Beweis: Kriterien 5, 6, 7 und `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlo
 
   **Offen:** der Hinweis auf der Optionsseite (Stufe 2) und der Satz in
   `docs/47 ## Bekannte Lücken` ist nachgezogen.
+
+## Log
+
+- **2026-11-19, Firefox-Berechtigungen gemessen** (gehört hierher, weil beide
+  Schalter `eval` und die Injektion betreffen):
+  - **Run in Private Windows = Allow:** ohne Wirkung. Private Fenster sind an drei
+    Stellen bewusst ausgeschlossen (`background.js:453`, `:466`,
+    `bridge.js:942`); `browser_status` zeigt sie auch mit Recht nicht.
+  - **Run on sites with restrictions = Allow**, gesetzt und **Firefox neu
+    gestartet:** `read`, `inspect`, `eval` und `click` antworten auf
+    `https://addons.mozilla.org/de/firefox/` weiter mit `page_not_readable`.
+    `navigate` funktioniert (keine Injektion nötig). Der Schalter wirkt für
+    dieses Add-on nicht.
+  - Vermutung, nicht gemessen: Firefox erzwingt seine Liste der eingeschränkten
+    Domains unabhängig vom Schalter für MV3-Add-ons, die das Recht nicht als
+    `optional_permissions` deklarieren.
 
 ## Log
 

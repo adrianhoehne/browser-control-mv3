@@ -292,13 +292,13 @@ Then in Firefox:
 ## Firefox permissions
 
 Firefox offers two switches per add-on under `about:addons` → the add-on →
-Permissions. Neither is needed for the tools, and one of them is deliberately
-ignored.
+Permissions. Neither is needed for the tools. The first is deliberately
+ignored and the second does not take effect (both measured, see the table).
 
 | Switch | What it does | Our advice |
 |---|---|---|
 | **Run in Private Windows** | Lets the extension run in private windows. | Leave it **off**. The tools never touch a private window: the bridge tab is created in a normal window only, and the window list excludes private ones in three places (`background.js:453`, `:466`, `bridge.js:942`). Turning it on gains nothing and widens what the extension may see. |
-| **Run on sites with restrictions** | Lets the extension work where Mozilla restricts add-ons, e.g. `addons.mozilla.org`. | Optional. Without it, reading such a page answers with a named error instead of content. |
+| **Run on sites with restrictions** | Meant to let the extension work where Mozilla restricts add-ons, e.g. `addons.mozilla.org`. | **No effect here, measured.** With the switch on and Firefox restarted, `read`, `inspect`, `eval` and `click` still answer `page_not_readable` on `addons.mozilla.org`; only `navigate` works, because navigating needs no injection. Leave it off unless you want it for another reason. |
 
 The four permissions the manifest declares are `tabs`, `storage`, `webRequest`
 and `scripting`, plus `<all_urls>` as host access. `scripting` is what carries the
