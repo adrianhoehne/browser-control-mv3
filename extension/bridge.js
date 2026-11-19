@@ -407,7 +407,12 @@
   const EVAL_FAILED_CODE = "eval_failed";
   const EVAL_TIMEOUT_CODE = "eval_timeout";
   const EVAL_RESULT_TOO_LARGE_CODE = "eval_result_too_large";
-  const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
+  // The page's own CSP. A named code instead of a wrapped error text: the cause is the
+// page's rule, not our bug (spec 48).
+const EVAL_CSP_CODE = "eval_blocked_by_the_page";
+const EVAL_CSP_MESSAGE =
+  "Die Seite verbietet eigenes Skript (CSP) — Werte lassen sich mit `read` oder `inspect` holen.";
+const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
 
   // Quoted from the wire protocol and kept in step with the bridge by hand, like
   // `TOO_MANY_TABS_MESSAGE`: both suites assert this exact sentence, so a rewrite on
@@ -3821,6 +3826,10 @@
       // `askPageAgent`, which always takes the channel.
       const injected = injectScript(tab.id, {
         target: want === null ? { tabId: tab.id, frameIds: [0] } : { tabId: tab.id, allFrames: true },
+        // The page's own world, not the isolated one: `new Function` is blocked by the
+        // extension's CSP inside the isolated world, and allowed by most pages in their
+        // own — which is the difference between `eval` working and not (specs 47, 48).
+        world: "MAIN",
         args: [request.code, limits, want],
         func: evalInPage,
       });
@@ -3860,10 +3869,14 @@
    */
   function evalResultOf(tabId, entry) {
     if (entry?.outcome === "threw") {
-      throw new EvalError(
-        EVAL_FAILED_CODE,
-        typeof entry.message === "string" ? entry.message : EVAL_FAILED_MESSAGE,
-      );
+      const message = typeof entry.message === "string" ? entry.message : "";
+      // A page that forbids its own script is not a failed call: it is a page with a rule.
+      // Named as such, with the way around it — a bare CSP text would send the caller into
+      // a retry that cannot work (spec 48).
+      if (message.includes("CSP")) {
+        throw new EvalError(EVAL_CSP_CODE, EVAL_CSP_MESSAGE);
+      }
+      throw new EvalError(EVAL_FAILED_CODE, message === "" ? EVAL_FAILED_MESSAGE : message);
     }
     if (entry?.outcome === "timeout") {
       throw new EvalError(EVAL_TIMEOUT_CODE, EVAL_TIMEOUT_MESSAGE);

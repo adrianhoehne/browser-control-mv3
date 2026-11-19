@@ -516,11 +516,14 @@ function createPageAgentChannel(config = null) {
     const carriesAFunc = details.func !== undefined;
     assert.deepStrictEqual(
       Object.keys(details).sort(),
-      carriesAFunc ? ["args", "func", "target"] : ["files", "target"],
+      carriesAFunc ? ["args", "func", "target", "world"] : ["files", "target"],
       carriesAFunc
-        ? "a `func` injection takes `args`, `func` and `target`, nothing else"
+        ? "a `func` injection takes `args`, `func`, `target` and `world`, nothing else"
         : "`scripting.executeScript` takes a `target` and `files`, nothing else",
     );
+    if (carriesAFunc) {
+      assert.equal(details.world, "MAIN", "a `func` runs in the page's own world (spec 48)");
+    }
     if (carriesAFunc === false) {
       // Through this realm: `details` was built in the sandbox, and `deepStrictEqual`
       // compares prototypes. Same trap as everywhere else in this harness.
@@ -12180,7 +12183,7 @@ test("eval_withReturnDocumentTitle_shouldAnswerTheTitle", async () => {
   assertNoTimerLeft(clock, pageClocks);
 });
 
-test("injection_forEval_shouldCarryArgsFuncTarget", async () => {
+test("injection_forEval_shouldCarryWorldMain", async () => {
   // GIVEN the switch on and a complete agent tab,
   const { tabs } = await evalOnce({ code: "return 1" });
 
@@ -12192,8 +12195,11 @@ test("injection_forEval_shouldCarryArgsFuncTarget", async () => {
   assert.equal(tabs.scriptCalls.length, 1);
   assert.deepStrictEqual(
     Object.keys(tabs.scriptCalls[0].details).sort(),
-    ["args", "target"],
+    ["args", "target", "world"],
   );
+  // ... and in the page's own world: the isolated one blocks `new Function` with the
+  // extension's CSP, which is what kept `eval` dead under MV3 (spec 48),
+  assert.equal(tabs.scriptCalls[0].details.world, "MAIN");
   // ... the function travelled as its source, so the injection's `func` is a real value
   // at the moment it is handed over — the recording just cannot show it,
   assert.equal(tabs.scriptCalls[0].details.func, undefined, "the recording cannot keep a function");
@@ -17115,6 +17121,7 @@ test("inject_withAFunc_shouldRunItInThePageWorldRealm", async () => {
   // WHEN a `func` writes a variable onto the page's global and reads it back,
   const [first] = await tabs.injectFile({
     args: [],
+    world: "MAIN",
     func: function () {
       globalThis.__bcProbe = 42;
       return globalThis.__bcProbe;
@@ -17130,6 +17137,7 @@ test("inject_withAFunc_shouldRunItInThePageWorldRealm", async () => {
   // ... the variable stayed in the page's world, so the next injection still reads it,
   const [second] = await tabs.injectFile({
     args: [],
+    world: "MAIN",
     func: function () {
       return globalThis.__bcProbe;
     },
@@ -17155,6 +17163,7 @@ test("inject_withAFuncThatAnswersAPromise_shouldAnswerTheResolvedValue", async (
   // WHEN a `func` answers a promise that resolves on a 50 ms page timer,
   const [entry] = await tabs.injectFile({
     args: [25],
+    world: "MAIN",
     func: function (delayMs) {
       return new Promise((resolve) => {
         setTimeout(() => resolve(`after ${delayMs}`), delayMs);
