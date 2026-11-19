@@ -12216,6 +12216,34 @@ test("injection_forEval_shouldCarryWorldMain", async () => {
   assert.equal(tabs.scriptCalls[0].details.args[2], null, "no `frame` is the main frame");
 });
 
+test("eval_withTopLevelAwait_shouldAnswerTheResolvedValue", async () => {
+  // GIVEN the switch on and code that awaits at its top level — the shape every API call
+  // against the page itself needs (spec 50),
+  const { answer } = await evalOnce(
+    { code: "const v = await Promise.resolve(7);\nreturn v;" },
+    DEFAULT_READ_PAGE,
+    { advanceMs: 10 },
+  );
+
+  // THEN it runs, and the awaited value is the answer,
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.result, 7);
+});
+
+test("eval_withTopLevelAwaitThatRejects_shouldAnswerEvalFailed", async () => {
+  // GIVEN code whose awaited value rejects,
+  const { answer } = await evalOnce(
+    { code: "await Promise.reject(new Error('kein Zugriff'));" },
+    DEFAULT_READ_PAGE,
+    { advanceMs: 10 },
+  );
+
+  // THEN the page's words travel as `eval_failed`, exactly like a throw,
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "eval_failed");
+  assert.match(answer.error.message, /kein Zugriff/);
+});
+
 test("eval_withMultiLineCodeAndReturn_shouldAnswer42", async () => {
   // GIVEN the switch on and a code that is statements, not an expression — the shape
   // a function *body* allows,

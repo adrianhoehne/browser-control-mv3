@@ -1,6 +1,6 @@
 ---
 description: Im eval-Code ist await auf oberster Ebene erlaubt — der func baut den Code als Rumpf einer async-Funktion.
-status: proposed
+status: active
 ---
 
 # `await` im `eval`-Code
@@ -50,8 +50,14 @@ Regel, die der Aufrufer nicht kennt.
 ## Die Änderung
 
 ```js
-produced = await new (Object.getPrototypeOf(async function () {}).constructor)(code)();
+produced = new (Object.getPrototypeOf(async function () {}).constructor)(code)();
 ```
+
+**Kein `await` vor dem Konstruktor.** Das wäre der naheliegende Griff und der
+falsche: eine async-Funktion nimmt jede Zusage an, also käme `isThenable` nie zum
+Zug, `withinDeadline` liefe nie, und die 2 000-ms-Frist wäre gelöscht. Gemessen in
+einer Wegwerf-Kopie: `eval_withAPromisePastTheDeadline…` antwortete `ok: true`
+statt `eval_timeout`.
 
 Der Konstruktor der async-Funktion statt `Function`: derselbe Rumpf, dieselbe
 Seitenwelt, aber `await` ist erlaubt. Ein Code **ohne** `await` verhält sich
@@ -63,25 +69,30 @@ für Code, der gar nicht warten wollte: sie ist eine Obergrenze, keine Wartezeit
 
 | Risiko | Wirkung | Gegenmittel |
 |---|---|---|
-| Jeder Code wird zum Promise | `elapsedMs` könnte durch einen Microtask wachsen. Gemessen: 0–1 ms bei trivialem Code | Fall `eval_withReturnDocumentTitle…` pinnt den Wert nur auf `Number.isInteger`, nicht auf 0 |
-| `await` in einer Seite ohne Promise | die Seite hat Promise | kein Fall, jede Seite hat `Promise` |
+| Jeder Code wird zum Promise | `elapsedMs` könnte durch einen Microtask wachsen. Ein Kommando dafür gibt es nicht, weil `Date.now()` im Harness die Seitenuhr ist | Fall `eval_withReturnDocumentTitle…` pinnt nur `Number.isInteger`, nicht 0 — der ehrliche Ersatz für eine Messung |
 | Ein Fehler in einer async-Funktion wird zur Rejection statt zum Wurf | `catch` im `func` fängt beides, weil `await` die Rejection wirft | Fall `eval_whenTheCodeThrows…` bleibt unverändert |
 
 ## Testing
 
 | Datei | Fall | Was er beweist |
 |---|---|---|
-| `test/extension.test.js` | `eval_withTopLevelAwait_shouldAnswerTheResolvedValue` (**neu**) | `const v = await Promise.resolve(7); return v;` ⇒ `7` |
-| `test/extension.test.js` | `eval_withTopLevelAwaitThatRejects_shouldAnswerEvalFailed` (**neu**) | eine abgelehnte Zusage wird `eval_failed` mit dem Text der Seite |
-| `test/extension.test.js` | `eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (bestehend, `:12268`) | die Frist gilt weiter |
+| `test/extension.test.js` | `eval_withTopLevelAwait_shouldAnswerTheResolvedValue` (**neu**, mit `{ advanceMs: 10 }`) | `const v = await Promise.resolve(7); return v;` ⇒ `7` |
+| `test/extension.test.js` | `eval_withTopLevelAwaitThatRejects_shouldAnswerEvalFailed` (**neu**, mit `{ advanceMs: 10 }`) | eine abgelehnte Zusage wird `eval_failed` mit dem Text der Seite |
+| `test/extension.test.js` | `eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (bestehend, `:12310`) | die Frist gilt weiter |
+
+**`advanceMs` ist Pflicht in den beiden neuen Fällen.** Ohne die Opt-out-Angabe
+fährt der Harness die Seitenuhr leer, die 2 000-ms-Frist fällt vor den
+Microtasks, und beide Fälle antworten `eval_timeout` — gemessen. Der bestehende
+50-ms-Fall (`:12288`) macht es genauso und begründet es im Kommentar.
 | `test/extension.test.js` | die 30 übrigen `eval_`-Fälle | nichts anderes ändert sich |
 
 ## Acceptance criteria
 
 1. **`await` trägt.** `node --test --test-reporter=tap --test-name-pattern="eval_withTopLevelAwait" test/extension.test.js`
    ⇒ zwei `ok`, kein `not ok`.
-2. **Die Frist bleibt.** `eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout`
-   ⇒ grün.
+2. **Die Frist bleibt.** `node --test --test-reporter=tap
+   --test-name-pattern="eval_withAPromisePastTheDeadline" test/extension.test.js`
+   ⇒ ein `ok`, kein `not ok`.
 3. **Sonst nichts.** `npm test` ⇒ `# fail 0`, `# cancelled 0`, `# skipped 0`;
    `npm run check` ⇒ 0.
 
@@ -99,9 +110,10 @@ Code gebaut wird.
 
 | Dokument | Abschnitt | was gilt |
 |---|---|---|
-| `docs/19-browser-eval.md` | `## Extension` | der Code wird als Rumpf einer **async**-Funktion gebaut; `await` auf oberster Ebene ist erlaubt, `return` bleibt Pflicht; datiert nachgezogen |
-| `docs/19-browser-eval.md` | `## Bekannte Lücken` | der Satz über `await` (falls vorhanden) entfällt |
-| `docs/49-func-vertrag-und-umzug.md` | `## Der Vertrag` | der `func` baut den Code mit dem Konstruktor der async-Funktion; `isThenable`/`withinDeadline` bleiben unverändert |
+| `docs/19-browser-eval.md` | `## Ziel` (`:31-32`) | „Der Code ist ein Funktionsrumpf … `new Function(code)()`" gilt nicht mehr: es ist der Rumpf einer **async**-Funktion, `await` ist erlaubt, `return` bleibt Pflicht. Datiert nachgezogen |
+| `docs/19-browser-eval.md` | `## Extension` | derselbe Wechsel, mit dem Konstruktor der async-Funktion als Bauart |
+| `docs/49-func-vertrag-und-umzug.md` | `## Der Vertrag` | der `func` baut den Code mit dem Konstruktor der async-Funktion. **Die 2 000-ms-Frist bleibt:** `isThenable`/`withinDeadline` warten unverändert die Zusage ab. Genau deshalb steht vor dem Konstruktor kein `await` |
+| `docs/31-youtube-recherche.md` | `:163`, `:321`, `:648` | die dort gemessene `await`-Erfahrung bleibt als **datierte Historie** stehen; kein Nachtrag nötig |
 
 ## Bekannte Lücken
 
@@ -120,6 +132,16 @@ Code gebaut wird.
 ### Runde 1 — steht aus
 
 ## Log
+
+- **2026-11-19, gebaut und gemessen.** Der `func` baut den Code jetzt mit dem
+  Konstruktor der async-Funktion, **ohne** `await` davor. Zwei neue Fälle grün
+  (`eval_withTopLevelAwait_shouldAnswerTheResolvedValue`,
+  `eval_withTopLevelAwaitThatRejects_shouldAnswerEvalFailed`), die Frist bleibt
+  (`eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout`). Belege:
+  `# tests 543, # fail 0, # cancelled 0, # skipped 0`; `npm run check` 0.
+  **Der Gate-Befund war richtig und wichtig:** die zuerst geplante Zeile mit
+  `await` vor dem Konstruktor hätte die 2 000-ms-Frist gelöscht — gemessen in
+  einer Wegwerf-Kopie, dort antwortete der Frist-Fall `ok: true`.
 
 - **2026-11-19, gemessen:** `await` auf oberster Ebene scheitert mit
   „await is only valid in async functions"; die Umhüllung

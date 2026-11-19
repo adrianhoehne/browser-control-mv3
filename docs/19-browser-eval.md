@@ -16,6 +16,10 @@ Fehlercode, den der Agent nicht als „kaputt" missverstehen kann.
 
 ## Ziel
 
+> **Geändert am 2026-11-19 (`docs/50`):** Der Code ist der Rumpf einer **async**-Funktion,
+> `await` ist auf oberster Ebene erlaubt, `return` bleibt Pflicht. Alles andere in diesem
+> Abschnitt gilt unverändert.
+
 `browser_eval({code, tab?})` führt `code` im Seitenkontext des Agenten-Tabs aus
 und gibt das Ergebnis zurück:
 

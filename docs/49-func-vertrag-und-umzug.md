@@ -59,7 +59,7 @@ Harness: `runFuncIn` gibt ein Promise zurück, `inject` ist `async`, der
 Die Frist von 2 000 ms läuft im `func` selbst, sodass ein Promise, das zu spät
 auflöst, `timeout` liefert und nicht hängt. Gepinnt von
 `eval_withAPromiseThatResolvesAfter50ms_shouldAnswerTheValue` (`:12246`) und
-`eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (`:12268`).
+`eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (`:12310`).
 
 **DOM-Ergebnisse haben einen Besitzer:** ein Element ⇒
 `{ kind: "node", tag, selector }`; ein **Textknoten** ⇒
@@ -105,7 +105,7 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 | `test/extension.test.js` | `eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12453`) und `eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12473`) | DOM-Ergebnisse haben einen Besitzer |
 | `test/extension.test.js` | `eval_withAResultOfExactlyTenThousandJsonCharacters_shouldAnswerOk` (`:12409`) und `eval_withAResultOfTenThousandAndOneJsonCharacters_shouldAnswerTooLarge` (`:12424`) | die Grenze gilt für `json` |
 | `test/extension.test.js` | `eval_withFrame_shouldRunTheCodeInTheAddressedFrame` (`:13816`) | der Frame-Pin `:13835-13836` — die einzige Stelle, die `details` anfasst |
-| `test/extension.test.js` | `eval_withAPromiseThatResolvesAfter50ms_shouldAnswerTheValue` (`:12246`) und `eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (`:12268`) | das Promise quert als aufgelöstes Ergebnis |
+| `test/extension.test.js` | `eval_withAPromiseThatResolvesAfter50ms_shouldAnswerTheValue` (`:12246`) und `eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (`:12310`) | das Promise quert als aufgelöstes Ergebnis |
 | `test/extension.test.js` | `eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard` (`:12286`) | siehe `## Bekannte Lücken` — der Fall sucht einen neuen Gegenstand |
 
 ## Acceptance criteria

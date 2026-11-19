@@ -3759,7 +3759,11 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
 
     let produced;
     try {
-      produced = new Function(code)();
+      // The constructor of an async function instead of `Function`: the same body, the
+      // same page world, but `await` at the top is allowed (spec 50). Deliberately **not**
+      // awaited here — an async function adopts any thenable, so a leading `await` would
+      // bypass `isThenable`/`withinDeadline` and delete the 2 000 ms deadline.
+      produced = new (Object.getPrototypeOf(async function () {}).constructor)(code)();
       if (isThenable(produced)) {
         produced = await withinDeadline(produced, deadline);
         if (produced === deadline) return { outcome: "timeout", ...frameFields() };
