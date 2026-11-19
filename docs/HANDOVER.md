@@ -69,3 +69,15 @@ ist `await` auf oberster Ebene ein Fehler („await is only valid in async
 functions"). Ein `return (async () => { … })()` trägt, weil das Werkzeug ein
 Promise als Ergebnis annimmt. Das gehört in den Hinweis auf der Optionsseite und
 in `docs/19`.
+
+### Tagesabfrage ohne Klicks (Verfahren, gemessen 2026-11-19)
+
+Der Deeplink trägt alles, was die App braucht. Ein Durchlauf über den Tag sind
+sechs Aufrufe: `navigate` mit `hd=2026-12-10T{HH}:00:00` für HH in 0, 4, 8, 12,
+16, 20, je neun Sekunden warten, dann die fünf Karten mit `eval` aus
+`.verbindung-list__result-item` lesen und nach `(ab, an, Umstiege, Preis)`
+entdoppeln. Ergebnis: 26 Verbindungen, billigste 27,99 €.
+
+**Fallstrick:** dieselbe Verbindung erscheint mehrfach mit verschiedenen Preisen
+(27,99 / 34,90 / 49,99 € für 00:21 → 08:52) — verschiedene Tarifprodukte. Wer
+nach Preis sortiert und nicht entdoppelt, listet denselben Zug dreimal.
