@@ -12,7 +12,7 @@ Der Schnitt ist der des Reviewers (2026-11-19):
 | Teil | Dokument |
 |---|---|
 | Func-Runner im Harness, Vereinigung am Schlüssel-Pin, ein neuer Fall | **hier** |
-| Vertrag des `func`, Umzug, die 23 Kanal-Fälle, `docs/45`-Amendment | `docs/49-eval-func-vertrag.md` |
+| Vertrag des `func`, Umzug, die 23 Kanal-Fälle, `docs/45`-Amendment | `docs/49-func-vertrag-und-umzug.md` |
 | `world: "MAIN"`, CSP-Meldung, Optionsseite | `docs/48-eval-in-der-seitenwelt.md` |
 
 Diese Hälfte ist bewusst klein: **eine** Stufe, **ein** neuer Fall, **kein**
@@ -23,7 +23,7 @@ Produktivcode. Sie hat einen Beweis, der nicht auf die anderen Hälften zeigt.
 - **Der Harness kann einen `func` ausführen**, in **zwei Welten je Frame** —
   sonst ist der Vertrag aus `docs/49` nicht messbar.
 - **Der Schlüssel-Pin prüft zwei Formen**, nicht eine: `{files, target}` bleibt
-  für die 15 bestehenden Aufrufer gültig, `{args, func, target}` kommt für den
+  für die 16 bestehenden Aufrufer gültig, `{args, func, target}` kommt für den
   einen `eval`-Aufruf dazu.
 - **Kein Produktivcode ändert sich.** `extension/` bleibt in dieser Spec
   unangetastet; geändert wird nur `test/extension.test.js`.
@@ -35,8 +35,8 @@ prüft heute `Object.keys(details)` gegen `["files", "target"]` — für **jeden
 Aufruf. Es gibt **16** `askPageAgent`-Aufrufe in `extension/bridge.js`
 (`:2165`, `:2214`, `:2809`, `:2994`, `:3127`, `:3180`, `:3313`, `:3597`,
 `:4158`, `:4779`, `:4781`, `:4797`, `:4808`, `:4882`, `:4901`, `:4927`; der
-17. Treffer ist die Definition auf `:2528`). Eine Ersetzung des Pins machte 15
-davon sofort rot.
+17. Treffer ist die Definition auf `:2528`). Nach dieser Stufe schicken **alle 16** davon weiter `{files, target}`; eine
+Ersetzung des Pins machte sie sofort rot.
 
 Deshalb wird der Pin eine **Vereinigung**:
 
@@ -47,9 +47,20 @@ details.func === undefined ? ["files", "target"] : ["args", "func", "target"]
 Der Zweig im Harness:
 
 - `args` reist durch JSON — kein Closure, kein DOM.
+- **`func` quert die Grenze als Quelltext**, nicht als Funktionswert: der Zweig
+  materialisiert ihn im Seitenwelt-Kontext (`vm.runInContext("(" +
+  func.toString() + ")", pageContext)`), ruft ihn dort mit den JSON-`args` auf
+  und holt das `result` per JSON zurück. Ein direkter Aufruf des
+  Funktionswerts liefe im Sandbox-Realm — der Fall wäre grün, ohne je zwei
+  Welten zu zeigen.
 - `func` läuft in einem **Seitenwelt-Realm**, getrennt vom isolierten Realm
   desselben Frames: zwei Kontexte, zwei `window`, ein gemeinsames DOM.
+- **Die `files`-Zusicherung wandert in den `files`-Arm.** Heute steht
+  `details.files === [PAGE_AGENT_FILE]` (`:477-481`) bedingungslos da und wäre im
+  `func`-Arm `undefined` ⇒ rot; `runFileIn` gehört ebenfalls dorthin.
 - Antwort: `[{frameId, result}]`, wie `executeScript` sie liefert.
+- Der `func`-Arm pinnt **genau** `["args", "func", "target"]`. `world` kommt in
+  `docs/48` dazu und weitet den Pin dort — hier steht er nicht.
 
 ## Non-goals
 
@@ -75,9 +86,9 @@ Der Zweig im Harness:
 2. **Jede Welt sieht nur ihr Eigenes.** Derselbe Fall prüft beides: der `func` schreibt
    `window.__bcProbe` und liest sie zurück (Wert kommt an), die isolierte Welt
    liest `undefined`.
-3. **Die Vereinigung trägt.** Die 15 `files`-Aufrufer bleiben grün, und der
+3. **Die Vereinigung trägt.** Alle **16** `files`-Aufrufer bleiben grün, und der
    `func`-Zweig ist grün — im selben Lauf: `npm test` ⇒ `# fail 0`,
-   `# cancelled 0`.
+   `# cancelled 0`. (Dass danach 15 + 1 gilt, ist `docs/49`.)
 4. **Kein Produktivcode.** `git diff --stat extension/` ⇒ **leer**.
 5. **Die Suite bleibt grün.** `npm run check` ⇒ 0.
 
