@@ -43,8 +43,8 @@ bedient.
   gesendet.
 - **Kein Umgehen von `iframe`- oder CSP-Grenzen.** Ein verbotener Frame bleibt
   verboten.
-- **Keine Wirkung auf bestehende Wurzeln.** Ein Schattenwurzel, der **vor** dem
-  Einschalten entsteht, bleibt geschlossen. Ein Neuladen der Seite schafft
+- **Keine Wirkung auf bestehende Wurzeln.** Ein Schattenwurzel, den die Seite
+  **vor** dem Einschalten anlegt, bleibt zu. Ein Neuladen der Seite schafft
   Abhilfe, und das steht auf der Optionsseite.
 
 ## Stufe 0 — vor jeder Spec-Freigabe zu messen
