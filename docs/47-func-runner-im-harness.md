@@ -129,9 +129,8 @@ Beweis: Kriterium 6 (unten). `docs/49` setzt diese Stufe voraus.
 - **Der Zwei-Welten-Harness ist eine Attrappe.** Er trennt zwei Kontexte, aber
   nicht mit derselben Mechanik wie Firefox; dass die echte Grenze hält, zeigt
   erst `docs/48` am laufenden Browser.
-- **Der `func`-Zweig ist nach dieser Stufe ungenutzt** — kein Produktivpfad
-  schickt einen `func`. Das ist Absicht: der Zweig wird gebaut, bevor ihn
-  jemand braucht, damit `docs/49` sich auf ihn stützen kann.
+- ~~Der `func`-Zweig ist nach dieser Stufe ungenutzt.~~ **Erledigt (2026-11-19):**
+  `eval` ist sein Nutzer (`docs/49`), und `world: "MAIN"` kommt aus `docs/48`.
 
 ## Open questions
 

@@ -1,6 +1,6 @@
 ---
 description: browser_eval läuft in der Seitenwelt — world MAIN, die CSP-Meldung der Seite, der Optionsseite-Hinweis und die Amendments; setzt den Func-Vertrag aus docs/49 voraus.
-status: proposed
+status: active
 ---
 
 # `browser_eval` in der Seitenwelt
@@ -152,6 +152,28 @@ Beweis: Kriterien 5, 6, 7 und `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlo
 ## Review
 
 ### Runde 1 — steht aus
+
+## Log
+
+- **2026-11-19, gebaut und am laufenden Browser gemessen.** `world: "MAIN"` in der
+  Injektion, `EVAL_CSP_CODE`/`EVAL_CSP_MESSAGE` benannt, Harness pinnt `world`.
+  Gegen den Dienst (`wss://`, Tab 10 = Google-Suche, Tab 9 = GitHub):
+
+  | Fall | Antwort |
+  |---|---|
+  | `return document.title` | der Titel der Seite |
+  | `return window.innerWidth` | `1745` — **Seitenvariable**, der Beweis für MAIN |
+  | `return document.querySelector("h3")` | `{"kind":"node","tag":"h3","selector":"h3#…"}` |
+  | Promise mit 10-ms-Timer | `42`, `elapsedMs` 304 |
+  | `return 1` mit `frame` | `frame_not_found`, „geantwortete Rahmen: 3" |
+  | `throw new Error("kaputt")` | `Der Code im Agenten-Tab ist gescheitert: kaputt` |
+  | kein `return` | `null` |
+  | Promise über 2 s | `eval_timeout` |
+  | 20 000 Zeichen | `eval_result_too_large` |
+  | GitHub (`tab: 9`) | `eval_blocked_by_the_page` |
+
+  **Offen:** der Hinweis auf der Optionsseite (Stufe 2) und der Satz in
+  `docs/47 ## Bekannte Lücken` ist nachgezogen.
 
 ## Log
 
