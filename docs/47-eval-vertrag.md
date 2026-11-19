@@ -1,5 +1,5 @@
 ---
-description: Der Vertrag für browser_eval und der Func-Runner im Harness — Vorarbeit für den Umzug in die Seitenwelt, ohne sichtbares Verhalten.
+description: Der Vertrag für browser_eval und der Func-Runner im Harness — Vorarbeit für den Umzug in die Seitenwelt.
 status: proposed
 ---
 
