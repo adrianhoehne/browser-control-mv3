@@ -38,7 +38,7 @@ unbrauchbar: jeder Aufruf fiele in ein Fenster, in dem niemand zuhört.
 - Keine neuen Berechtigungen, keine Signierung, kein Agenten-Tab, keine
   Tab-Steuerung.
 - Kein `browser_specific_settings`-Umbau: die Extension-ID bleibt
-  `browser-control@bergkaese.dev`, damit gespeicherter Endpunkt und Token
+  `browser-control@bergkaese.dev (bis `docs/43`; seit der Trennung `browser-control-mv3@bergkaese.dev`)`, damit gespeicherter Endpunkt und Token
   erhalten bleiben.
 - **Keine Kommentar-Kosmetik** in `background.js`, `protocol.js` oder
   `options.js`, obwohl dort noch „MV3" steht: der Code bleibt in diesem
@@ -167,7 +167,7 @@ zweiten Reload und damit eine neue Zehn-Minuten-Messung kostet.
    (Reihenfolge, nicht `includes`); `assert.deepStrictEqual(manifest.permissions,
    ["tabs", "storage"])`; `!("host_permissions" in manifest)`;
    `manifest.browser_specific_settings.gecko.id ===
-   "browser-control@bergkaese.dev"`. Genau diese sechs, damit die Zahl in
+   "browser-control@bergkaese.dev (bis `docs/43`; seit der Trennung `browser-control-mv3@bergkaese.dev`)"`. Genau diese sechs, damit die Zahl in
    Kriterium 2 stimmt. Die Datei wird vom bestehenden `npm test`
    (`node --test test/*.test.js`) automatisch erfasst; `package.json` bleibt
    unberührt.

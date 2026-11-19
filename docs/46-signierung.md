@@ -52,7 +52,7 @@ steht es unter `## Open questions`.
 
 | Was | Stand heute | nötig |
 |---|---|---|
-| feste Add-on-ID | `browser-control@bergkaese.dev` | vorhanden |
+| feste Add-on-ID | `browser-control-mv3@bergkaese.dev` (eigene ID, getrennt vom eingefrorenen `browser-control`) | vorhanden |
 | `manifest_version` 3 | seit `docs/43` | vorhanden |
 | Version | **`0.6.1`** — `0.6.0` ist der Merge-Release und bleibt unsigniert; die Signatur kommt mit `0.6.1` (Betreiberentscheid 2026-11-18) | muss je Release steigen |
 | **Daten-Erklärung** | **fehlt** | siehe `## Die Daten-Erklärung` |

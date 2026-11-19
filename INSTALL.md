@@ -289,7 +289,7 @@ Then in Firefox:
    crossed-out icon means “off”, the bridge icon means “connected”, the yellow bolt
    means “on, but the bridge does not answer”.
 
-The extension ID is fixed (`browser-control@bergkaese.dev`), so endpoint and
+The extension ID is fixed (`browser-control-mv3@bergkaese.dev`), so endpoint and
 token stay in `storage.local` across reloads. **After a Firefox restart** the
 extension is gone and has to be loaded again — the settings survive.
 

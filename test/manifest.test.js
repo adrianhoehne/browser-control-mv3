@@ -161,7 +161,7 @@ test("browserSpecificSettings_shouldKeepTheExtensionId", () => {
   // WHEN we read `browser_specific_settings.gecko.id`,
   // THEN it has to be the unchanged value — a new id would silently orphan the
   // token and force the operator to type it in again:
-  assert.equal(MANIFEST.browser_specific_settings.gecko.id, "browser-control@bergkaese.dev");
+  assert.equal(MANIFEST.browser_specific_settings.gecko.id, "browser-control-mv3@bergkaese.dev");
 });
 
 /**
