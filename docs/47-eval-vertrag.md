@@ -49,7 +49,7 @@ dieser `func` zurückgibt und wie der Harness ihn ausführt — sonst ist jeder 
 |---|---|
 | `not_the_frame` | `outcome`, `href` |
 | `ok` | `outcome`, `href`, `url`, `title`, `elapsedMs`, `json` |
-| `threw` | `outcome`, `href`, `url`, `title`, `elapsedMs`, `message` |
+| `threw` | `outcome`, `href`, `message` (`extension/page-agent.js:1563` liefert genau diese drei; `evalResultOf` liest nicht mehr) |
 | `timeout`, `too_large`, `unserializable` | `outcome`, `href` |
 
 - `json` ist ein **JSON-String** (`evalResultOf` macht `JSON.parse(entry.json)`,
@@ -63,7 +63,7 @@ dieser `func` zurückgibt und wie der Harness ihn ausführt — sonst ist jeder 
 **DOM-Ergebnisse haben einen Besitzer:** liefert der Code ein Element, antwortet
 `json` mit `{ kind: "node", tag, selector }`; bei einem **Textknoten** mit
 `{ kind: "node", nodeType: 3 }` — ein Textknoten trägt keinen Selektor und keinen
-Text, weil er beides nicht hat (`extension/page-agent.js:1476-1479`). Gebaut von
+Text, weil er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag selbst ab `:1480`). Gebaut von
 **einem** Selektor-Bauer, der mit dem `func` reist (`selectorForElement`, heute
 `extension/page-agent.js:1179`). Die Fälle
 `eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12387`) und
@@ -73,7 +73,7 @@ und bleiben unverändert.
 ## Der Func-Runner im Harness
 
 Der Harness (`test/extension.test.js`) kennt heute nur `inject()` mit
-`{files, target}` (`:468-500`). Er bekommt einen zweiten Zweig:
+`{files, target}` (`:468-506`, der `return` steht auf `:505`). Er bekommt einen zweiten Zweig:
 
 - Schlüssel genau `["args", "func", "target", "world"]` — `world` fehlt, solange
   `docs/48` nicht gebaut ist; dann prüft der Fall nur `{args, func, target}`.
@@ -95,8 +95,8 @@ Der Harness (`test/extension.test.js`) kennt heute nur `inject()` mit
 | `test/extension.test.js` | `eval_whenTheCodeThrows_shouldAnswerEvalFailedWithTheMessageAndNoStack` (bestehend) | `message` steht im Vertrag |
 | `test/extension.test.js` | `eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (bestehend, `:12387`) und `eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12407`) | DOM-Ergebnisse haben einen Besitzer |
 | `test/extension.test.js` | `eval_withAResultOfExactlyTenThousandJsonCharacters_shouldAnswerOk` (`:12343`) und `…TenThousandAndOne…_shouldAnswerTooLarge` (`:12358`) | die Grenze gilt für `json` |
-| `test/extension.test.js` | `eval_whenTheCodeThrows_shouldAnswerEvalFailedWithTheMessage` (bestehend, `:12372`) | `message` ist auf `messageLimit` gekürzt |
-| `test/extension.test.js` | `injection_forEval_shouldCarryArgsFuncTargetWorld` | die Schlüssel sind gepinnt; ein Rückfall in den Kanal bleibt nicht grün |
+| `test/extension.test.js` | `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (bestehend, `:12372`) | `message` ist auf `messageLimit` gekürzt |
+| `test/extension.test.js` | `injection_forEval_shouldCarryArgsFuncTarget` | die Schlüssel sind gepinnt; den `world`-Schlüssel besitzt `docs/48` (`injection_forEval_shouldCarryWorldMain`) |
 
 ## Acceptance criteria
 
@@ -105,12 +105,17 @@ Der Harness (`test/extension.test.js`) kennt heute nur `inject()` mit
 1. **Ein Serialisierer.** `grep -c 'function serialize' extension/page-agent.js
    extension/bridge.js` ⇒ **0** in `page-agent.js` (der `eval`-Op und sein
    Serialisierer sind dort gelöscht) und **1** in `bridge.js`.
-2. **Der Vertrag steht.** `injection_forEval_shouldCarryArgsFuncTargetWorld`
-   ⇒ grün; die Schlüssel sind **genau** `args`, `func`, `target` (und `world`,
-   sobald `docs/48` gebaut ist).
-3. **Die 30 Fälle laufen über den `func`.** `node --test --test-reporter=tap
-   test/extension.test.js 2>&1 | grep -cE '^ok [0-9]+ - eval_'` ⇒ **≥ 30**
-   (`docs/48` fügt zwei dazu; die Zahl wächst dort, nicht hier).
+2. **Der Vertrag steht.** `injection_forEval_shouldCarryArgsFuncTarget` ⇒ grün;
+   die Schlüssel sind **genau** `args`, `func`, `target`. `world` kommt erst mit
+   `docs/48` dazu und wird dort geprüft.
+3. **Die Fälle laufen über den `func`, nicht über den Kanal.** Die Zahl allein
+   beweist nichts — `grep -cE '^ok … - eval_'` zählt **heute schon 30**. Der
+   Beweis ist der Kanal: im umgestellten Fall
+   (`eval_withReturnDocumentTitle_shouldAnswerTheTitle`) ist
+   `tabs.channel.calls.length` ⇒ **0**, und der Inject-Aufruf trägt `func`.
+   **23** der 30 Fälle laufen heute über den Kanal (sieben antworten vor der
+   Injection: `:11823`, `:11844`, `:11862`, `:11878`, `:11898`, `:11913`,
+   `:11937`); nach Stufe 2 keiner mehr.
 4. **Der Fehlertext reist.** `eval_whenTheCodeThrows_shouldAnswerEvalFailedWithTheMessageAndNoStack`
    ⇒ grün, und die Antwort enthält den Text der Seite, keinen Stack.
 5. **DOM-Ergebnisse.**
@@ -124,12 +129,16 @@ Der Harness (`test/extension.test.js`) kennt heute nur `inject()` mit
 **Stufe 1 — der Func-Runner und der gelockerte Schlüssel-Pin**
 
 Dateien: `test/extension.test.js` (`inject()` um den `func`-Zweig, zwei Realms je
-Frame) **und** der Schlüssel-Pin `:471-473` (`["files","target"]` ⇒
-`["args","func","target"]`), dazu ein **neuer** reiner Harness-Fall
-(`inject_withAFunc_shouldRunItInThePageWorldRealm`).
+Frame) **und** der Schlüssel-Pin `:471-473` als **Vereinigung** zweier Mengen:
 
-Der Pin muss in derselben Stufe fallen wie der Zweig — sonst ist der erste
-Aufruf rot.
+```
+details.func === undefined ? ["files", "target"] : ["args", "func", "target"]
+```
+
+Der Pin prüft **jeden** Inject-Aufruf, und alle 17 `askPageAgent`-Stellen
+schicken weiter `{files, target}` — eine echte Ersetzung machte die Suite
+flächendeckend rot. Dazu ein **neuer** reiner Harness-Fall
+(`inject_withAFunc_shouldRunItInThePageWorldRealm`).
 
 Beweis: Kriterium 2 (der neue Fall).
 
@@ -149,13 +158,20 @@ Beweis: Kriterien 1, 3, 4, 5.
 Dateien: `test/extension.test.js` (`:13769-13771` — die Frame-Fälle prüfen
 `details.files`/`scriptCalls`).
 
-Beweis: Kriterium 6.
+Beweis: nicht „Suite grün", sondern die vier Frame-Fälle namentlich:
+`eval_withFrame_shouldRunOnlyInTheAddressedFrame` (`:13778`),
+`eval_withFrame_shouldNotRunTheCodeInTheUnaddressedFrame` (`:13798`),
+`eval_withTwoThrowingFrames_shouldAnswerFrameAmbiguousWithBothCandidates`
+(`:13824`) und `eval_withoutFrame_shouldRunInTheMainFrame` (`:13750`) — jeder
+einzeln grün, nachdem der Pin gezogen ist.
 
 ## Amendments to previous spec docs
 
 | Dokument | Abschnitt | was gilt |
 |---|---|---|
 | `docs/45-injection-naht.md` | `## Die Naht` | `eval` antwortet nicht mehr über den Kanal: seine Antwort kommt mit dem `executeScript`-Promise, und einen „stummen Frame" gibt es dort nicht. Datiert in Stufe 2 nachgezogen |
+| `docs/45-injection-naht.md` | `## Bekannte Lücken` („`func` wurde verworfen") | für `eval` ist die Entscheidung **aufgehoben**: dort reist die Nutzlast als `func`. Der Grund (die Helfer reisen sonst als Text) bleibt für die anderen Werkzeuge gültig |
+| `docs/45-injection-naht.md` | `## Testing` („die 16 Aufrufer gegen `{file}` plus Nachrichtenkanal") | nach Stufe 2 sind es **16 gegen `{file}`** und **ein** Aufrufer gegen `func` |
 
 ## Bekannte Lücken
 
@@ -191,6 +207,26 @@ wird gelöscht); der Func-Runner mit zwei Welten je Frame als Voraussetzung für
 alle Fälle; `selectorForElement` als mitreisende Kopie mit den zwei bestehenden
 DOM-Fällen; `timeoutMs` reist in `limits`; die Testnamen sind die echten; diese
 Runde steht hier.
+
+### Runde 2 des neuen Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧
+
+Sechs Blocker: eine Testnamen-Leiche aus Runde 1
+(`eval_whenTheCodeThrows…` existiert nicht; `:12372` heißt
+`eval_withAThrownMessageOf600Characters_shouldCutItAt500`); die `threw`-Zeile
+versprach `url`/`title`/`elapsedMs`, die niemand liefert; der Schlüssel-Pin war
+als Ersetzung statt als Vereinigung geschrieben (alle 17 `askPageAgent`-Stellen
+schicken weiter `{files, target}`); das `docs/45`-Amendment ließ „`func` wurde
+verworfen" stehen; derselbe Pin hatte zwei Namen (`…ArgsFuncTargetWorld` hier,
+`…CarryWorldMain` in `docs/48`); und Kriterium 3 war heute schon grün, weil es
+nur die Zahl 30 zählte.
+
+**Übernommen:** Name getauscht; `threw` liefert `outcome`, `href`, `message`;
+der Pin ist die Vereinigung `details.func === undefined ? ["files","target"] :
+["args","func","target"]`; Stufe 3 beweist sich mit den vier Frame-Fällen
+namentlich statt mit „Suite grün"; das Amendment nennt jetzt auch die
+aufgehobene `func`-Entscheidung und die Aufruferzahl; der Pin heißt hier
+`…ArgsFuncTarget` (den `world`-Schlüssel besitzt `docs/48`); Kriterium 3 hängt
+am Kanal (`tabs.channel.calls.length` ⇒ 0) und nennt die echte Zahl **23**.
 
 ## Log
 
