@@ -37,7 +37,7 @@ dieser `func` zurückgibt und wie der Harness ihn ausführt — sonst ist jeder 
 | Teil | Inhalt |
 |---|---|
 | `code` | der auszuwertende Ausdruck, als String |
-| `limits` | `{ timeoutMs, messageLimit, resultLimit, valueLimit, classLimit }`. Alle fünf reisen mit, weil der `func` die Konstanten der Brücke nicht sieht: `timeoutMs` = `EVAL_TIMEOUT_MS` 2 000 (`extension/bridge.js:387`), `messageLimit` = `EVAL_MESSAGE_LIMIT` 500 (`:404`), `resultLimit` = `EVAL_RESULT_LIMIT` 10 000. `valueLimit` und `classLimit` sind die `inspect`-Grenzen, damit `selectorForElement` denselben Selektor baut wie heute |
+| `limits` | `{ timeoutMs, messageLimit, resultLimit, valueLimit, classLimit }`. Alle fünf reisen mit, weil der `func` die Konstanten der Brücke nicht sieht. Werte: `timeoutMs` = 2 000 (`EVAL_TIMEOUT_MS`), `messageLimit` = 500 (`EVAL_MESSAGE_LIMIT`), `resultLimit` = 10 000 (`EVAL_RESULT_LIMIT`). `valueLimit` und `classLimit` sind die `inspect`-Grenzen, damit `selectorForElement` denselben Selektor baut wie heute |
 | `want` | der Frame-Filter, **erste Anweisung** im `func` — sonst läuft er mit `allFrames` in jedem Frame |
 
 **Rückgabe:** genau ein Objekt. Die Felder hängen am `outcome` —
