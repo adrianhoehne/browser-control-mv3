@@ -15,12 +15,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/adrianhoehne/browser-control.git"
+    "url": "https://github.com/adrianhoehne/browser-control-mv3.git"
   },
   "bugs": {
-    "url": "https://github.com/adrianhoehne/browser-control/issues"
+    "url": "https://github.com/adrianhoehne/browser-control-mv3/issues"
   },
-  "homepage": "https://github.com/adrianhoehne/browser-control#readme",
+  "homepage": "https://github.com/adrianhoehne/browser-control-mv3#readme",
   "keywords": [
     "firefox",
     "extension",

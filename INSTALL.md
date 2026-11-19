@@ -251,7 +251,7 @@ no XPI to download — the source is the repo:
 
 ```bash
 # from GitHub (the published state)
-git clone https://github.com/adrianhoehne/browser-control.git ~/browser-control
+git clone https://github.com/adrianhoehne/browser-control-mv3.git ~/browser-control
 
 # or over SSH from your own server, if that is where you develop
 git clone <user>@<host>:browser-control ~/browser-control
