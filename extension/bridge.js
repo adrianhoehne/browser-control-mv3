@@ -3566,15 +3566,13 @@
    * The one `func` of `eval` (specs 47 and 49): it travels as source into the page's own
    * world, so it can close over nothing of this module and carries its helpers itself.
    *
-   * `args` is `[code, limits, want]` — every number the page needs arrives as an
-   * argument, because a closure over this module's constants would not survive the trip.
+   * `args` of the injection is `[code, limits, want]`, passed **positionally** — every
+   * number the page needs arrives as an argument, because a closure over this module's
+   * constants would not survive the trip.
    * Answers one `outcome` in every case and never a rejection: the caller's vocabulary is
    * the wire protocol's codes.
    */
-  async function evalInPage(args) {
-    const code = args[0];
-    const limits = args[1];
-    const want = args[2];
+  async function evalInPage(code, limits, want) {
     const hrefOf = () => String(location.href);
     // The frame filter of spec 25, and the first thing that runs on purpose: a frame that
     // was not addressed runs no code at all — `eval` may change the page, and no call may
@@ -3800,10 +3798,9 @@
 
     const tab = await addressedAgentTab(params, EvalError);
 
-    // Every number the page needs arrives as an argument: the snippet closes over
+    // Every number the page needs arrives as an argument: the `func` closes over
     // nothing, and a closure over this module's constants would not survive the trip.
-    const cfg = {
-      code: request.code,
+    const limits = {
       timeoutMs: EVAL_TIMEOUT_MS,
       messageLimit: EVAL_MESSAGE_LIMIT,
       resultLimit: EVAL_RESULT_LIMIT,
@@ -3819,23 +3816,29 @@
     // does not.
     const guard = guardAfter(EVAL_GUARD_MS);
     try {
-      const injected = askPageAgent(tab.id, evalPageRequest(cfg, want), {
-        allFrames: want !== null,
+      // The `func` injection (specs 47 and 49): one entry per addressed frame, the page's
+      // verdict in `result`. No channel, so no silent frame and no answer budget — and no
+      // `askPageAgent`, which always takes the channel.
+      const injected = injectScript(tab.id, {
+        target: want === null ? { tabId: tab.id, frameIds: [0] } : { tabId: tab.id, allFrames: true },
+        args: [request.code, limits, want],
+        func: evalInPage,
       });
       // The promise that loses the race keeps running and can still end at its own
-      // deadline ("no frame answered"). Nobody would be left to read that rejection, and
-      // an unhandled one takes the page down with it. Handled here, once.
+      // deadline. Nobody would be left to read that rejection, and an unhandled one takes
+      // the page down with it. Handled here, once.
       void injected.catch(() => {});
       const winner = await Promise.race([injected, guard.promise]);
-      // The guard answers `undefined`. So "not a call's answers" is the guard — or a
-      // browser that handed back nothing at all, which is the same statement for the
-      // caller: no answer from the page in time. The check has to stay *before* the frame
-      // selection: `frameTargetOf` would read the guard's `undefined` as "no frame
-      // answered" and turn the timeout into `frame_not_found`.
-      if (!isPageAnswers(winner)) {
+      // The guard answers `undefined`. So "no answer from the page in time" is the guard —
+      // or a browser that handed back nothing at all, which is the same statement for the
+      // caller. The check has to stay *before* the frame selection: `frameTargetOf` would
+      // read `undefined` as "no frame answered" and turn the timeout into `frame_not_found`.
+      if (winner === undefined || Array.isArray(winner) === false) {
         throw new EvalError(EVAL_TIMEOUT_CODE, EVAL_TIMEOUT_MESSAGE);
       }
-      return evalResultOf(tab.id, frameTargetOf(valuesOf(winner.answers), want));
+      // `[{frameId, result}]`, like every `func` injection: the verdict is `result`.
+      const verdicts = winner.map((entry) => entry?.result);
+      return evalResultOf(tab.id, frameTargetOf(verdicts, want));
     } finally {
       // Disarmed whichever side won: an uncleared guard would outlive the call it
       // belonged to.
@@ -3899,16 +3902,6 @@
   }
 
 
-  /**
-   * The eval call: the code plus every number the page needs, and the frame filter.
-   *
-   * The filter travels always, `null` included (see `inspectPageRequest`). The selector
-   * builder a DOM result is mapped with lives in `page-agent.js` now — one copy, shared
-   * with `inspect`, which is what keeps the two tools naming one element the same way.
-   */
-  function evalPageRequest(cfg, want) {
-    return { op: "eval", args: { cfg, want } };
-  }
 
   /* ------------------------------------------------------------ screenshot */
 

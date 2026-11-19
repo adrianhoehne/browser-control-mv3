@@ -12155,7 +12155,7 @@ test("eval_withoutATab_shouldAddressTheLastUsedAgentTab", async () => {
 test("eval_withReturnDocumentTitle_shouldAnswerTheTitle", async () => {
   // GIVEN the switch on and a complete agent tab standing on a page with a title,
   // WHEN the bridge evaluates `return document.title`,
-  const { answer, clock, pageClocks } = await evalOnce({ code: "return document.title" });
+  const { answer, tabs, clock, pageClocks } = await evalOnce({ code: "return document.title" });
 
   // THEN the answer is the page's title, together with where it came from — the
   // ordinary case of the contract,
@@ -12170,8 +12170,44 @@ test("eval_withReturnDocumentTitle_shouldAnswerTheTitle", async () => {
   assert.equal(Number.isInteger(answer.result.elapsedMs), true);
   assert.equal(answer.result.elapsedMs >= 0, true);
 
+  // ... the channel never carried it: `eval` answers through the injection itself, so no
+  // message was sent and no frame had to speak (specs 47 and 49),
+  assert.deepStrictEqual(tabs.channel.calls, []);
+  assert.equal(tabs.scriptCalls.length, 1);
+  assert.deepStrictEqual(Object.keys(tabs.scriptCalls[0].details.target).sort(), ["frameIds", "tabId"]);
+
   // ... and nothing stayed armed on either side of the wire.
   assertNoTimerLeft(clock, pageClocks);
+});
+
+test("injection_forEval_shouldCarryArgsFuncTarget", async () => {
+  // GIVEN the switch on and a complete agent tab,
+  const { tabs } = await evalOnce({ code: "return 1" });
+
+  // WHEN the bridge evaluated the code,
+  // THEN the injection carried exactly three things: the arguments, the function and the
+  // target. Checked on the pin in `inject` — `tabs.scriptCalls` is no witness, because the
+  // stub records `JSON.parse(JSON.stringify(details))` and a function does not survive
+  // that (specs 47 and 49),
+  assert.equal(tabs.scriptCalls.length, 1);
+  assert.deepStrictEqual(
+    Object.keys(tabs.scriptCalls[0].details).sort(),
+    ["args", "target"],
+  );
+  // ... the function travelled as its source, so the injection's `func` is a real value
+  // at the moment it is handed over — the recording just cannot show it,
+  assert.equal(tabs.scriptCalls[0].details.func, undefined, "the recording cannot keep a function");
+  // ... and the arguments are the code, the five limits and the frame filter,
+  assert.equal(tabs.scriptCalls[0].details.args.length, 3);
+  assert.equal(tabs.scriptCalls[0].details.args[0], "return 1");
+  assert.deepStrictEqual(Object.keys(tabs.scriptCalls[0].details.args[1]).sort(), [
+    "classLimit",
+    "messageLimit",
+    "resultLimit",
+    "timeoutMs",
+    "valueLimit",
+  ]);
+  assert.equal(tabs.scriptCalls[0].details.args[2], null, "no `frame` is the main frame");
 });
 
 test("eval_withMultiLineCodeAndReturn_shouldAnswer42", async () => {
@@ -12289,7 +12325,10 @@ test("eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard", asyn
   const tabs = createTabsStub({
     tabs: [createAgentTabFixture({ status: "complete" })],
     pageAgent: {
-      frames: [{ href: DEFAULT_READ_PAGE.url, silent: true }, { href: "https://widget.example.net/kalender", silent: true }],
+      frames: [{ href: DEFAULT_READ_PAGE.url }, { href: "https://widget.example.net/kalender" }],
+      // The shape a throttled page leaves behind, now on the injection itself: the `func`
+      // never settles, so `executeScript` never answers.
+      neverAnswer: true,
     },
   });
   const { socket, clock } = await connectedBackground({ tabs, settings: EVAL_ENABLED_SETTINGS });
@@ -12314,20 +12353,13 @@ test("eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard", asyn
   await settleAsyncWork();
   assert.equal(responsesById(socket).get(3).error.code, "eval_timeout");
 
-  // ... and the guard took its own timer with it. Two reply budgets stay armed — the
-  // collection waits for a frame that never spoke, and its own deadline is the thing
-  // that ends it (5 000, deliberately under the bridge's 20 000). They fire into a call
-  // that is already answered and are dropped; nothing else survives them.
-  assert.deepStrictEqual(clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS, INJECTION_REPLY_TIMEOUT_MS]);
-  // Two rounds: the second budget was armed after the first guard fired, so it falls due
-  // a little later than the first.
-  for (let round = 0; round < 2; round += 1) {
-    clock.runByDelay(INJECTION_REPLY_TIMEOUT_MS);
-    await settleAsyncWork();
-  }
+  // ... and the guard took its own timer with it. No reply budget is left armed: with no
+  // channel there is no collection waiting for a frame that never spoke,
   assert.deepStrictEqual(clock.pendingDelays(), []);
-  assert.equal(responsesById(socket).has(2), true, "a late frame must not answer a call twice");
-  assert.equal(responsesById(socket).has(3), true);
+  // ... and a call that ran out of time cannot be answered afterwards,
+  await settleAsyncWork();
+  assert.equal(responsesById(socket).get(2).error.code, "eval_timeout");
+  assert.equal(responsesById(socket).get(3).error.code, "eval_timeout");
 });
 
 test("eval_inParallelInTheSameTab_shouldAnswerBoth", async () => {
@@ -13832,8 +13864,11 @@ test("eval_withFrame_shouldRunTheCodeInTheAddressedFrame", async () => {
   assert.equal(tabs.scriptCalls.length, 1);
   assert.equal(tabs.scriptCalls[0].details.target.allFrames, true);
   assert.equal(tabs.scriptCalls[0].details.target.frameIds, undefined);
-  assert.deepStrictEqual(tabs.scriptCalls[0].details.files, [PAGE_AGENT_FILE]);
-  assert.equal(tabs.channel.calls[0].message.args.want, "widget", "the filter travels to the page");
+  // ... and the filter travels in the injection's own arguments: `eval` takes no channel
+  // any more (specs 47 and 49), so `details.files` is gone and `want` rides in `args`.
+  assert.equal(tabs.scriptCalls[0].details.files, undefined);
+  assert.deepStrictEqual(tabs.scriptCalls[0].details.args.slice(2), ["widget"]);
+  assert.deepStrictEqual(tabs.channel.calls, []);
 
   // ... both frame clocks were seen and both are empty: the deadline timer of the frame
   // that answered and of the one that only said `not_the_frame`.
