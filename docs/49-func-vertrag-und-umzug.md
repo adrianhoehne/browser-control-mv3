@@ -28,7 +28,7 @@ Harness-Runner steht in `docs/47-func-runner-im-harness.md` und ist
 | Teil | Inhalt |
 |---|---|
 | `code` | der auszuwertende Ausdruck, als String |
-| `limits` | `{ timeoutMs, messageLimit, resultLimit, valueLimit, classLimit }`. Alle fünf reisen mit, weil der `func` die Konstanten der Brücke nicht sieht. Werte: `timeoutMs` = 2 000 (`EVAL_TIMEOUT_MS`), `messageLimit` = 500 (`EVAL_MESSAGE_LIMIT`), `resultLimit` = 10 000 (`EVAL_RESULT_LIMIT`). `valueLimit` und `classLimit` sind die `inspect`-Grenzen, damit `selectorForElement` denselben Selektor baut wie heute |
+| `limits` | `{ timeoutMs, messageLimit, resultLimit, valueLimit, classLimit }`. Alle fünf reisen mit, weil der `func` die Konstanten der Brücke nicht sieht. Werte: `timeoutMs` = 2 000 (`EVAL_TIMEOUT_MS`), `messageLimit` = 500 (`EVAL_MESSAGE_LIMIT`), `resultLimit` = 10 000 (`EVAL_RESULT_LIMIT`). `valueLimit` und `classLimit` sind die `inspect`-Grenzen, damit `selectorForElement` denselben Selektor baut wie heute: `INSPECT_TEXT_LIMIT` 200 und `INSPECT_CLASS_LIMIT` 10 (`extension/bridge.js:263-264`, angewandt auf `:3588-3589`) |
 | `want` | der Frame-Filter, **erste Anweisung** im `func` — sonst läuft er mit `allFrames` in jedem Frame |
 
 **Rückgabe:** ein Objekt, dessen Felder am `outcome` hängen. `href` trägt
@@ -47,7 +47,7 @@ und `eval_withTwoFramesThatBothThrow_shouldAnswerFrameAmbiguousWithBothAddresses
 - `json` ist ein **JSON-String** (`evalResultOf` macht `JSON.parse(entry.json)`,
   `extension/bridge.js:3633`); seine Länge zählt gegen `resultLimit`.
 - `message` ist der Fehlertext der Seite, gekürzt auf `messageLimit` — gepinnt
-  von `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (`:12372`).
+  von `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (`:12426`).
 - `undefined` ⇒ `null`, BigInt ⇒ String, Funktion ⇒ `"[function]"`, Symbol ⇒
   `"[symbol]"`, nicht serialisierbar ⇒ `unserializable`.
 
@@ -66,8 +66,8 @@ Promise, das zu spät auflöst, `timeout` liefert und nicht hängt. Gepinnt von
 er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 `:1480`). Gebaut von **einem** Selektor-Bauer, der mit dem `func` reist
 (`selectorForElement`, heute `extension/page-agent.js:1179`). Gepinnt von
-`eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12387`) und
-`eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12407`).
+`eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12441`) und
+`eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12461`).
 
 ## Die Zahlen
 
@@ -80,9 +80,12 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
   brechen nicht „einer nach dem anderen", sondern im selben Schritt, in dem der
   `eval`-Op fällt. Deshalb ist die Umstellung **eine** Änderung, keine Reihe.
 - **16** `askPageAgent`-Aufrufe hat `extension/bridge.js`. Der `eval`-Aufruf
-  (`:3597`) ist **einer** davon: nach dem Umzug schicken **15** `{files, target}`
-  und **einer** `{args, func, target}`. Die Zahl 16 in `docs/45` bleibt richtig,
-  die Form ist es nicht mehr.
+  (`:3597`) kann **keiner** davon bleiben: `askPageAgent` (`:2528-2535`) schickt
+  immer `sendPageMessage` und wartet auf die Kanalsammlung — mit ihm würde
+  `tabs.channel.calls.length` nie 0, und das `[{frameId, result}]` des `func`
+  fiele weg. Nach dem Umzug gibt es **15** `askPageAgent`-Aufrufer und **einen
+  direkten** Aufruf der einen `executeScript`-Stelle (`injectScript`, `:2464`).
+  `frameTargetOf` bekommt die `result` je Frame statt der Kanalantworten.
 
 ## Non-goals
 
@@ -95,10 +98,10 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 |---|---|---|
 | `test/extension.test.js` | `injection_forEval_shouldCarryArgsFuncTarget` (**neu**) | die Schlüssel sind genau `args`, `func`, `target`; den `world`-Schlüssel besitzt `docs/48` |
 | `test/extension.test.js` | `eval_withReturnDocumentTitle_shouldAnswerTheTitle` (bestehend, umgestellt) | der Kanal wird nicht mehr benutzt: `tabs.channel.calls.length` ⇒ 0 |
-| `test/extension.test.js` | `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (`:12372`, bestehend) | `message` steht im Vertrag und ist gekürzt |
-| `test/extension.test.js` | `eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12387`) und `eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12407`) | DOM-Ergebnisse haben einen Besitzer |
-| `test/extension.test.js` | `eval_withAResultOfExactlyTenThousandJsonCharacters_shouldAnswerOk` (`:12343`) und `eval_withAResultOfTenThousandAndOneJsonCharacters_shouldAnswerTooLarge` (`:12358`) | die Grenze gilt für `json` |
-| `test/extension.test.js` | `eval_withFrame_shouldRunTheCodeInTheAddressedFrame` (`:13804`) | der Frame-Pin `:13823-13825` — die einzige Stelle, die `details` anfasst |
+| `test/extension.test.js` | `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (`:12426`, bestehend) | `message` steht im Vertrag und ist gekürzt |
+| `test/extension.test.js` | `eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12441`) und `eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12461`) | DOM-Ergebnisse haben einen Besitzer |
+| `test/extension.test.js` | `eval_withAResultOfExactlyTenThousandJsonCharacters_shouldAnswerOk` (`:12397`) und `eval_withAResultOfTenThousandAndOneJsonCharacters_shouldAnswerTooLarge` (`:12412`) | die Grenze gilt für `json` |
+| `test/extension.test.js` | `eval_withFrame_shouldRunTheCodeInTheAddressedFrame` (`:13804`) | der Frame-Pin `:13823-13824` — die einzige Stelle, die `details` anfasst |
 | `test/extension.test.js` | `eval_withAPromiseThatResolvesAfter50ms_shouldAnswerTheValue` (`:12234`) und `eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (`:12256`) | das Promise quert als aufgelöstes Ergebnis |
 | `test/extension.test.js` | `eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard` (`:12274`) | siehe `## Bekannte Lücken` — der Fall sucht einen neuen Gegenstand |
 
@@ -118,7 +121,8 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
    `eval_withFrame_shouldNotRunTheCodeInTheUnaddressedFrame` `:13852`,
    `eval_withTwoFramesThatBothThrow_shouldAnswerFrameAmbiguousWithBothAddresses`
    `:13878`) ⇒ grün. **Nur `:13804` fasst `details` an** (`:13823` `files`,
-   `:13824` die Kanalzeile `args.want`); die anderen drei beweisen das Verhalten.
+   `:13824` die Kanalzeile `args.want`, danach eine Leerzeile); die anderen drei
+   beweisen das Verhalten.
    Beide Reparaturen fallen in **Stufe 1**, nicht in Stufe 2 — der Fall bricht
    sonst, bevor die Stufe ihn repariert.
 5. **Die Suite bleibt grün.** `npm test` ⇒ `# fail 0`, `# cancelled 0`;
@@ -129,16 +133,26 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 **Stufe 1 — der `func` und der Umzug**
 
 Dateien: `extension/bridge.js` (der eigenständige `func` mit Frame-Filter, den
-fünf `limits`, Serialisierer, DOM-Formen; der Aufruf auf `:3597` schickt
-`{args, func, target}`), `extension/page-agent.js` (`eval`-Op und `serialize`
-löschen), `test/extension.test.js` (die 23 Kanal-Fälle auf den `func`-Zweig aus
-`docs/47`).
+fünf `limits`, Serialisierer, DOM-Formen; der Aufruf auf `:3597` wird ein
+direkter `injectScript`-Aufruf), `extension/page-agent.js` (`eval`-Op und
+`serialize` löschen), `test/extension.test.js` (die 23 Kanal-Fälle auf den
+`func`-Zweig aus `docs/47`).
+
+**Der Harness gehört in diese Stufe, nicht in eine Doku-Stufe.** Vier Stellen
+ändern sich, alle in `test/extension.test.js`:
+
+| Stelle | was |
+|---|---|
+| `runFuncIn` (`:487`) | wird `async` und wartet auf den Rückgabewert des `func`, bevor er durch JSON geht |
+| `inject` (`:506`) | gibt ein Promise zurück statt eines Arrays (Firefox tut dasselbe) |
+| `letPageClocksRun` (`:604`) | fährt auch die Uhren aus `pageRealmOf` (`:467`) weiter — heute erreicht `advanceMs` nur die isolierten Realms aus `realms` (`:684`), also können `:12234` und `:12256` nie grün werden |
+| Stub-Haken | `neverAnswer` für den Wächter-Fall (`:12274`) |
 
 Die Umstellung ist **ein** Schritt: der `eval`-Op fällt, und mit ihm alle 23
 Fälle, die ihn verwenden.
 
 Beweis: Kriterien 1, 2, 3, 4, 5 — die Reparatur der Frame-Assertions
-(`:13823-13825`, `details.files` und die Kanalzeile `args.want`) gehört in diese
+(`:13823-13824`, `details.files` und die Kanalzeile `args.want`) gehört in diese
 Stufe, weil der `eval`-Op hier fällt.
 
 **Stufe 2 — die Doku**
@@ -155,7 +169,7 @@ Beweis: keiner in Code — die Suite aus Stufe 1 bleibt grün.
 |---|---|---|
 | `docs/45-injection-naht.md` | `## Die Naht` | `eval` antwortet nicht mehr über den Kanal: seine Antwort kommt mit dem `executeScript`-Promise, und einen „stummen Frame" gibt es dort nicht |
 | `docs/45-injection-naht.md` | `## Bekannte Lücken` („`func` wurde verworfen") | für `eval` ist die Entscheidung **aufgehoben**: dort reist die Nutzlast als `func`. Der Grund bleibt für die anderen Werkzeuge gültig |
-| `docs/45-injection-naht.md` | `## Testing` („16 Aufrufer gegen `{file}` plus Nachrichtenkanal") | nach Stufe 1: **16** Aufrufer, davon 15 gegen `{files, target}` und einer gegen `{args, func, target}`; kein Kanal |
+| `docs/45-injection-naht.md` | `## Testing` („16 Aufrufer gegen `{file}` plus Nachrichtenkanal") | nach Stufe 1: **15** `askPageAgent`-Aufrufer gegen `{files, target}` und **ein** direkter `injectScript`-Aufruf (`:2464`) gegen `{args, func, target}`; kein Kanal |
 
 ## Bekannte Lücken
 
@@ -200,6 +214,22 @@ steht im Vertrag.
 
 Die Block-Runden des Vorgängers stehen in der Git-Historie
 (`docs/47-eval-vertrag.md`, `ab986b1` und davor).
+
+### Runde 2 des Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧
+
+Drei Blocker: fünf Zeilen aus dem `12400`-Block waren noch der Stand vor
+`35be904` (−54); der Promise-Transport stand im Vertrag, aber in **keiner**
+Stufe — und es ist mehr als ein `await` (`runFuncIn` synchron, `inject`
+synchron, `letPageClocksRun` fährt die Seitenwelt-Uhr nicht weiter, `neverAnswer`
+fehlt); und der `eval`-Aufruf konnte kein `askPageAgent`-Aufrufer bleiben, weil
+`askPageAgent` immer den Kanal nimmt.
+
+**Übernommen:** die fünf Zeilen nachgezogen (`:12397`, `:12412`, `:12426`,
+`:12441`, `:12461`); die vier Harness-Stellen stehen als Tabelle in **Stufe 1**,
+und Stufe 2 ist nur noch Doku; die Zahlen sind **15 `askPageAgent` + 1 direkter
+`injectScript` (`:2464`)**, mit `frameTargetOf` auf die `result` je Frame; dazu
+`valueLimit`/`classLimit` mit Namen und Zahlen und `:13823-13824` statt
+`:13823-13825`.
 
 ## Log
 
