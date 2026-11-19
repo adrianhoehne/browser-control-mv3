@@ -1,6 +1,6 @@
 ---
 description: Der Vertrag des func und der Umzug von browser_eval auf den Kanal-freien Weg — setzt den Harness-Runner aus docs/47 voraus.
-status: proposed
+status: active
 ---
 
 # Der `func`-Vertrag und der Umzug von `browser_eval`
@@ -292,6 +292,21 @@ Kriterium 1 prüft außerdem `grep -c 'evalPageSource'` ⇒ 0, `evalPageRequest`
 (`:3684`) ist als arbeitslos benannt, und der Bereich ist `:12317-12330`.
 
 ## Log
+
+- **2026-11-19, Stufe 1 gebaut und gemessen.** Der `func` steht in
+  `extension/bridge.js`, eigenständig, mit eigenen Kopien von `serialize`,
+  `selectorOf`, `isThenable`, `withinDeadline` und `messageOf`; der Aufruf geht
+  **direkt** über `injectScript` statt `askPageAgent`. Gelöscht: der `eval`-Op,
+  `evalPageSource`, `serialize`, `isThenable` und `withinDeadline` (170 Zeilen),
+  dazu `evalPageRequest`.
+  **Ein Fund beim Bauen:** die `args` reisen **positional** — Firefox verteilt das
+  Array auf die Parameter. Der `func` nimmt deshalb `(code, limits, want)`, nicht
+  ein Array; mit einem Array-Parameter las er `"r"` als Code.
+  Belege: `# tests 541, # fail 0, # cancelled 0, # skipped 0`;
+  `npm run check` 0 (23 Dateien); `grep -c 'serialize(' extension/page-agent.js`
+  ⇒ 0, `grep -c 'evalPageSource' extension/page-agent.js` ⇒ 0.
+  **Offen (Betreiber):** die Erweiterung in Firefox neu laden und `eval` gegen
+  den laufenden Dienst prüfen.
 
 - **2026-11-19, Teilung:** dritter Block; Vertrag und Umzug hier, der
   Harness-Runner in `docs/47`.
