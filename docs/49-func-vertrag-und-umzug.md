@@ -35,7 +35,7 @@ Harness-Runner steht in `docs/47-func-runner-im-harness.md` und ist
 **jede** Antwort, weil `frameTargetOf` daraus die Kandidaten baut — ohne `href`
 werden zwei werfende Frames zu `frame_ambiguous` mit `candidates: [null, null]`,
 und `eval_withTwoFramesThatBothThrow_shouldAnswerFrameAmbiguousWithBothAddresses`
-(`:13824`) fällt:
+(`:13890`) fällt:
 
 | `outcome` | Felder |
 |---|---|
@@ -48,18 +48,18 @@ und `eval_withTwoFramesThatBothThrow_shouldAnswerFrameAmbiguousWithBothAddresses
   `extension/bridge.js:3633` und parst auf `:3658`); seine Länge zählt gegen
   `resultLimit`.
 - `message` ist der Fehlertext der Seite, gekürzt auf `messageLimit` — gepinnt
-  von `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (`:12426`).
+  von `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (`:12438`).
 - `undefined` ⇒ `null`, BigInt ⇒ String, Funktion ⇒ `"[function]"`, Symbol ⇒
   `"[symbol]"`, nicht serialisierbar ⇒ `unserializable`.
 
 **Ein Promise als Rückgabe:** der `func` wartet in der Seitenwelt, nicht die
-Brücke — er gibt erst das aufgelöste Ergebnis zurück. Dafür wird der Harness
-aus `docs/47` um **ein** `await` je Frame erweitert (`runFuncIn` wartet auf den
-Rückgabewert, bevor es ihn durch JSON schickt); das ist ein Amendment an
-`docs/47`. Die Frist von 2 000 ms läuft dabei im `func` selbst, sodass ein
-Promise, das zu spät auflöst, `timeout` liefert und nicht hängt. Gepinnt von
-`eval_withAPromiseThatResolvesAfter50ms_shouldAnswerTheValue` (`:12234`) und
-`eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (`:12256`).
+Brücke — er gibt erst das aufgelöste Ergebnis zurück. Der Transport steht im
+Harness: `runFuncIn` gibt ein Promise zurück, `inject` ist `async`, der
+`func`-Arm treibt die Uhr (gebaut und gemessen in `50c5569`, `docs/47` Stufe 2).
+Die Frist von 2 000 ms läuft im `func` selbst, sodass ein Promise, das zu spät
+auflöst, `timeout` liefert und nicht hängt. Gepinnt von
+`eval_withAPromiseThatResolvesAfter50ms_shouldAnswerTheValue` (`:12246`) und
+`eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (`:12268`).
 
 **DOM-Ergebnisse haben einen Besitzer:** ein Element ⇒
 `{ kind: "node", tag, selector }`; ein **Textknoten** ⇒
@@ -67,18 +67,18 @@ Promise, das zu spät auflöst, `timeout` liefert und nicht hängt. Gepinnt von
 er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 `:1480`). Gebaut von **einem** Selektor-Bauer, der mit dem `func` reist
 (`selectorForElement`, heute `extension/page-agent.js:1179`). Gepinnt von
-`eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12441`) und
-`eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12461`).
+`eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12453`) und
+`eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12473`).
 
 ## Die Zahlen
 
 - **30** `eval_`-Fälle zählt `npm test` heute.
-- **5** davon antworten, **bevor** injiziert wird (`:11877`, `:11898`, `:11916`,
-  `:11932`, `:11952` — Schalter aus, Schalter als String `"true"`, Code leer, die
+- **5** davon antworten, **bevor** injiziert wird (`:11889`, `:11910`, `:11928`,
+  `:11944`, `:11964` — Schalter aus, Schalter als String `"true"`, Code leer, die
   Grenzen des Argumentbaus), und **2** antworten aus einer **abgelehnten**
-  Injektion (`:11967` reicht ein werfendes `executeScript` herein, `:11991`
+  Injektion (`:11979` reicht ein werfendes `executeScript` herein, `:12003`
   antwortet danach und prüft selbst `tabs.scriptCalls.length === 1`).
-  *(Zeilen nach `35be904`.)*
+  *(Zeilen nach `50c5569`.)*
 - **23** laufen über den Nachrichtenkanal. Nach Stufe 1 sind es **0** — sie
   brechen nicht „einer nach dem anderen", sondern im selben Schritt, in dem der
   `eval`-Op fällt. Deshalb ist die Umstellung **eine** Änderung, keine Reihe.
@@ -101,12 +101,12 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 |---|---|---|
 | `test/extension.test.js` | `injection_forEval_shouldCarryArgsFuncTarget` (**neu**) | die Schlüssel sind genau `args`, `func`, `target`; den `world`-Schlüssel besitzt `docs/48` |
 | `test/extension.test.js` | `eval_withReturnDocumentTitle_shouldAnswerTheTitle` (bestehend, umgestellt) | der Kanal wird nicht mehr benutzt: `tabs.channel.calls.length` ⇒ 0 |
-| `test/extension.test.js` | `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (`:12426`, bestehend) | `message` steht im Vertrag und ist gekürzt |
-| `test/extension.test.js` | `eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12441`) und `eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12461`) | DOM-Ergebnisse haben einen Besitzer |
-| `test/extension.test.js` | `eval_withAResultOfExactlyTenThousandJsonCharacters_shouldAnswerOk` (`:12397`) und `eval_withAResultOfTenThousandAndOneJsonCharacters_shouldAnswerTooLarge` (`:12412`) | die Grenze gilt für `json` |
-| `test/extension.test.js` | `eval_withFrame_shouldRunTheCodeInTheAddressedFrame` (`:13804`) | der Frame-Pin `:13823-13824` — die einzige Stelle, die `details` anfasst |
-| `test/extension.test.js` | `eval_withAPromiseThatResolvesAfter50ms_shouldAnswerTheValue` (`:12234`) und `eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (`:12256`) | das Promise quert als aufgelöstes Ergebnis |
-| `test/extension.test.js` | `eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard` (`:12274`) | siehe `## Bekannte Lücken` — der Fall sucht einen neuen Gegenstand |
+| `test/extension.test.js` | `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (`:12438`, bestehend) | `message` steht im Vertrag und ist gekürzt |
+| `test/extension.test.js` | `eval_withADomNodeResult_shouldAnswerTheSelectorOfThatElement` (`:12453`) und `eval_withATextNodeResult_shouldAnswerKindNodeAndNodeType` (`:12473`) | DOM-Ergebnisse haben einen Besitzer |
+| `test/extension.test.js` | `eval_withAResultOfExactlyTenThousandJsonCharacters_shouldAnswerOk` (`:12409`) und `eval_withAResultOfTenThousandAndOneJsonCharacters_shouldAnswerTooLarge` (`:12424`) | die Grenze gilt für `json` |
+| `test/extension.test.js` | `eval_withFrame_shouldRunTheCodeInTheAddressedFrame` (`:13816`) | der Frame-Pin `:13835-13836` — die einzige Stelle, die `details` anfasst |
+| `test/extension.test.js` | `eval_withAPromiseThatResolvesAfter50ms_shouldAnswerTheValue` (`:12246`) und `eval_withAPromisePastTheDeadline_shouldAnswerEvalTimeout` (`:12268`) | das Promise quert als aufgelöstes Ergebnis |
+| `test/extension.test.js` | `eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard` (`:12286`) | siehe `## Bekannte Lücken` — der Fall sucht einen neuen Gegenstand |
 
 ## Acceptance criteria
 
@@ -119,15 +119,15 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 3. **Der Vertrag steht.** `injection_forEval_shouldCarryArgsFuncTarget` ⇒ grün;
    die Schlüssel sind **genau** `args`, `func`, `target`. Geprüft wird der Pin
    **in `inject`** — `tabs.scriptCalls` taugt dafür nicht: der Stub protokolliert
-   `JSON.parse(JSON.stringify(details))` (`:1777`), und eine Funktion überlebt
+   `JSON.parse(JSON.stringify(details))` (`:1791`), und eine Funktion überlebt
    das nicht.
 4. **Kein Frame-Verhalten geändert.** Die vier Frame-Fälle
-   (`eval_withFrame_shouldRunTheCodeInTheAddressedFrame` `:13804`,
-   `eval_withAFrameThatMatchesNoFrame_shouldAnswerFrameNotFound` `:13832`,
-   `eval_withFrame_shouldNotRunTheCodeInTheUnaddressedFrame` `:13852`,
+   (`eval_withFrame_shouldRunTheCodeInTheAddressedFrame` `:13816`,
+   `eval_withAFrameThatMatchesNoFrame_shouldAnswerFrameNotFound` `:13844`,
+   `eval_withFrame_shouldNotRunTheCodeInTheUnaddressedFrame` `:13864`,
    `eval_withTwoFramesThatBothThrow_shouldAnswerFrameAmbiguousWithBothAddresses`
-   `:13878`) ⇒ grün. **Nur `:13804` fasst `details` an** (`:13823` `files`,
-   `:13824` die Kanalzeile `args.want`, danach eine Leerzeile); die anderen drei
+   `:13890`) ⇒ grün. **Nur `:13816` fasst `details` an** (`:13835` `files`,
+   `:13836` die Kanalzeile `args.want`, danach eine Leerzeile); die anderen drei
    beweisen das Verhalten.
    Beide Reparaturen fallen in **Stufe 1**, nicht in Stufe 2 — der Fall bricht
    sonst, bevor die Stufe ihn repariert.
@@ -146,21 +146,21 @@ direkter `injectScript`-Aufruf), `extension/page-agent.js` (`eval`-Op und
 
 **Voraussetzung: `docs/47` Stufe 2** (der Transport — `runFuncIn` async, `inject`
 gibt ein Promise, die Uhr im `func`-Arm, `neverAnswer`). Diese vier Stellen sind
-dort gebaut und bewiesen; ohne sie können `:12234` und `:12256` nicht grün
+dort gebaut und bewiesen; ohne sie können `:12246` und `:12268` nicht grün
 werden.
 
 Die Umstellung ist **ein** Schritt: der `eval`-Op fällt, und mit ihm alle 23
 Fälle, die ihn verwenden.
 
 Beweis: Kriterien 1, 2, 3, 4, 5 — die Reparatur der Frame-Assertions
-(`:13823-13824`, `details.files` und die Kanalzeile `args.want`) gehört in diese
+(`:13835-13836`, `details.files` und die Kanalzeile `args.want`) gehört in diese
 Stufe, weil der `eval`-Op hier fällt.
 
 **Stufe 2 — die Doku**
 
 Dateien: `docs/45-injection-naht.md` (datiertes Amendment),
-`docs/PROJECT-STATE.md`, `docs/47-func-runner-im-harness.md` (Amendment: ein
-`await` je Frame für ein Promise-Ergebnis).
+`docs/PROJECT-STATE.md`, `docs/47-func-runner-im-harness.md` (`## Bekannte
+Lücken`: der `func`-Zweig ist ab jetzt genutzt statt ungenutzt).
 
 Beweis: keiner in Code — die Suite aus Stufe 1 bleibt grün.
 
@@ -170,18 +170,17 @@ Beweis: keiner in Code — die Suite aus Stufe 1 bleibt grün.
 |---|---|---|
 | `docs/45-injection-naht.md` | `## Die Naht` | `eval` antwortet nicht mehr über den Kanal: seine Antwort kommt mit dem `executeScript`-Promise, und einen „stummen Frame" gibt es dort nicht |
 | `docs/45-injection-naht.md` | `## Bekannte Lücken` („`func` wurde verworfen") | für `eval` ist die Entscheidung **aufgehoben**: dort reist die Nutzlast als `func`. Der Grund bleibt für die anderen Werkzeuge gültig |
+| `docs/47-func-runner-im-harness.md` | `## Bekannte Lücken` („Der `func`-Zweig ist nach dieser Stufe ungenutzt") | wird mit Stufe 1 **falsch**: `eval` ist der erste und einzige Nutzer. Der Satz fällt |
 | `docs/45-injection-naht.md` | `## Testing` („16 Aufrufer gegen `{file}` plus Nachrichtenkanal") | nach Stufe 1: **15** `askPageAgent`-Aufrufer gegen `{files, target}` und **ein** direkter `injectScript`-Aufruf (`:2464`) gegen `{args, func, target}`; kein Kanal |
 
 ## Bekannte Lücken
 
-- **Der Wächter-Fall verliert seinen Gegenstand.**
+- **Der Wächter-Fall muss umgebaut werden.**
   `eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard`
-  (`:12274`) hängt an `silent`-Frames und den `INJECTION_REPLY_TIMEOUT_MS`-Timern
-  des Kanals. Der `func`-Arm ignoriert `silent`, und einen Haken
-  „`executeScript` antwortet nie" gibt es im Stub nicht (nur
-  `refuseInjectionAfter`). Der Fall braucht in Stufe 1 **einen neuen
-  Gegenstand**: der Stub bekommt `neverAnswer`, und der Fall prüft, dass die
-  Frist der Brücke (`EVAL_GUARD_MS`) greift, wenn das Promise nie aufgelöst
+  (`:12286`) hängt an `silent`-Frames und den zwei `INJECTION_REPLY_TIMEOUT_MS`
+  (`:12308-12316`). Beides fällt mit dem Kanal weg. Der Haken ist da —
+  `neverAnswer` (`test/extension.test.js:559`) —, Stufe 1 stellt den Fall darauf
+  um und prüft, dass `EVAL_GUARD_MS` greift, wenn das Promise nie aufgelöst
   wird. Bis dahin ist die Wächter-Frist unbelegt.
 - **`selectorForElement` reist als Kopie im `func`.** Eine echte
   Wiederverwendung ginge nur über eine injizierte Datei, und die kann keine
@@ -204,14 +203,14 @@ Baum **vor** `35be904` geschrieben, das den Harness-Fall einfügte), und Kriteri
 4 zeigte damit auf einen Kommentar statt auf den Frame-Fall; ein Promise als
 Rückgabe hatte keinen Transport (zwei Fälle hätten nie grün werden können);
 Stufe 2 fasste Zeilen an, die Stufe 1 schon bricht; und der Wächter-Fall
-`:12274` verlor mit dem Kanal seinen Gegenstand.
+`:12286` verlor mit dem Kanal seinen Gegenstand.
 
 **Übernommen:** alle Zeilen gegen HEAD neu verankert (Zusatz „Zeilen nach
 `35be904`"), der siebte Injection-Fall
 (`eval_whenTheSwitchHoldsTheStringTrue_shouldRefuseWithoutInjecting`) ergänzt,
 der Promise-Übergang in den Vertrag und als `docs/47`-Amendment aufgenommen,
 die Reparatur der Frame-Assertions nach Stufe 1 gezogen, Stufe 2 auf die Doku
-reduziert, Kriterium 4 auf „nur `:13804` fasst `details` an" korrigiert, der
+reduziert, Kriterium 4 auf „nur `:13816` fasst `details` an" korrigiert, der
 Wächter-Fall mit `neverAnswer` als Lücke benannt, und `symbol ⇒ "[symbol]"`
 steht im Vertrag.
 
@@ -227,8 +226,8 @@ synchron, `letPageClocksRun` fährt die Seitenwelt-Uhr nicht weiter, `neverAnswe
 fehlt); und der `eval`-Aufruf konnte kein `askPageAgent`-Aufrufer bleiben, weil
 `askPageAgent` immer den Kanal nimmt.
 
-**Übernommen:** die fünf Zeilen nachgezogen (`:12397`, `:12412`, `:12426`,
-`:12441`, `:12461`); die vier Harness-Stellen stehen als Tabelle in **Stufe 1**,
+**Übernommen:** die fünf Zeilen nachgezogen (`:12409`, `:12424`, `:12438`,
+`:12453`, `:12473`); die vier Harness-Stellen stehen als Tabelle in **Stufe 1**,
 und Stufe 2 ist nur noch Doku; die Zahlen sind **15 `askPageAgent` + 1 direkter
 `injectScript` (`:2464`)**, mit `frameTargetOf` auf die `result` je Frame; dazu
 `valueLimit`/`classLimit` mit Namen und Zahlen und `:13823-13824` statt
@@ -240,7 +239,7 @@ Drei Blocker: die Harness-Zeile nannte die falsche Ursache (`letPageClocksRun`
 wird nur aus `deliver` gerufen, nicht aus dem `func`-Arm; die Seitenwelt-Uhr ist
 dasselbe Objekt wie die aus `realms`); Kriterium 3 war mit `tabs.scriptCalls`
 nicht entscheidbar (der Stub protokolliert durch JSON, `func` fällt weg); und von
-den „7 Fällen vor der Injection" injizieren zwei doch (`:11967`, `:11991`).
+den „7 Fällen vor der Injection" injizieren zwei doch (`:11979`, `:12003`).
 
 **Folge: geteilt.** Die vier Harness-Stellen (Transport) sind nach `docs/47`
 **Stufe 2** gewandert — dort sind sie ohne Produktivcode beweisbar
@@ -250,8 +249,26 @@ wiederkommen. Hier bleibt: `func`, Vertrag, die 23 Fälle, die Frame-Reparaturen
 und die Doku.
 
 **Übernommen:** Kriterium 3 prüft den Pin **in `inject`**, mit der Begründung
-(`:1777`); die Zahlen sind 5 + 2; `evalResultOf` `:3633` und das Parsen `:3658`;
+(`:1791`); die Zahlen sind 5 + 2; `evalResultOf` `:3633` und das Parsen `:3658`;
 der `func` ist ein Funktionswert, der als Quelltext reist.
+
+### Runde 1 dieses Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧
+
+Der vierte Rutsch derselben Art: `50c5569` (der Transport in `docs/47`) schob
+jede Testzeile um **+12**, und die Spec war gegen den Stand davor geschrieben —
+zwei der sieben Zahlen zeigten auf Leerzeilen. Dazu begründete Kriterium 3 sich
+mit `:1777` (dem Rückgabeobjekt des Stubs) statt mit `:1791` (dem
+JSON-Rundlauf), und zwei Dinge waren als offen beschrieben, die `50c5569`
+gebaut hat (`neverAnswer`, der Promise-Transport).
+
+**Übernommen:** alle Testzeilen um +12 nachgezogen, Herkunft auf `50c5569`
+gesetzt, die zwei Sonderfälle von Hand (`:13890` für den
+Zwei-Frame-Fall im Vertrag, `:13835-13836` für den Frame-Pin); `:1791` für den
+JSON-Rundlauf; der Promise-Transport ist als **gebaut** benannt; die Lücke ist
+jetzt der **Fall-Umbau** (`silent` und die zwei `INJECTION_REPLY_TIMEOUT_MS`
+fallen weg, `neverAnswer` `:559` tritt an ihre Stelle); und das fehlende
+Amendment steht in der Tabelle — `docs/47 ## Bekannte Lücken` („der
+`func`-Zweig ist ungenutzt") wird mit Stufe 1 falsch.
 
 ## Log
 
