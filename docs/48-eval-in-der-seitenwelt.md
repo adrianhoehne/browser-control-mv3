@@ -9,9 +9,8 @@ Zweiter Teil der ursprünglichen `docs/47`, abgespalten nach dem **dritten**
 Review-Block (2026-11-18). `docs/47-eval-vertrag.md` legt den Vertrag des `func`
 fest und baut den Harness-Runner; **diese Spec macht das Verhalten sichtbar.**
 
-**Voraussetzung:** `docs/47` ist gebaut. Ohne den Func-Runner und den Vertrag
-(`args: [code, limits, want]`, Rückgabe mit `message`, ein Serialisierer) ist der
-Umzug nicht messbar.
+**Voraussetzung:** `docs/47` (Func-Runner im Harness) und `docs/49` (Vertrag und
+Umzug auf `func`) sind gebaut. Ohne beide ist dieser Schritt nicht messbar.
 
 ## Ziel
 
@@ -82,7 +81,7 @@ Messung zeigte `eval()`.
 | `test/extension.test.js` | `injection_forEval_shouldCarryWorldMain` | die Schlüssel sind `{args, func, target, world}` |
 | `test/extension.test.js` | `eval_inThePageWorld_shouldSeeThePageVariable` | Seitenvariable gesetzt und gelesen, mit zwei Welten (aus `docs/47`) |
 | `test/extension.test.js` | `eval_whenThePageForbidsScript_shouldNameTheCsp` | der CSP-Fall ist ein benannter Fehler mit deutschem Satz |
-| `test/extension.test.js` | `eval_withoutTheSwitch_shouldRefuseBeforeInjecting` (bestehend) | `allowEval` bleibt Pflicht |
+| `test/extension.test.js` | `eval_whenTheSwitchIsOff_shouldRefuseWithoutInjecting` (bestehend, `:11823`) | `allowEval` bleibt Pflicht |
 | `test/manifest.test.js` | `manifest_shouldNotAllowUnsafeEval` | `content_security_policy.extension_pages` enthält kein `'unsafe-eval'` |
 | `test/manifest.test.js` | `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlocks` (bestehend, erweitert) | der Hinweis nennt **Seitenvariablen**; die alten Wörter (`password fields`, `localStorage`, `HttpOnly`, `fetch`) bleiben |
 
