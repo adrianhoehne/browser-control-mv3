@@ -81,7 +81,7 @@ Messung zeigte `eval()`.
 | `test/extension.test.js` | `injection_forEval_shouldCarryWorldMain` | die Schlüssel sind `{args, func, target, world}` |
 | `test/extension.test.js` | `eval_inThePageWorld_shouldSeeThePageVariable` | Seitenvariable gesetzt und gelesen, mit zwei Welten (aus `docs/47`) |
 | `test/extension.test.js` | `eval_whenThePageForbidsScript_shouldNameTheCsp` | der CSP-Fall ist ein benannter Fehler mit deutschem Satz |
-| `test/extension.test.js` | `eval_whenTheSwitchIsOff_shouldRefuseWithoutInjecting` (bestehend, `:11823`) | `allowEval` bleibt Pflicht |
+| `test/extension.test.js` | `eval_whenTheSwitchIsOff_shouldRefuseWithoutInjecting` (bestehend, `:11877`) | `allowEval` bleibt Pflicht |
 | `test/manifest.test.js` | `manifest_shouldNotAllowUnsafeEval` | `content_security_policy.extension_pages` enthält kein `'unsafe-eval'` |
 | `test/manifest.test.js` | `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlocks` (bestehend, erweitert) | der Hinweis nennt **Seitenvariablen**; die alten Wörter (`password fields`, `localStorage`, `HttpOnly`, `fetch`) bleiben |
 

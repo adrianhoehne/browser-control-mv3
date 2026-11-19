@@ -74,7 +74,8 @@ Der Zweig im Harness:
 |---|---|---|
 | `test/extension.test.js` | `inject_withAFunc_shouldRunItInThePageWorldRealm` (**neu**) | der Zweig existiert, und die zwei Realms sind getrennt: der `func` sieht eine Seitenvariable, die isolierte Welt nicht |
 | `test/extension.test.js` | `eval_withReturnDocumentTitle_shouldAnswerTheTitle` (bestehend) | die `files`-Form bleibt unberührt gültig — der Pin ist eine Vereinigung, keine Ersetzung |
-| `test/extension.test.js` | alle Frame-Fälle (`:13750`, `:13778`, `:13798`, `:13824`) | die Suite bleibt grün, obwohl der Pin jetzt zwei Formen kennt |
+| `test/extension.test.js` | `inject_withAFuncThatAnswersAPromise_shouldAnswerTheResolvedValue` (**neu**) | der Transport trägt ein Promise: `inject` wartet, der Rückgabewert ist der aufgelöste Wert |
+| `test/extension.test.js` | alle Frame-Fälle (`:13804`, `:13832`, `:13852`, `:13878`) | die Suite bleibt grün, obwohl der Pin jetzt zwei Formen kennt |
 
 ## Acceptance criteria
 
@@ -91,6 +92,11 @@ Der Zweig im Harness:
    `# cancelled 0`. (Dass danach 15 + 1 gilt, ist `docs/49`.)
 4. **Kein Produktivcode.** `git diff --stat extension/` ⇒ **leer**.
 5. **Die Suite bleibt grün.** `npm run check` ⇒ 0.
+6. **Der Transport trägt.** `inject_withAFuncThatAnswersAPromise_shouldAnswerTheResolvedValue`
+   ⇒ grün: der `func` gibt ein Promise zurück, das erst nach `advanceMs`
+   auflöst, und `inject` antwortet mit dem aufgelösten Wert. Dazu
+   `grep -c 'letPageClocksRun' test/extension.test.js` ⇒ **2** (der `deliver`-Ruf
+   und der neue im `func`-Arm).
 
 ## Dev plan
 
@@ -102,7 +108,20 @@ zwei Realms je Frame, die Vereinigung an `:471-473`, der neue Fall
 
 Beweis: Kriterien 1, 2, 3, 4, 5.
 
-**Keine Stufe 2.** Was danach kommt, steht in `docs/49`.
+**Stufe 2 — der Transport (nachgereicht 2026-11-19)**
+
+Die Stufe war in `docs/49` geplant worden und gehört hierher: sie ist **ohne
+Produktivcode** beweisbar, `inject` ist direkt aufrufbar. Vier Stellen, alle in
+`test/extension.test.js`:
+
+| Stelle | was |
+|---|---|
+| `runFuncIn` (`:487`) | wird `async` und wartet auf den Rückgabewert des `func`, bevor er durch JSON geht |
+| `inject` (`:506`) | gibt ein Promise zurück statt eines Arrays (Firefox tut dasselbe) |
+| `inject`-`func`-Arm | treibt die Uhr, während auf den `func` gewartet wird. `letPageClocksRun` wird heute nur aus `deliver` (`:648`) gerufen. Der `func`-Arm schickt keine Nachricht, also fährt keine Uhr — eine Frist im `func` kann nie fallen |
+| Stub | `neverAnswer`: eine Injektion, die nie antwortet — der Gegenstand des Wächter-Falls `eval_whenThePageNeverAnswers_shouldAnswerEvalTimeoutThroughTheGuard` (`:12274`) |
+
+Beweis: Kriterium 6 (unten). `docs/49` setzt diese Stufe voraus.
 
 ## Bekannte Lücken
 
@@ -127,6 +146,10 @@ geteilten Hälfte neu, weil ihr Umfang ein anderer ist.
 
 ## Log
 
+- **2026-11-19, Stufe 2 nachgereicht:** der Transport (Promise, Uhr, `neverAnswer`)
+  stand zuerst in `docs/49`; er ist hier ohne Produktivcode beweisbar und
+  gehört deshalb in dieses Dokument. Begründung im `## Review` der Runde 3 von
+  `docs/49`.
 - **2026-11-19, gebaut und gemessen:** der `func`-Zweig steht in `inject()`, der
   Pin ist die Vereinigung, `inject_withAFunc_shouldRunItInThePageWorldRealm` ist
   grün. Belege: `# tests 539, # fail 0, # cancelled 0, # skipped 0`;

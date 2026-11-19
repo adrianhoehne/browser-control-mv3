@@ -44,8 +44,9 @@ und `eval_withTwoFramesThatBothThrow_shouldAnswerFrameAmbiguousWithBothAddresses
 | `threw` | `outcome`, `href`, `message` (`extension/page-agent.js:1563` liefert genau diese drei) |
 | `timeout`, `too_large`, `unserializable` | `outcome`, `href` |
 
-- `json` ist ein **JSON-String** (`evalResultOf` macht `JSON.parse(entry.json)`,
-  `extension/bridge.js:3633`); seine Länge zählt gegen `resultLimit`.
+- `json` ist ein **JSON-String** (`evalResultOf` steht auf
+  `extension/bridge.js:3633` und parst auf `:3658`); seine Länge zählt gegen
+  `resultLimit`.
 - `message` ist der Fehlertext der Seite, gekürzt auf `messageLimit` — gepinnt
   von `eval_withAThrownMessageOf600Characters_shouldCutItAt500` (`:12426`).
 - `undefined` ⇒ `null`, BigInt ⇒ String, Funktion ⇒ `"[function]"`, Symbol ⇒
@@ -72,9 +73,11 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 ## Die Zahlen
 
 - **30** `eval_`-Fälle zählt `npm test` heute.
-- **7** davon antworten, bevor injiziert wird: `:11877`, `:11898`, `:11916`,
-  `:11932`, `:11952`, `:11967`, `:11991` — der Schalter aus, der Schalter als
-  String `"true"`, der Code leer, die Grenzen des Argumentbaus.
+- **5** davon antworten, **bevor** injiziert wird (`:11877`, `:11898`, `:11916`,
+  `:11932`, `:11952` — Schalter aus, Schalter als String `"true"`, Code leer, die
+  Grenzen des Argumentbaus), und **2** antworten aus einer **abgelehnten**
+  Injektion (`:11967` reicht ein werfendes `executeScript` herein, `:11991`
+  antwortet danach und prüft selbst `tabs.scriptCalls.length === 1`).
   *(Zeilen nach `35be904`.)*
 - **23** laufen über den Nachrichtenkanal. Nach Stufe 1 sind es **0** — sie
   brechen nicht „einer nach dem anderen", sondern im selben Schritt, in dem der
@@ -114,7 +117,10 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 2. **Der Kanal ist frei.** In `eval_withReturnDocumentTitle_shouldAnswerTheTitle`
    ist `tabs.channel.calls.length` ⇒ **0**, und der Inject-Aufruf trägt `func`.
 3. **Der Vertrag steht.** `injection_forEval_shouldCarryArgsFuncTarget` ⇒ grün;
-   die Schlüssel sind **genau** `args`, `func`, `target`.
+   die Schlüssel sind **genau** `args`, `func`, `target`. Geprüft wird der Pin
+   **in `inject`** — `tabs.scriptCalls` taugt dafür nicht: der Stub protokolliert
+   `JSON.parse(JSON.stringify(details))` (`:1777`), und eine Funktion überlebt
+   das nicht.
 4. **Kein Frame-Verhalten geändert.** Die vier Frame-Fälle
    (`eval_withFrame_shouldRunTheCodeInTheAddressedFrame` `:13804`,
    `eval_withAFrameThatMatchesNoFrame_shouldAnswerFrameNotFound` `:13832`,
@@ -138,15 +144,10 @@ direkter `injectScript`-Aufruf), `extension/page-agent.js` (`eval`-Op und
 `serialize` löschen), `test/extension.test.js` (die 23 Kanal-Fälle auf den
 `func`-Zweig aus `docs/47`).
 
-**Der Harness gehört in diese Stufe, nicht in eine Doku-Stufe.** Vier Stellen
-ändern sich, alle in `test/extension.test.js`:
-
-| Stelle | was |
-|---|---|
-| `runFuncIn` (`:487`) | wird `async` und wartet auf den Rückgabewert des `func`, bevor er durch JSON geht |
-| `inject` (`:506`) | gibt ein Promise zurück statt eines Arrays (Firefox tut dasselbe) |
-| `letPageClocksRun` (`:604`) | fährt auch die Uhren aus `pageRealmOf` (`:467`) weiter — heute erreicht `advanceMs` nur die isolierten Realms aus `realms` (`:684`), also können `:12234` und `:12256` nie grün werden |
-| Stub-Haken | `neverAnswer` für den Wächter-Fall (`:12274`) |
+**Voraussetzung: `docs/47` Stufe 2** (der Transport — `runFuncIn` async, `inject`
+gibt ein Promise, die Uhr im `func`-Arm, `neverAnswer`). Diese vier Stellen sind
+dort gebaut und bewiesen; ohne sie können `:12234` und `:12256` nicht grün
+werden.
 
 Die Umstellung ist **ein** Schritt: der `eval`-Op fällt, und mit ihm alle 23
 Fälle, die ihn verwenden.
@@ -185,8 +186,10 @@ Beweis: keiner in Code — die Suite aus Stufe 1 bleibt grün.
 - **`selectorForElement` reist als Kopie im `func`.** Eine echte
   Wiederverwendung ginge nur über eine injizierte Datei, und die kann keine
   Funktion zurückgeben.
-- **Der `func` ist ein String.** Er kann nichts aus der Brücke mitnehmen; alles,
-  was er braucht, steht in `args`.
+- **Der `func` ist ein Funktionswert, der als Quelltext reist.** Firefox nimmt nur
+  einen Funktionswert entgegen; der Harness nimmt beides und ruft
+  `func.toString()` auf. Er kann nichts aus der Brücke mitnehmen — alles, was er
+  braucht, steht in `args`.
 
 ## Open questions
 
@@ -230,6 +233,25 @@ und Stufe 2 ist nur noch Doku; die Zahlen sind **15 `askPageAgent` + 1 direkter
 `injectScript` (`:2464`)**, mit `frameTargetOf` auf die `result` je Frame; dazu
 `valueLimit`/`classLimit` mit Namen und Zahlen und `:13823-13824` statt
 `:13823-13825`.
+
+### Runde 3 — 2026-11-19, `grizzled-senior-dev`: 🔧 → **geteilt**
+
+Drei Blocker: die Harness-Zeile nannte die falsche Ursache (`letPageClocksRun`
+wird nur aus `deliver` gerufen, nicht aus dem `func`-Arm; die Seitenwelt-Uhr ist
+dasselbe Objekt wie die aus `realms`); Kriterium 3 war mit `tabs.scriptCalls`
+nicht entscheidbar (der Stub protokolliert durch JSON, `func` fällt weg); und von
+den „7 Fällen vor der Injection" injizieren zwei doch (`:11967`, `:11991`).
+
+**Folge: geteilt.** Die vier Harness-Stellen (Transport) sind nach `docs/47`
+**Stufe 2** gewandert — dort sind sie ohne Produktivcode beweisbar
+(`inject_withAFuncThatAnswersAPromise_shouldAnswerTheResolvedValue`), und die
+Runde-2-Klasse („steht im Vertrag, aber in keiner Stufe") kann strukturell nicht
+wiederkommen. Hier bleibt: `func`, Vertrag, die 23 Fälle, die Frame-Reparaturen
+und die Doku.
+
+**Übernommen:** Kriterium 3 prüft den Pin **in `inject`**, mit der Begründung
+(`:1777`); die Zahlen sind 5 + 2; `evalResultOf` `:3633` und das Parsen `:3658`;
+der `func` ist ein Funktionswert, der als Quelltext reist.
 
 ## Log
 
