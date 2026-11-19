@@ -169,7 +169,6 @@ Beweis: Kriterien 5, 6, 7 und `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlo
     Domains unabhängig vom Schalter für MV3-Add-ons, die das Recht nicht als
     `optional_permissions` deklarieren.
 
-## Log
 
 - **2026-11-19, gebaut und am laufenden Browser gemessen.** `world: "MAIN"` in der
   Injektion, `EVAL_CSP_CODE`/`EVAL_CSP_MESSAGE` benannt, Harness pinnt `world`.
@@ -191,7 +190,6 @@ Beweis: Kriterien 5, 6, 7 und `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlo
   **Offen:** der Hinweis auf der Optionsseite (Stufe 2) und der Satz in
   `docs/47 ## Bekannte Lücken` ist nachgezogen.
 
-## Log
 
 - **2026-11-19, Firefox-Berechtigungen gemessen** (gehört hierher, weil beide
   Schalter `eval` und die Injektion betreffen):
@@ -207,7 +205,6 @@ Beweis: Kriterien 5, 6, 7 und `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlo
     Domains unabhängig vom Schalter für MV3-Add-ons, die das Recht nicht als
     `optional_permissions` deklarieren.
 
-## Log
 
 - **2026-11-18, Teilung:** nach dem dritten Review-Block der ursprünglichen
   `docs/47`; der Vertrag und der Harness-Runner stehen in `docs/47`.
