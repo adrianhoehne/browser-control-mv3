@@ -95,8 +95,9 @@ Der Zweig im Harness:
 6. **Der Transport trägt.** `inject_withAFuncThatAnswersAPromise_shouldAnswerTheResolvedValue`
    ⇒ grün: der `func` gibt ein Promise zurück, das erst nach `advanceMs`
    auflöst, und `inject` antwortet mit dem aufgelösten Wert. Dazu
-   `grep -c 'letPageClocksRun' test/extension.test.js` ⇒ **2** (der `deliver`-Ruf
-   und der neue im `func`-Arm).
+   `grep -n 'letPageClocksRun' test/extension.test.js` nennt **zwei Aufrufe**
+   (`:564` im `func`-Arm, `:660` in `deliver`) neben der Definition (`:616`) und
+   einem Kommentar (`:563`). Der Fall ist der Beweis, nicht die Zahl.
 
 ## Dev plan
 
@@ -146,6 +147,14 @@ geteilten Hälfte neu, weil ihr Umfang ein anderer ist.
 
 ## Log
 
+- **2026-11-19, Stufe 2 gebaut und gemessen:** `runFuncIn` gibt ein Promise
+  zurück, `inject` ist `async` und führt das `func`-Ergebnis über
+  `Promise.all`; der `func`-Arm treibt die Uhr, und `pageRealmOf` **behält** sie
+  (`{ context, clock }`) — ohne das fand der Treiber sie nicht, und der Fall
+  blieb hängen. `neverAnswer` steht im Stub. Belege: `# tests 540, # fail 0,
+  # cancelled 0, # skipped 0`; `npm run check` 0 (23 Dateien);
+  `git diff --stat extension/` leer. Neuer Fall
+  `inject_withAFuncThatAnswersAPromise_shouldAnswerTheResolvedValue`.
 - **2026-11-19, Stufe 2 nachgereicht:** der Transport (Promise, Uhr, `neverAnswer`)
   stand zuerst in `docs/49`; er ist hier ohne Produktivcode beweisbar und
   gehört deshalb in dieses Dokument. Begründung im `## Review` der Runde 3 von

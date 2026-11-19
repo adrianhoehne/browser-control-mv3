@@ -473,7 +473,9 @@ function createPageAgentChannel(config = null) {
     const page = frame.page ?? { url: frame.href, inFrame: frame.top === false };
     const { context } = pageContextOf(page, { clock, mutationObserver });
     vm.createContext(context);
-    const realm = { context };
+    // The clock is kept with the realm, because the driver has to find it: without it a
+    // `func` that waits for a page timer would wait for one that never falls due.
+    const realm = { context, clock };
     pageRealms.set(index, realm);
     return realm;
   }
@@ -490,8 +492,11 @@ function createPageAgentChannel(config = null) {
       filename: "injected:func.js",
     });
     const values = args === undefined ? [] : JSON.parse(JSON.stringify(args));
-    const value = pageFunction(...values);
-    return JSON.parse(JSON.stringify(value === undefined ? null : value));
+    // Awaitable, because a `func` may answer late: Firefox resolves the injection when the
+    // page function's promise resolves, and the caller sees the settled value.
+    return Promise.resolve(pageFunction(...values)).then((value) =>
+      JSON.parse(JSON.stringify(value === undefined ? null : value)),
+    );
   }
 
   /**
@@ -503,7 +508,7 @@ function createPageAgentChannel(config = null) {
    * as a whole, so an MV2 leftover (`frameId`, `allFrames` at the top level, `runAt`,
    * `matchAboutBlank`) fails here instead of being silently ignored by the next browser.
    */
-  function inject(details) {
+  async function inject(details) {
     requireConfig("an injection of `page-agent.js`");
     // Two shapes, one pin: the file injection the ops travel on, and the `func`
     // injection of `eval` (specs 47 and 49). Whichever arrived, the keys are exactly its
@@ -548,10 +553,17 @@ function createPageAgentChannel(config = null) {
     // The one real difference between the shapes: a `func` answers through its return
     // value, one entry per frame, and the file injection through the channel.
     if (carriesAFunc) {
-      return indexes.map((index) => ({
-        frameId: index,
-        result: runFuncIn(index, details.func, details.args),
-      }));
+      // A page function that never answers: the injection stays open until the bridge's
+      // own guard ends the call. That is the subject the channel used to carry (`silent`),
+      // and `executeScript` has it too — a page whose script never settles.
+      if (config?.neverAnswer === true) return new Promise(() => {});
+      const pending = indexes.map((index) => runFuncIn(index, details.func, details.args));
+      // The page world's clock has to run while the answer is pending, or a `func` that
+      // waits for a timer would wait for one this harness never lets fall due. The timer
+      // belongs to the page realm, and `letPageClocksRun` reads it from there too.
+      if (config?.advanceClocks !== false) await letPageClocksRun(indexes);
+      const results = await Promise.all(pending);
+      return results.map((result, at) => ({ frameId: indexes[at], result }));
     }
     for (const index of indexes) runFileIn(index);
     // `result` stays `undefined` for a `files` injection, exactly like Firefox: the
@@ -604,7 +616,7 @@ function createPageAgentChannel(config = null) {
   async function letPageClocksRun(indexes) {
     for (let round = 0; round < 3; round += 1) {
       for (const index of indexes) {
-        const clock = realms.get(index)?.clock;
+        const clock = realms.get(index)?.clock ?? pageRealms.get(index)?.clock;
         if (clock === undefined) continue;
         // `advanceMs` is the opt-out for a case that has to see a timer the op was
         // supposed to clear: draining the clock would make "cleared" and "fired"
@@ -17096,6 +17108,30 @@ test("inject_withAFunc_shouldRunItInThePageWorldRealm", async () => {
     vm.runInContext("typeof globalThis.__bcProbe", tabs.channel.realms.get(0).context),
     "undefined",
   );
+});
+
+test("inject_withAFuncThatAnswersAPromise_shouldAnswerTheResolvedValue", async () => {
+  // GIVEN a tab with one main frame whose page timers the harness drives,
+  const page = { ...DEFAULT_READ_PAGE };
+  const tabs = createTabsStub({
+    pageAgent: { frames: [{ href: page.url, page, top: true }], advanceMs: 50 },
+  });
+
+  // WHEN a `func` answers a promise that resolves on a 50 ms page timer,
+  const [entry] = await tabs.injectFile({
+    args: [25],
+    func: function (delayMs) {
+      return new Promise((resolve) => {
+        setTimeout(() => resolve(`after ${delayMs}`), delayMs);
+      });
+    },
+    target: { tabId: 500, frameIds: [0] },
+  });
+
+  // THEN the injection waited for it and answered the settled value — not `{}`, not the
+  // pending promise, which is what a JSON round-trip on the return value would give,
+  assert.equal(entry.frameId, 0);
+  assert.equal(entry.result, "after 25");
 });
 
 test("injection_whenAFrameStaysSilent_shouldRejectAtTheDeadline", async () => {
