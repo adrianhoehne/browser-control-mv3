@@ -289,6 +289,21 @@ Then in Firefox:
    crossed-out icon means “off”, the bridge icon means “connected”, the yellow bolt
    means “on, but the bridge does not answer”.
 
+## Firefox permissions
+
+Firefox offers two switches per add-on under `about:addons` → the add-on →
+Permissions. Neither is needed for the tools, and one of them is deliberately
+ignored.
+
+| Switch | What it does | Our advice |
+|---|---|---|
+| **Run in Private Windows** | Lets the extension run in private windows. | Leave it **off**. The tools never touch a private window: the bridge tab is created in a normal window only, and the window list excludes private ones in three places (`background.js:453`, `:466`, `bridge.js:942`). Turning it on gains nothing and widens what the extension may see. |
+| **Run on sites with restrictions** | Lets the extension work where Mozilla restricts add-ons, e.g. `addons.mozilla.org`. | Optional. Without it, reading such a page answers with a named error instead of content. |
+
+The four permissions the manifest declares are `tabs`, `storage`, `webRequest`
+and `scripting`, plus `<all_urls>` as host access. `scripting` is what carries the
+page agent; without it seven of the thirteen tools and the settle wait fall away.
+
 The extension ID is fixed (`browser-control-mv3@bergkaese.dev`), so endpoint and
 token stay in `storage.local` across reloads. **After a Firefox restart** the
 extension is gone and has to be loaded again — the settings survive.
