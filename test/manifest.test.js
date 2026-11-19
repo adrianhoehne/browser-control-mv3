@@ -395,6 +395,9 @@ test("optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlocks", async () => {
   assert.match(block, /HttpOnly/);
   assert.match(block, /fetch/);
   assert.match(block, /change/);
+  // ... and, since the code runs in the page's world, the page's own variables — the
+  // one reach that only exists since the move to `world: "MAIN"` (spec 48):
+  assert.match(block, /variables/, "the hint must name the page's own variables");
 });
 
 test("optionsJs_forTheEvalSwitch_shouldNameTheSameKeyLiteralAsTheCheckbox", async () => {

@@ -88,7 +88,9 @@
         <code>document.cookie</code> (but not <code>HttpOnly</code> cookies),
         <code>localStorage</code> and <code>fetch</code> with this profile's
         cookies. It may <strong>change</strong> the page and lifts the lock on
-        <strong>password fields</strong>. Code that never returns can
+        <strong>password fields</strong>. Since the code runs in the page's own
+        world, it also sees that page's <strong>variables</strong> — everything a
+        script on the page itself could read. Code that never returns can
         <strong>freeze</strong> the tab; only closing the tab helps then. The value
         is read on every call, so a change takes effect immediately.
       </p>

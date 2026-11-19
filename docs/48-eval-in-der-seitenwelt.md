@@ -187,8 +187,10 @@ Beweis: Kriterien 5, 6, 7 und `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlo
   | 20 000 Zeichen | `eval_result_too_large` |
   | GitHub (`tab: 9`) | `eval_blocked_by_the_page` |
 
-  **Offen:** der Hinweis auf der Optionsseite (Stufe 2) und der Satz in
-  `docs/47 ## Bekannte Lücken` ist nachgezogen.
+  **Stufe 2 ist nachgezogen (2026-11-19):** der Hinweis am `allowEval`-Schalter
+  nennt jetzt zusätzlich die **Seitenvariablen** („it also sees that page's
+  variables"), und `test/manifest.test.js` pinnt das Wort. Der Satz in
+  `docs/47 ## Bekannte Lücken` war bereits durchgestrichen und datiert.
 
 
 - **2026-11-19, Firefox-Berechtigungen gemessen** (gehört hierher, weil beide
