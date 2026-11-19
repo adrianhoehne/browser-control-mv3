@@ -135,7 +135,6 @@ Beweis: Kriterien 5, 6, 7 und `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlo
 |---|---|---|
 | `docs/25-frame-handeln.md` | `## Ziel`, `## Bekannte Lücken` | „läuft in der isolierten Welt" ist **überholt**; neu: Seitenwelt, weil MV3 es anders nicht zulässt |
 | `docs/19-browser-eval.md` | Fehlertabelle | `message` steht im Vertrag (`docs/47`), die CSP-Meldung ist neu; die Sätze bleiben |
-| `docs/45-injection-naht.md` | `## Ziel`, `## Die Naht` | `eval` nimmt weder Kanal noch stummen Frame in Anspruch: es antwortet über das `executeScript`-Promise |
 | `README.md` | Rechtetabelle | entsteht in `docs/46`; der Satz zu `scripting` bekommt „im Seitenkontext" dazu |
 
 ## Bekannte Lücken
