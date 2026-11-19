@@ -24,3 +24,36 @@ ist die größte Änderung seit der MV3-Migration und in dieser Reihenfolge zu t
    dem Kanal fallen.
 
 Kriterien: `docs/49` `## Acceptance criteria` 1–5. Zeilenstand: nach `cbe5eb0`.
+
+## 2026-11-19 — Werkzeugtest auf echten Seiten (Ergebnis)
+
+**Was trägt.** Amazon.de (`/s?k=…`): `navigate` + `eval` liefern 10 Treffer mit
+Namen und Preis in einem Aufruf. MediaMarkt (`/de/search.html?query=…`): dito,
+Preise teils hinter „Tiefstpreis" verborgen. Geizhals: `read` liefert die
+Trefferliste als Text, `eval` mit `product`-Selektor findet **0** Elemente — der
+Selektor stimmt nicht (Nachtrag nötig, falls Geizhals gebraucht wird).
+
+**Was nicht trägt — und warum.**
+
+1. **bahn.de Buchungsformular: geschlossene Shadow Roots.** `read` und `inspect`
+   sehen den Text („Start", „Ziel", „Suchen"), aber `querySelectorAll` im
+   Seitenkontext findet **kein** Eingabefeld (577 Elemente, keins davon das
+   Formular), und `inspect` liefert keinen Selektor, den `click`/`type` erreichen
+   könnte. Ein Formular in einem geschlossenen Shadow Root ist für dieses
+   Werkzeug nicht bedienbar.
+2. **`/web/api/angebote/fahrplan` (POST): 403 `OPS_BLOCKED`.** Der Bot-Schutz
+   greift, auch mit `origin`, `referer`, `accept-language` und
+   `x-correlation-id`. Die Ortsauflösung (`/web/api/reiseloesung/orte`, GET)
+   funktioniert dagegen: Mannheim Hbf `L=8000244`, Lübeck Hbf `L=8000237`.
+3. **`reiseauskunft.bahn.de`**: `page_not_readable` (Weiterleitung).
+   **Trainline-SEO-Seite**: 404.
+
+**Folge:** Fahrkartenpreise sind mit dem Werkzeug derzeit **nicht** ermittelbar.
+Nicht „schwer", sondern blockiert — und das ist eine Grenze der Seiten, nicht
+unserer Logik.
+
+**Nebenbefund für `docs/19`:** `eval` läuft in einer Funktion ohne `async`, also
+ist `await` auf oberster Ebene ein Fehler („await is only valid in async
+functions"). Ein `return (async () => { … })()` trägt, weil das Werkzeug ein
+Promise als Ergebnis annimmt. Das gehört in den Hinweis auf der Optionsseite und
+in `docs/19`.
