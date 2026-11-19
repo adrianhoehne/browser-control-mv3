@@ -113,8 +113,9 @@ er beides nicht hat (`extension/page-agent.js:1476-1479`, der Vertrag ab
 **Kriterien 1–4 entscheidet der Umsetzer**, ohne Browser.
 
 1. **Ein Serialisierer, und kein toter Aufrufer.**
-   `grep -c 'function serialize' extension/page-agent.js` ⇒ **0**, in
-   `extension/bridge.js` ⇒ **1**; `grep -c 'evalPageSource' extension/page-agent.js`
+   `grep -c 'serialize(' extension/page-agent.js` ⇒ **0**, in
+   `extension/bridge.js` ⇒ **1** (die Aufrufform, nicht die Deklarationsform —
+   der `func` reist als Quelltext); `grep -c 'evalPageSource' extension/page-agent.js`
    ⇒ **0**. Sonst bleibt ein Rumpf stehen, der `serialize` aufruft und nie
    läuft, und `npm test` wie `node --check` merken es nicht.
 2. **Der Kanal ist frei.** In `eval_withReturnDocumentTitle_shouldAnswerTheTitle`
@@ -202,7 +203,7 @@ Beweis: keiner in Code — die Suite aus Stufe 1 bleibt grün.
 
 ## Review
 
-### Runde 2 dieses Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧
+### Runde 1 — 2026-11-19, `grizzled-senior-dev`: 🔧 *(Vorgänger-Zuschnitt)*
 
 Vier Blocker: alle Testzeilen waren um 54 verrutscht (die Spec war gegen den
 Baum **vor** `35be904` geschrieben, das den Harness-Fall einfügte), und Kriterium
@@ -258,7 +259,7 @@ und die Doku.
 (`:1791`); die Zahlen sind 5 + 2; `evalResultOf` `:3633` und das Parsen `:3658`;
 der `func` ist ein Funktionswert, der als Quelltext reist.
 
-### Runde 2 dieses Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧
+### Runde 1 dieses Zuschnitts — 2026-11-19, `grizzled-senior-dev`: 🔧 *(nach der Teilung)*
 
 Der vierte Rutsch derselben Art: `50c5569` (der Transport in `docs/47`) schob
 jede Testzeile um **+12**, und die Spec war gegen den Stand davor geschrieben —
@@ -276,7 +277,7 @@ fallen weg, `neverAnswer` `:559` tritt an ihre Stelle); und das fehlende
 Amendment steht in der Tabelle — `docs/47 ## Bekannte Lücken` („der
 `func`-Zweig ist ungenutzt") wird mit Stufe 1 falsch.
 
-### Runde 2 dieses Zuschnitts — Nachtrag
+### Runde 2 dieses Zuschnitts — Nachtrag — 2026-11-19, `grizzled-senior-dev`: 🔧
 
 Zwei Blocker: das Löschen von „`eval`-Op und `serialize`" ließ `evalPageSource`
 (`:1432`) mit `isThenable` und `withinDeadline` stehen, deren Rumpf auf `:1568`

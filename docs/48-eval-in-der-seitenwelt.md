@@ -1,5 +1,5 @@
 ---
-description: browser_eval läuft in der Seitenwelt — world MAIN, die CSP-Meldung der Seite, der Optionsseite-Hinweis und die Amendments; setzt den Func-Vertrag aus docs/47 voraus.
+description: browser_eval läuft in der Seitenwelt — world MAIN, die CSP-Meldung der Seite, der Optionsseite-Hinweis und die Amendments; setzt den Func-Vertrag aus docs/49 voraus.
 status: proposed
 ---
 
