@@ -140,7 +140,6 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `47-func-runner-im-harness.md` | Der Harness kann einen `func` in zwei Welten je Frame ausführen, der Schlüssel-Pin wird zur Vereinigung — nur `test/extension.test.js`, kein Produktivcode | `active` |
 | `48-eval-in-der-seitenwelt.md` | `browser_eval` läuft in der Seitenwelt (`world: "MAIN"`): gemessen, dass der Parameter trägt; dazu die CSP-Meldung der Seite und der ehrliche Hinweis, dass `allowEval` jetzt auch Seitenvariablen erlaubt | `proposed` |
 | `49-func-vertrag-und-umzug.md` | Der Vertrag des `func` (`args: [code, limits, want]`, Felder je `outcome`, ein Serialisierer, DOM-Formen) und der Umzug der 23 Kanal-Fälle in einem Schritt | `proposed` |
-| `48-eval-in-der-seitenwelt.md` | `browser_eval` läuft in der Seitenwelt (`world: "MAIN"`): gemessen, dass der Parameter trägt; dazu die CSP-Meldung der Seite und der ehrliche Hinweis, dass `allowEval` jetzt auch Seitenvariablen erlaubt | `proposed` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.
