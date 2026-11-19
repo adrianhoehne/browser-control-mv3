@@ -48,9 +48,21 @@ Selektor stimmt nicht (Nachtrag nötig, falls Geizhals gebraucht wird).
 3. **`reiseauskunft.bahn.de`**: `page_not_readable` (Weiterleitung).
    **Trainline-SEO-Seite**: 404.
 
-**Folge:** Fahrkartenpreise sind mit dem Werkzeug derzeit **nicht** ermittelbar.
-Nicht „schwer", sondern blockiert — und das ist eine Grenze der Seiten, nicht
-unserer Logik.
+**Folge — korrigiert am selben Tag:** die Preise **sind** ermittelbar, sobald
+die Ergebnisseite einmal gerendert ist. Der Blocker betrifft nur die
+**Eingabe**, nicht das **Lesen**.
+
+- Einmal von Hand gesucht (Mannheim Hbf → Lübeck Hbf, 10.12.2026), danach liest
+  das Werkzeug die Liste vollständig: `.verbindung-list__result-item` ist im
+  Seitenkontext **erreichbar** (5 Karten), je Karte Abfahrt, Ankunft, Dauer,
+  Umstiege und „ab"-Preis.
+- Das **URL-Format der App** steht damit fest; es trägt `soid`/`zoid` (die
+  Stations-IDs), `soei`/`zoei` (EVA-Nummern), `hd` (Zeitstempel der Anfrage) und
+  `s=true`. Ein selbstgebauter Deeplink mit nur `so`/`zo` fällt auf „heute"
+  zurück — deshalb braucht es das volle Format.
+- Der Formular-Teil bleibt zu: das Eingabefeld liegt in einem **geschlossenen**
+  Shadow Root, also gibt es keinen Selektor für `click`/`type`. Ein Mensch klickt
+  einmal, danach ist alles maschinell lesbar.
 
 **Nebenbefund für `docs/19`:** `eval` läuft in einer Funktion ohne `async`, also
 ist `await` auf oberster Ebene ein Fehler („await is only valid in async
