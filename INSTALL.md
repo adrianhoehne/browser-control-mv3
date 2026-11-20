@@ -300,6 +300,12 @@ ignored and the second does not take effect (both measured, see the table).
 | **Run in Private Windows** | Lets the extension run in private windows. | Leave it **off**. The tools never touch a private window: the bridge tab is created in a normal window only, and the window list excludes private ones in three places (`background.js:453`, `:466`, `bridge.js:942`). Turning it on gains nothing and widens what the extension may see. |
 | **Run on sites with restrictions** | Meant to let the extension work where Mozilla restricts add-ons, e.g. `addons.mozilla.org`. | **No effect here, measured.** With the switch on and Firefox restarted, `read`, `inspect`, `eval` and `click` still answer `page_not_readable` on `addons.mozilla.org`; only `navigate` works, because navigating needs no injection. Leave it off unless you want it for another reason. |
 
+**Switching from the temporary add-on to the signed file:** remove the temporary
+entry first (two builds of one ID cannot both run), then double-click the signed
+XPI. Removing the temporary add-on **takes its storage with it**, so the endpoint
+and the token are empty afterwards and have to be entered once more. The switches
+are off again as well. That is expected, not a defect.
+
 The four permissions the manifest declares are `tabs`, `storage`, `webRequest`
 and `scripting`, plus `<all_urls>` as host access. `scripting` is what carries the
 page agent; without it seven of the thirteen tools and the settle wait fall away.

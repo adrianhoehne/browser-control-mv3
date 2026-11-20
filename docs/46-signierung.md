@@ -1,6 +1,6 @@
 ---
 description: Die Erweiterung signieren (AMO, unlisted) — damit sie per Doppelklick installiert und von Firefox behalten wird; mit Schlüsselverwaltung außerhalb des Repos und einer ehrlichen Reichweiten-Dokumentation.
-status: proposed
+status: active
 ---
 
 # Die Signierung
@@ -261,6 +261,16 @@ Wegwerfprofil genügt (siehe Kriterium 5).
 ### Runde 1 — steht aus
 
 ## Log
+
+- **2026-11-20, Stufe 3 — signiert, installiert, benutzt.** `./scripts/sign.sh` lud
+  `0.6.1` hoch; AMO nahm an und gab `43cfbddadfa944fca519-0.6.1.xpi` zurück.
+  Doppelklick im echten Profil (bigdelli), **keine Warnung**, Neustart überlebt.
+  Danach gegen den Dienst: `open_tab`, `read` (`settled: true`), `eval` mit
+  Seitenvariable (`window.innerWidth` ⇒ 1920), `eval` mit `await` ⇒ 42,
+  `close_tab`. Die Verbindung ist `extension connected peer=127.0.0.1` über
+  `ws://` (unverschlüsselt, weil Loopback — die Regel aus `docs/36`).
+  **Ein Befund, der in `INSTALL.md` gehört:** wer die temporäre Fassung vorher
+  entfernt, verliert Endpunkt und Token — das Entfernen nimmt den Speicher mit.
 
 - **2026-11-18, Betreiberentscheid:** Einreichungsart **`unlisted`**.
 - **2026-11-18, Betreiberentscheid: verschoben.** Die Signierung wartet, bis der
