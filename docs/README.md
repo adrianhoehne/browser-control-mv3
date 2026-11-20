@@ -141,7 +141,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `48-eval-in-der-seitenwelt.md` | `browser_eval` läuft in der Seitenwelt (`world: "MAIN"`): gemessen, dass der Parameter trägt; dazu die CSP-Meldung der Seite und der ehrliche Hinweis, dass `allowEval` jetzt auch Seitenvariablen erlaubt | `active` |
 | `49-func-vertrag-und-umzug.md` | Der Vertrag des `func` (`args: [code, limits, want]`, Felder je `outcome`, ein Serialisierer, DOM-Formen) und der Umzug der 23 Kanal-Fälle in einem Schritt | `active` |
 | `50-await-in-eval.md` | `await` auf oberster Ebene im `eval`-Code: der `func` baut den Rumpf als async-Funktion — kleine Änderung an `docs/19`, am 2026-11-19 zweimal gestolpert | `active` |
-| `51-schattenwurzeln.md` | Geschlossene Shadow Roots erreichbar machen (`attachShadow` bei `document_start` in der Seitenwelt), hinter einem Schalter, Default aus — mit drei Pflicht-Messungen vor dem Bau | `proposed` |
+| `51-schattenwurzeln.md` | Geschlossene Shadow Roots erreichbar machen (`attachShadow` bei `document_start` in der Seitenwelt), hinter einem Schalter, Default aus — mit drei Pflicht-Messungen vor dem Bau | `withdrawn` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.

@@ -81,3 +81,18 @@ entdoppeln. Ergebnis: 26 Verbindungen, billigste 27,99 €.
 **Fallstrick:** dieselbe Verbindung erscheint mehrfach mit verschiedenen Preisen
 (27,99 / 34,90 / 49,99 € für 00:21 → 08:52) — verschiedene Tarifprodukte. Wer
 nach Preis sortiert und nicht entdoppelt, listet denselben Zug dreimal.
+
+## 2026-11-19 — Lehre aus dem bahn.de-Fehlschluss
+
+`browser_navigate` antwortet mit `settled`. **`settled: false` heißt: die Seite
+arbeitet noch.** Wer sofort `querySelectorAll` oder `click` aufruft, misst die
+Hülle, nicht die App — bei einer Angular-Anwendung wie bahn.de fehlen dann die
+Formularfelder, und es sieht aus wie ein geschlossener Shadow Root.
+
+Gemessen am 2026-11-19: nach 4 Sekunden sechs Eingabefelder (nur Kopfbereich),
+nach 14 Sekunden zehn (mit den beiden Buchungsfeldern), **ohne** jeden Eingriff.
+Der Verdacht auf geschlossene Shadow Roots war falsch; `docs/51` ist deshalb
+zurückgezogen.
+
+**Regel für Werkzeugnutzung:** nach `navigate` auf `settled` sehen und bei `false`
+erneut lesen, statt die Schuld beim DOM zu suchen.

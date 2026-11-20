@@ -1,6 +1,6 @@
 ---
 description: Geschlossene Shadow Roots für die Werkzeuge erreichbar machen — ein Eingriff bei document_start, hinter einem eigenen Schalter, Default aus.
-status: proposed
+status: withdrawn
 ---
 
 # Geschlossene Schattenwurzeln
@@ -175,6 +175,31 @@ am 2026-11-19 gemessen und trägt.
 ### Runde 1 — steht aus
 
 ## Log
+
+- **2026-11-19, ZURÜCKGEZOGEN — der Anlass trägt nicht.** Kontrollmessung ohne das
+  Wegwerf-Add-on, `https://www.bahn.de/buchung/start`, 14 Sekunden nach dem
+  Navigieren:
+
+  ```
+  {"hosts": 1, "plainInputs": 10, "textInputs": 2}
+  ```
+
+  Mit laufender Probe: `{"hosts": 1, "plainInputs": 10, "textInputs": 2}` —
+  **identisch**. Die Buchungsfelder liegen im normalen DOM, in keinem Shadow
+  Root. Der Ausfall am Nachmittag war **kein** geschlossener Wurzel, sondern eine
+  zu frühe Messung: `browser_navigate` meldete `settled: false`, die
+  Angular-App hatte noch nicht hydratisiert, und `querySelectorAll` fand nur die
+  sechs Felder des Kopfbereichs.
+
+  **Damit ist die Spec gegenstandslos.** Sie würde einen Eingriff in fremde
+  Seiten bauen, der das Problem, das sie lösen soll, nicht löst. Die Messung aus
+  Stufe 0 bleibt als Tatsache stehen (`registerContentScripts` mit `world: "MAIN"`
+  trägt, die Datei läuft bei `document_start`, ein geschlossener Wurzel ist
+  danach offen) — aber sie belegt keine Notwendigkeit.
+
+  **Die echte Lehre steht in `docs/HANDOVER.md`:** `settled: false` heißt
+  „die Seite arbeitet noch"; wer dann den DOM abfragt, misst die Hülle statt der
+  App.
 
 - **2026-11-19, Messung:** `bahn.de` legt das Buchungsformular in einem
   geschlossenen Shadow Root an; `read`/`inspect` sehen den Text,
