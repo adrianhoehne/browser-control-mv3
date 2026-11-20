@@ -108,3 +108,22 @@ test("package_refusesAnUnknownArgument", { skip: SKIP }, () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr + result.stdout, /unknown argument/);
 });
+
+test("sign_withoutAmoEnv_shouldExitOneAndNameThePath", async () => {
+  // GIVEN a machine without the API credentials — the likeliest failure, and the one
+  // whose message decides whether the operator looks in the right place,
+  const script = fileURLToPath(new URL("../scripts/sign.sh", import.meta.url));
+  const missing = path.join(os.tmpdir(), "bc-no-such-amo.env");
+
+  // WHEN the signing script runs,
+  const result = spawnSync("bash", [script], {
+    env: { ...process.env, BC_AMO_ENV: missing, HOME: os.tmpdir() },
+    encoding: "utf8",
+  });
+
+  // THEN it stops with exit 1 and names the path it looked for — "AMO_JWT_ISSUER is
+  // not set" would send the operator hunting in the environment instead of the file,
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /no API credentials at/);
+  assert.match(result.stderr, new RegExp(missing.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});

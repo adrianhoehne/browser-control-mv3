@@ -45,8 +45,8 @@ nicht in der AMO-Suche; der Betreiber verteilt die Datei selbst.
 für den **Bau** richtig; das Signieren ist ein eigener Schritt und braucht das
 Werkzeug. Der Kommentar in `package.sh` wird präzisiert.
 
-**Der Betreiber muss dieses Werkzeug freigeben** (`CONTRIBUTING.md`); bis dahin
-steht es unter `## Open questions`.
+**Freigegeben vom Betreiber am 2026-11-20.** Das Werkzeug signiert nur; es steckt
+nicht im Produkt und läuft nicht zur Laufzeit.
 
 ## Was AMO verlangt
 
@@ -204,6 +204,17 @@ erfüllt".
   vielleicht von Hand; die Wartezeit ist nicht planbar.
 - **Die exakte Form der Daten-Erklärung ist ungemessen.** Sie wird beim Bauen
   ermittelt und nachgetragen.
+
+### Stufe 2 gebaut — 2026-11-20
+
+`scripts/sign.sh` liest `~/.config/browser-control/amo.env`, bricht mit Exit 1 und
+dem **Pfad** ab, wenn die Datei oder eine der beiden Variablen fehlt, baut die
+unsignierte XPI über `scripts/package.sh` und ruft `web-ext sign
+--channel=unlisted`. `--dry-run` baut und stoppt, **ohne** AMO zu kontaktieren.
+
+Geprüft: `sign_withoutAmoEnv_shouldExitOneAndNameThePath` (`test/package.test.js`)
+⇒ grün; Trockenlauf mit Attrappe ⇒ `built dist/browser-control-0.6.1.xpi
+(unsigned)` und Exit 0.
 
 ## Open questions
 
