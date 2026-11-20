@@ -7,6 +7,21 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 Nichts offen.
 
+## [0.6.1] — 2026-11-20
+
+**`browser_eval` läuft wieder.** Unter MV3 war es tot: `new Function` ist im
+isolierten Kontext von der CSP der Erweiterung blockiert. Der Code reist jetzt als
+`func` in die **Seitenwelt** (`world: "MAIN"`), ohne Nachrichtenkanal — kein
+stummer Frame, kein Antwortbudget. `await` ist auf oberster Ebene erlaubt. Eine
+Seite mit eigener CSP antwortet mit `eval_blocked_by_the_page` statt mit einem
+nackten Fehlertext; der Hinweis am `allowEval`-Schalter nennt jetzt auch die
+Seitenvariablen, die der Code sieht.
+
+Dazu: `docs/50` (await), `docs/49` (Vertrag und Umzug), `docs/48` (Seitenwelt),
+Ende-zu-Ende gegen den laufenden Dienst gemessen — Titel, Seitenvariable, DOM-Knoten
+mit Selektor, Promise mit Frist, geworfener Fehler ohne Stack, `null` ohne `return`,
+`eval_timeout`, `eval_result_too_large` und der CSP-Fall.
+
 ## [0.6.0] — 2026-11-18
 
 **Die Erweiterung läuft auf MV3, und der Socket wohnt in einem eigenen Tab.**

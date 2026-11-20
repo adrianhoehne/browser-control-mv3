@@ -1,6 +1,6 @@
 {
   "name": "browser-control",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "type": "module",
   "description": "Firefox extension plus bridge that exposes the operator's own browser to pi",
   "engines": {

@@ -1,21 +1,34 @@
 {
   "manifest_version": 3,
   "name": "Browser Control",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Steuert den sichtbaren, eingeloggten Firefox über die Bridge auf dem Server.",
   "background": {
-    "scripts": ["background.js"]
+    "scripts": [
+      "background.js"
+    ]
   },
   "action": {
     "default_icon": "icons/bridge-off.svg",
     "default_title": "Browser Control — aus"
   },
-  "permissions": ["tabs", "storage", "webRequest", "scripting"],
-  "host_permissions": ["<all_urls>"],
+  "permissions": [
+    "tabs",
+    "storage",
+    "webRequest",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
   "web_accessible_resources": [
     {
-      "resources": ["page-agent.js"],
-      "matches": ["<all_urls>"]
+      "resources": [
+        "page-agent.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
     }
   ],
   "content_security_policy": {
