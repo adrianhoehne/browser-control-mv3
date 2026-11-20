@@ -3,3 +3,5 @@ node_modules/
 *.xpi
 .DS_Store
 dist/
+amo.env
+dist/signed/
