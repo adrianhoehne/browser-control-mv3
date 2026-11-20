@@ -165,7 +165,19 @@ Namen) und kommt **nicht** ins Repo.
    Ohne die zwei Zeilen bleibt `active: false, userDisabled: true`: ein von Hand
    ins Profil gelegtes XPI wartet auf einen Klick, den es headless nicht gibt.
    **Teil zwei bleibt beim Betreiber:** Doppelklick auf die Datei, Neustart,
-   Brücken-Tab, `extension connected`. Frisches Firefox-Profil, XPI
+   Brücken-Tab, `extension connected` — erledigt am 2026-11-20, siehe `## Log`.
+
+   **Der Beweis ist als Skript festgehalten:**
+   `scripts/verify-signature.sh dist/signed/<datei>.xpi` lädt die Datei in ein
+   Wegwerfprofil, liest `signedState` und endet mit 0 nur bei `2`. Gegenprobe mit
+   der unsignierten XPI: `signedState absent`, Exit 1.
+
+   **Warum es nicht in `npm test` steht:** das signierte Artefakt liegt in
+   `dist/signed/`, ist ignoriert und entsteht bei AMO — die CI hätte nichts zu
+   prüfen. Ein Fall, der dort überspringen müsste, bräche die Regel „keine
+   übersprungenen Fälle" aus dem falschen Grund. Die zwei geprüften Fälle in
+   `test/package.test.js` decken den Aufruf ab (fehlende Datei, fehlendes
+   Argument), nicht das Browserverhalten. Frisches Firefox-Profil, XPI
    doppelklicken, installieren, Firefox beenden und starten ⇒ die Erweiterung ist
    **noch da**, der Brücken-Tab erscheint, die Bridge loggt `extension
    connected`. Damit ist Kriterium 11 aus `docs/42` erstmals messbar.

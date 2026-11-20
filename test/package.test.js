@@ -127,3 +127,30 @@ test("sign_withoutAmoEnv_shouldExitOneAndNameThePath", async () => {
   assert.match(result.stderr, /no API credentials at/);
   assert.match(result.stderr, new RegExp(missing.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
+
+test("verifySignature_withoutAFile_shouldExitOneAndNameIt", async () => {
+  // GIVEN the signature checker and a path that does not exist,
+  const script = fileURLToPath(new URL("../scripts/verify-signature.sh", import.meta.url));
+  const missing = path.join(os.tmpdir(), "bc-no-such.xpi");
+
+  // WHEN it runs,
+  const result = spawnSync("bash", [script, missing], { encoding: "utf8" });
+
+  // THEN it stops before starting a browser and names the file — a checker that
+  // silently passes on a typo would be worse than no checker,
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /no such file/);
+  assert.match(result.stderr, new RegExp(missing.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("verifySignature_withoutAnArgument_shouldPrintTheUsage", async () => {
+  // GIVEN the checker with no argument at all,
+  const script = fileURLToPath(new URL("../scripts/verify-signature.sh", import.meta.url));
+
+  // WHEN it runs,
+  const result = spawnSync("bash", [script], { encoding: "utf8" });
+
+  // THEN the usage is on stderr and the exit code says "you called me wrong",
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /usage: scripts\/verify-signature\.sh/);
+});
