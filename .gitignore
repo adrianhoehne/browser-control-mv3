@@ -5,3 +5,4 @@ node_modules/
 dist/
 amo.env
 dist/signed/
+.amo-upload-uuid
