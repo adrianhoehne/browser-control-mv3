@@ -64,6 +64,35 @@ Drei Fragen, jede mit einem Nein als möglichem Ausgang:
 
 **Ohne diese drei Messungen wird nicht gebaut.**
 
+### Ergebnis der Messung — 2026-11-19, Firefox 152, Wegwerf-Add-on
+
+Alle drei Fragen sind **positiv** beantwortet. Die Wegwerf-Extension
+(`probe-shadow-open/`, nicht im Repo) registriert die Datei und meldet sich selbst
+über eine Seitenvariable:
+
+```
+{"ran": true, "world": "MAIN", "readyState": "loading",
+ "reachable": true, "closedSeen": "open"}
+```
+
+| Frage | Antwort | Beleg |
+|---|---|---|
+| `registerContentScripts` mit `world: "MAIN"` | **trägt** | `register=ok`, kein Fehler |
+| Läuft die Datei vor dem Code der Seite? | **ja** | `document.readyState` ist `loading` im Moment des Laufs |
+| Ist ein geschlossener Wurzel danach offen? | **ja** | die Datei legt selbst einen mit `mode: "closed"` an; `shadowRoot` ist da, `querySelector("#inner")` findet das Kind, `mode` meldet `open` |
+
+**Der Praxisfall dazu, am selben Tag gemessen:** auf
+`https://www.bahn.de/buchung/start` findet `document.querySelectorAll` weiterhin
+nur die sechs Felder des Kopfbereichs — `querySelectorAll` durchdringt auch
+**offene** Wurzeln nicht. Ein Durchlauf über `element.shadowRoot` findet nach dem
+Laden der App **zehn** Eingabefelder, darunter zwei `type="text"`: das
+Buchungsformular, das am Morgen unerreichbar war. `addons.mozilla.org` antwortet
+weiter `page_not_readable` — Firefos eigene Grenze bleibt.
+
+**Folge für den Bau:** `inspect` und `click`/`type` müssen den Wurzel-Durchlauf
+können, nicht nur der Schalter. `shadowSelectorForElement` gibt es schon
+(`docs/09`), und dieser Durchlauf ist seine Voraussetzung.
+
 ## Risiken
 
 | Risiko | Wirkung | Gegenmittel |
@@ -138,10 +167,8 @@ Beweis: Kriterien 5, 6.
 
 ## Open questions
 
-1. **`registerContentScripts` mit `world: "MAIN"`** — in Firefox 152 messbar, aber
-   ungemessen. Fällt die Antwort nein aus, braucht die Spec einen anderen Weg
-   (Manifest-`content_scripts` mit `world`, oder `executeScript` bei
-   `onCommitted` mit dem Preis, zu spät zu sein).
+**Keine.** Die eine offene Frage (`registerContentScripts` mit `world: "MAIN"`) ist
+am 2026-11-19 gemessen und trägt.
 
 ## Review
 
