@@ -128,11 +128,11 @@ Namen) und kommt **nicht** ins Repo.
 
 ## Acceptance criteria
 
-1. **Das Manifest trägt die Daten-Erklärung.** `node -e "const m=require('./extension/manifest.json');
-   console.log(JSON.stringify(m.browser_specific_settings.gecko.data_collection_permissions))"`
-   ⇒ **das Literal, das Stufe 0 gemessen hat** (es wird hier eingetragen, sobald
-   es vorliegt; bis dahin ist dieses Kriterium nicht entscheidbar und die Spec
-   bleibt `proposed`).
+1. **Das Manifest trägt die Daten-Erklärung.**
+   `node -p "JSON.stringify(require('./extension/manifest.json').browser_specific_settings.gecko.data_collection_permissions)"`
+   ⇒ `{"required":["none"],"optional":[]}`. **Gemessen am 2026-11-20:** mit dieser
+   Form hat Firefox 152 die Erweiterung geladen und verbunden (`extension
+   connected`, Version 0.6.1, nach einem sauberen `disconnected reason=1000`).
 2. **Die Reichweite steht in `README.md`.** `grep -c 'host_permissions\|<all_urls>'
    README.md` ⇒ **≥ 1**, mit der Tabelle aus `## Die Reichweite`.
 3. **Die Schlüssel sind nicht im Repo — nur ihre Namen.** Erlaubt ist, dass
@@ -158,14 +158,14 @@ Namen) und kommt **nicht** ins Repo.
 
 ## Dev plan
 
-**Stufe 0 — die Form der Daten-Erklärung messen**
+**Stufe 0 — die Form der Daten-Erklärung messen** ✅ erledigt 2026-11-20
 
-Dateien: keine. Manifest-Schlüssel in der dokumentierten Form setzen, XPI bauen,
-in Firefox 152 laden, `about:addons` → Berechtigungen prüfen. Das Ergebnis wird
-in Kriterium 1 als Literal eingetragen.
+Gesetzt: `browser_specific_settings.gecko.data_collection_permissions =
+{"required": ["none"], "optional": []}`. XPI gebaut, in Firefox 152 geladen: die
+Erweiterung lädt und verbindet (`extension connected`, Version 0.6.1), also nimmt
+Firefox den Schlüssel an. Die Sichtprüfung in `about:addons` bleibt beim Betreiber.
 
-Beweis: Kriterium 1 mit dem gemessenen Literal; `about:addons` zeigt die
-Erklärung.
+Beweis: Kriterium 1.
 
 **Stufe 1 — Manifest, Version und Doku**
 

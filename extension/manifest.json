@@ -39,7 +39,13 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "browser-control-mv3@bergkaese.dev"
+      "id": "browser-control-mv3@bergkaese.dev",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ],
+        "optional": []
+      }
     }
   }
 }
