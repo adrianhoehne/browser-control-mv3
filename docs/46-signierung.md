@@ -142,7 +142,30 @@ Namen) und kommt **nicht** ins Repo.
    `grep -c 'amo.env' .gitignore` ⇒ **1**.
 4. **Die Signatur läuft durch.** (Betreiber.) `scripts/sign.sh` ⇒ Exit 0 und
    `ls -1 dist/signed/*.xpi | wc -l` ⇒ **1**.
-5. **Die Installation hält.** (Betreiber.) Frisches Firefox-Profil, XPI
+5. **Die Installation hält.** (Betreiber.)
+
+   **Teil eins ist automatisiert und gemessen (2026-11-20).** Ein Wegwerfprofil,
+   die signierte XPI unter `extensions/browser-control-mv3@bergkaese.dev.xpi`,
+   zwei Voreinstellungen, 25 Sekunden headless — danach steht in
+   `extensions.json`:
+
+   ```
+   {"version": "0.6.1", "active": true, "userDisabled": false,
+    "signedState": 2, "location": "app-profile"}
+   ```
+
+   `signedState: 2` ist „gültig signiert". Die Gegenprobe mit der **unsignierten**
+   XPI im selben Aufbau: der Eintrag fehlt ganz — Firefox lädt sie nicht.
+
+   ```
+   user_pref("extensions.autoDisableScopes", 0);
+   user_pref("extensions.enabledScopes", 15);
+   ```
+
+   Ohne die zwei Zeilen bleibt `active: false, userDisabled: true`: ein von Hand
+   ins Profil gelegtes XPI wartet auf einen Klick, den es headless nicht gibt.
+   **Teil zwei bleibt beim Betreiber:** Doppelklick auf die Datei, Neustart,
+   Brücken-Tab, `extension connected`. Frisches Firefox-Profil, XPI
    doppelklicken, installieren, Firefox beenden und starten ⇒ die Erweiterung ist
    **noch da**, der Brücken-Tab erscheint, die Bridge loggt `extension
    connected`. Damit ist Kriterium 11 aus `docs/42` erstmals messbar.
@@ -215,6 +238,16 @@ unsignierte XPI über `scripts/package.sh` und ruft `web-ext sign
 Geprüft: `sign_withoutAmoEnv_shouldExitOneAndNameThePath` (`test/package.test.js`)
 ⇒ grün; Trockenlauf mit Attrappe ⇒ `built dist/browser-control-0.6.1.xpi
 (unsigned)` und Exit 0.
+
+### Stufe 3 — signiert, 2026-11-20
+
+`./scripts/sign.sh` hat `0.6.1` hochgeladen; AMO hat angenommen und
+`dist/signed/43cfbddadfa944fca519-0.6.1.xpi` zurückgegeben (130 235 Bytes, mit
+`META-INF/cose.sig`). **Der `eval`-Absatz aus `docs/52` war nicht nötig** — es gab
+keine Rückfrage.
+
+Der Beweis lief ohne Docker und ohne VM: Firefox 152.0.3 liegt lokal, ein
+Wegwerfprofil genügt (siehe Kriterium 5).
 
 ## Open questions
 
