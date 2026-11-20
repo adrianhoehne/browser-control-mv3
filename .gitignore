@@ -3,4 +3,3 @@ node_modules/
 *.xpi
 .DS_Store
 dist/
-probe-shadow-open/
