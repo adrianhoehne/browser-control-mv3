@@ -42,6 +42,24 @@ persistence across a background tab, and a log that does not copy page text.
   screenshots. The agent never flips them itself.
 - **The agent only sees its own tabs.** It does not drive yours.
 
+### What the extension may do, and what it does
+
+A signed build ships with these permissions. The right column is the promise that
+comes with them.
+
+| Permission | Allows | What this extension does with it |
+|---|---|---|
+| `<all_urls>` (host access) | reach any page the operator opens | reads and drives **only the agent tab**, never the operator's tabs; the filter is in the code |
+| `scripting` | run code in pages | injects `page-agent.js` only, only into the agent tab, only on a tool call |
+| `tabs` | list, focus, close tabs | manages the agent tab and keeps the bridge tab alive |
+| `storage` | local settings | the endpoint, the token and three switches |
+| `webRequest` | observe requests | watches `youtube.com/api/timedtext` to capture the signed caption address; blocks nothing |
+
+**Data transmission:** the extension sends page text, DOM results and — only with
+its own switch — screenshots to the bridge address the operator configures. It
+sends nothing to Mozilla and nothing to any third party. There is no analytics,
+no telemetry and no remote code fetched by the extension.
+
 ## Quick start
 
 **Portable, no installation.** Download the zip of your platform
