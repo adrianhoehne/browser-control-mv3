@@ -251,6 +251,27 @@ Geprüft: `sign_withoutAmoEnv_shouldExitOneAndNameThePath` (`test/package.test.j
 ⇒ grün; Trockenlauf mit Attrappe ⇒ `built dist/browser-control-0.6.1.xpi
 (unsigned)` und Exit 0.
 
+### Auslieferung — 2026-11-20
+
+Die signierte XPI hängt am GitHub-Release `v0.6.1` als
+`browser-control-0.6.1.xpi` (130 235 Bytes). **Der Name ohne AMOs Hash ist
+zulässig:** die Signatur liegt in `META-INF/cose.sig` und deckt den Inhalt, nicht
+den Dateinamen — gemessen durch Umbenennen und anschließendes
+`scripts/verify-signature.sh` (`signedState 2`).
+
+**Die portablen Zips trugen vorher die unsignierte XPI** (116 780 Bytes), weil die
+CI sie vor der Signatur baut. Beide sind ersetzt und neu hochgeladen; das
+heruntergeladene Linux-Zip enthält jetzt die signierte Datei (130 235 Bytes), und
+ein Auspacken und Prüfen ergibt `signedState 2`. Das Binary behält sein `x`-Recht.
+
+`scripts/release-sign.sh <tag> [--fix-zips]` hält den Ablauf fest: Version gegen
+Tag prüfen, signieren, Signatur prüfen, hochladen, optional die Zips
+instandsetzen. **Die Reihenfolge ist die Botschaft:** erst prüfen, dann
+veröffentlichen — ein Downloader vertraut dem Namen.
+
+**Nichts davon berührt git.** Das Artefakt lebt in `dist/` (ignoriert) und am
+Release.
+
 ### Stufe 3 — signiert, 2026-11-20
 
 `./scripts/sign.sh` hat `0.6.1` hochgeladen; AMO hat angenommen und

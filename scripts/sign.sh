@@ -75,6 +75,18 @@ npx --yes web-ext sign \
   --source-dir "$REPO_ROOT/extension" \
   --artifacts-dir "$ARTIFACTS_DIR"
 
+# AMO names the file after its own submission (`<hash>-<version>.xpi`). That hash is
+# an upload id, not part of the signature: the COSE signature sits inside the
+# package and covers its content, so renaming it keeps it valid (measured
+# 2026-11-20, `scripts/verify-signature.sh` after a rename). A stable name is what a
+# downloader expects.
+for produced in "$ARTIFACTS_DIR"/*-"$version".xpi; do
+  [[ -e "$produced" ]] || continue
+  [[ "$(basename "$produced")" == "browser-control-$version.xpi" ]] && continue
+  mv "$produced" "$ARTIFACTS_DIR/browser-control-$version.xpi"
+  printf 'renamed %s -> browser-control-%s.xpi\n' "$(basename "$produced")" "$version"
+done
+
 printf '\nsigned artifacts in dist/signed:\n'
 ls -1 "$ARTIFACTS_DIR"
 printf '\nInstall it with a double click, then restart Firefox and check the bridge log:\n'
