@@ -115,7 +115,7 @@ Nach Reload der Erweiterung, über den laufenden Dienst (MCP über HTTP):
   antwortete. Ergebnis: **beide beantwortet, keiner `superseded`**, jeder mit seiner eigenen
   `tabId` (10 und 11). Vor diesem Inkrement hätte der erste `superseded` bekommen.
 - **Ein Tab, zwei Klicks im selben Tick (Gegenprobe):** der erste antwortet `superseded`
-  („Die Extension konnte die Anfrage nicht ausführen (code=superseded)"), der zweite liefert sein
+  („Die Extension konnte die Anfrage nicht ausführen (code=superseded)" — so die Antwort damals; englisch seit `docs/54`), der zweite liefert sein
   Ergebnis. Die alte Regel gilt innerhalb eines Tabs unverändert.
 - **Zeiten, wie Kriterium 5 sie verlangt:** beide Klicks meldeten `settled: false, waitedMs: 0` —
   sie lösten eine Navigation aus, die Ruhe-Injektion wurde beim Dokumentwechsel abgelehnt, der

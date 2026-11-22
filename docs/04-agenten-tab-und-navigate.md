@@ -115,7 +115,7 @@ Antwort der Extension:
 | Feld | Wert |
 |---|---|
 | `name` | `browser_navigate` |
-| `description` | Öffnet eine http(s)-URL im Agenten-Tab des Betreiber-Browsers (Default-Container) und wartet, bis die Seite geladen ist. |
+| `description` | Opens an http(s) URL in the agent tab of the operator's browser (Default container), waits until the page has loaded and then until it has settled (3 s at most); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last. |
 | `inputSchema` | `{"type":"object","properties":{"url":{"type":"string"}},"required":["url"],"additionalProperties":false}` |
 
 `tools/call` mit `browser_navigate`:
@@ -124,15 +124,15 @@ Antwort der Extension:
   mit dem Ergebnis aus dem Wire-Protokoll.
 - **`url` fehlt oder ist kein String**: JSON-RPC-Fehler `{code:-32602, message:"invalid params"}`.
 - **unbekanntes Argument**: `{"content":[{"type":"text","text":"browser_navigate
-  erwartet nur `url`."}],"isError":true}` — gleiche Präzedenz wie bei
+  takes only `url` and `tab`."}],"isError":true}` — gleiche Präzedenz wie bei
   `browser_status` in Spec 03: ein Argumentenfehler ist eine Meldung an den
   Client, kein Protokollfehler.
-- **kein http(s)**: `{"content":[{"type":"text","text":"Nur http:// und https:// sind erlaubt."}],"isError":true}`.
-- **Extension-Code `invalid_url`**: derselbe deutsche Satz, `isError: true`.
+- **kein http(s)**: `{"content":[{"type":"text","text":"Only http:// and https:// are allowed."}],"isError":true}`.
+- **Extension-Code `invalid_url`**: derselbe englische Satz, `isError: true`.
 - **keine Extension / Zeitüberschreitung**: dieselben zwei Sätze wie bei
   `browser_status` (Spec 03) — nicht neu formuliert.
-- **`ok:false` mit anderem Code**: `"Die Extension konnte die Anfrage nicht
-  ausführen (code=<code>)."`, `isError: true`.
+- **`ok:false` mit anderem Code**: `"The extension could not carry out the
+  request (code=<code>)."`, `isError: true`.
 
 ## Hub
 
@@ -196,10 +196,10 @@ bleiben wörtlich, wie sie sind.
 | `test/mcp.test.js` — `tools/list` | Genau zwei Werkzeuge, beide Schemata mit `additionalProperties:false` |
 | dito — `browser_navigate` mit Fake-Extension | Text ist JSON mit `tabId`/`url`/`title`/`complete` |
 | dito — `browser_navigate` ohne `url` | `-32602` |
-| dito — `browser_navigate` mit `file:///etc/passwd` | `isError:true` und der deutsche Satz, **ohne** dass eine Anfrage an die Extension geht |
+| dito — `browser_navigate` mit `file:///etc/passwd` | `isError:true` und der englische Satz, **ohne** dass eine Anfrage an die Extension geht |
 | dito — Fake-Extension antwortet `ok:false, code:"invalid_url"` | `isError:true`, derselbe Satz |
-| dito — `browser_navigate` mit einem zweiten Argument | `isError:true`, „browser_navigate erwartet nur `url`." |
-| dito — Fake-Extension antwortet `ok:false, code:"navigate_failed"` | `isError:true`, „Die Extension konnte die Anfrage nicht ausführen (code=navigate_failed)." |
+| dito — `browser_navigate` mit einem zweiten Argument | `isError:true`, „browser_navigate takes only `url` and `tab`." |
+| dito — Fake-Extension antwortet `ok:false, code:"navigate_failed"` | `isError:true`, „The extension could not carry out the request (code=navigate_failed)." |
 | `test/protocol.test.js` | `navigate` steht in beiden Kopien der Konstanten (`extension/protocol.js`, `bridge/protocol.mjs`) |
 
 ## Acceptance criteria

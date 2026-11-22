@@ -7,7 +7,7 @@ status: active
 
 Zweimal in einer Sitzung (2026-10-23) stand der Agent vor derselben Wand: Die
 Preisliste war ein **JPEG**, die AGB ein **PDF**, und `browser_read` antwortete
-„Diese Seite kann die Extension nicht lesen (interne Seite oder Sonderformat)."
+„Diese Seite kann die Extension nicht lesen (interne Seite oder Sonderformat)." (so die Antwort damals; englisch seit `docs/54`)
 Der Agent wusste danach **nicht**, ob er es mit einer internen Seite zu tun hat,
 mit einem PDF, mit einem Bild — oder ob die Seite einfach nur kaputt geladen war.
 
@@ -81,10 +81,10 @@ stehen nur bei `not_readable`:
 
 | Fall | Satz |
 |---|---|
-| `kind: "pdf"`, `url` | „Diese Seite kann die Extension nicht lesen (Typ: pdf). Adresse: <url>" |
+| `kind: "pdf"`, `url` | „The extension cannot read this page (kind: pdf). Address: <url>" |
 | `kind: "internal"`, `url` | „… (Typ: internal). Adresse: …" |
-| `kind: "unknown"`, `url` | „Diese Seite kann die Extension nicht lesen. Adresse: <url>" — kein Typ, weil keiner bekannt ist |
-| alles `null`/`unknown` ohne `url` | unverändert: „Diese Seite kann die Extension nicht lesen (interne Seite oder Sonderformat)." |
+| `kind: "unknown"`, `url` | „The extension cannot read this page. Address: <url>" — kein Typ, weil keiner bekannt ist |
+| alles `null`/`unknown` ohne `url` | unverändert: „The extension cannot read this page (internal page or special format)." |
 
 `<kind>` steht klein und wörtlich da (`internal`, `pdf`, `file`, `unknown`).
 `isError: true` bleibt, `content` bleibt ein Textblock. Ein unbekannter
@@ -186,7 +186,8 @@ neu gestartetem pi:
   `browser_read` antwortet:
   „Diese Seite kann die Extension nicht lesen **(Typ: pdf)**. Adresse:
   https://www.clever-fit.com/app/uploads/2022/10/AGB.pdf"
-  — genau die zugesagte Form: Typ benannt, Adresse weiterreichbar.
+  — genau die zugesagte Form: Typ benannt, Adresse weiterreichbar (so die
+  Antwort damals; englisch seit `docs/54`).
 - Bestätigt nebenbei, dass die Durchreiche durch den Hub funktioniert: ohne die
   drei Zeilen in `bridge/hub.mjs` wäre der Satz der alte geblieben.
 

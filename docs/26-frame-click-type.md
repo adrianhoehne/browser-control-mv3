@@ -228,11 +228,11 @@ das Präfix `d0b8f3071e`, die Gegenprobe lief auf `6e3a7f0e05`.
 | 2 (`type`) | `browser_type` mit `frame`, `selector: "#uname"`, `text: "RAHMEN-TEST"` ⇒ Antwort trägt `url` des **Rahmens** (`…d0b8f3071e….mdnplay.dev/…/runner.html`), kein Fehler |
 | 4 (live) | `browser_eval` im adressierten Rahmen ⇒ `"RAHMEN-TEST"`; derselbe Ausdruck im **nicht** adressierten Rahmen ⇒ `""`; `browser_inspect` ohne `frame` auf `#uname` ⇒ `count: 0` (Hauptrahmen unverändert) |
 | 2 (`click`) | `browser_click` mit `frame`, `selector: "#uname"` ⇒ `clicked: "input#uname"`, `url` des Rahmens, `settled: true`, `waitedMs: 1006` |
-| 3 | `browser_click` mit `frame: "gibtsnicht"` ⇒ „Zu diesem `frame` passt kein Rahmen … (geantwortete Rahmen: 8)" — `frame_not_found`, nicht `click_failed` |
+| 3 | `browser_click` mit `frame: "gibtsnicht"` ⇒ „Zu diesem `frame` passt kein Rahmen … (geantwortete Rahmen: 8)" (so die Antwort damals; englisch seit `docs/54`) — `frame_not_found`, nicht `click_failed` |
 | 2 (Ruhe im Rahmen) | `browser_read` mit `frame` auf derselben Seite ⇒ `settled: true`, `waitedMs: 1003` |
 
 **Ein Messfehler, der keiner war:** der erste `browser_type`-Versuch mit `frame`
-antwortete „Kein Element passt zu: input", während `browser_eval` im selben Rahmen
+antwortete „Kein Element passt zu: input" (so die Antwort damals; englisch seit `docs/54`), während `browser_eval` im selben Rahmen
 ein Feld sah. Ursache war der **Build**: die geladene Extension stammte von vor
 diesem Inkrement und ignorierte das unbekannte `frame`-Argument (pi reichte es
 durch, die Extension warf es weg). Nach Extension-Reload und pi-Neustart lief

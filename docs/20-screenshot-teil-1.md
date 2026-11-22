@@ -149,7 +149,7 @@ Antwort, abgelehnt:
 ```json
 {"type":"response","id":11,"ok":false,
  "error":{"code":"screenshot_too_large",
-          "message":"Das Bild ist auch nach dem Verkleinern zu groß: 611400 Bytes bei 1200 × 675 (Grenze 3145728)."}}
+          "message":"The picture is too large even after scaling down: 611400 bytes at 1200 × 675 (limit 3145728)."}}
 ```
 
 Neue Codes:
@@ -199,7 +199,7 @@ Elfter Eintrag der Tabelle in `bridge/mcp.mjs`, **angehängt** (Position 10, nac
   `SCREENSHOT_ENCODE_TIMEOUT_MS = 3000` (Begründung in `## Risiken`), `ALLOW_SCREENSHOT = "allowScreenshot"`,
   die drei Codes, `SCREENSHOT_MESSAGE_LIMIT = 500` (derselbe Wert wie
   `EVAL_MESSAGE_LIMIT`, damit eine gekürzte Browser-Meldung so lang ist wie eine
-  gekürzte Seitenmeldung), die deutschen Sätze.
+  gekürzte Seitenmeldung), die englischen Sätze (seit `docs/54`).
 - `screenshotRequestParams(params)` prüft **nur** die Form von `tab` (wie
   `focus`). Reihenfolge in `screenshotAgentTab`: **Schalter → Parameter → Tab →
   Aufnahme** — dieselbe Reihenfolge wie bei `eval`.

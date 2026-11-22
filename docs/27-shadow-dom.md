@@ -140,7 +140,7 @@ und nach dem Commit zu messen; **Kernannahme** ist Kriterium 6.
 | 6 (live) | `browser_inspect` mit `lazy-svg#headerLogo >>> svg` ⇒ `count: 1`, `selector: lazy-svg#headerLogo >>> svg[aria-label="Lit Home"]` — **beide** Glieder sind einfache Selektoren mit Hook |
 | 1 (Gegenprobe) | derselbe Treffer **ohne** `>>>` gesucht (`svg[aria-label="Lit Home"]`) ⇒ `count: 0`: das Element ist im Dokument nicht auffindbar, nur im Schattenbaum |
 | 6 (Rundlauf) | der zurückgegebene `selector` ein zweites Mal durch `browser_inspect` ⇒ `count: 1`, derselbe `svg` — wiederverwendbar |
-| 3 | `theme-switcher >>> div span` ⇒ „Der Selektor ist ungültig: …" (Verbund rechts), keine Trefferliste |
+| 3 | `theme-switcher >>> div span` ⇒ „The selector is invalid: …" (Verbund rechts), keine Trefferliste |
 | 4 | auf `chromestatus.com/features` (160 Schattenwirte): `sl-icon-button` ohne `>>>` ⇒ `count: 0`; `chromedash-app >>> chromedash-header` ⇒ `count: 1`. Der zurückgegebene Selektor lautete dort `html > body > chromedash-app:nth-of-type(1) >>> chromedash-header:nth-of-type(1)` — **nicht** wiederverwendbar, genau der dokumentierte Rückfall, weil der Host keinen Hook trägt |
 
 **Befund, der als Lücke bleibt:** auf einer Seite, deren Schattenwirt keinen

@@ -162,6 +162,8 @@ und Dienst müssen beide neu starten**, sonst zeigt die Antwort den alten Satz.
 > Diese Seite kann die Extension nicht lesen **(Typ: pdf, Content-Type: application/pdf;
 > qs=0.001)**. Adresse: https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf
 
+(so die Antworten damals; englisch seit `docs/54`)
+
 **2. Dokument ohne Endung** (`https://arxiv.org/pdf/2101.00001` — arXiv liefert PDFs unter
 `/pdf/<id>`, die Adresse verrät nichts):
 

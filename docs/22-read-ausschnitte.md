@@ -88,7 +88,7 @@ Antwort wie bisher, mit drei zusätzlichen Feldern (`offset`, `chars`,
 | Code | Wann |
 |---|---|
 | `invalid_params` | falscher Typ, negatives `offset`, `maxChars` außerhalb `1 … 100000`, nicht-ganzzahlige Werte — **vor** jeder Injektion |
-| `offset_out_of_range` | `offset > totalChars` — **nach** dem Lesen, mit `totalChars` in der Meldung („Der Text hat 87314 Zeichen; offset 999999 liegt dahinter.") |
+| `offset_out_of_range` | `offset > totalChars` — **nach** dem Lesen, mit `totalChars` in der Meldung („The text has 87314 characters; offset 999999 is past its end.") |
 
 ## MCP-Werkzeug
 
@@ -299,7 +299,7 @@ Stufe entscheidet.
    in `pageResultOf` **vor** `isUsablePageResult` ein Zweig wie in
    `inspectResultOf`: `first?.outcome === "offset_out_of_range"` ⇒
    `throw new ReadError(OFFSET_OUT_OF_RANGE_CODE, …)`. Die Meldung nennt beide
-   Zahlen („Der Text hat 87314 Zeichen; offset 999999 liegt dahinter."); sind sie
+   Zahlen („The text has 87314 characters; offset 999999 is past its end."); sind sie
    keine ganzen Zahlen, ist das unsere eigene Panne und es bleibt bei
    `READ_FAILED_CODE` mit der vorhandenen Warnzeile.
    `OFFSET_OUT_OF_RANGE_CODE = "offset_out_of_range"` als Konstante neben
@@ -354,8 +354,8 @@ Stufe entscheidet.
    **abwesend**, nicht `null`); `{offset: "5"}` ⇒ `-32602` und `recorded` bleibt
    leer. Der Fehlersatz end-to-end über die Fixture:
    `BC_TEST_READ_ANSWER: "error:offset_out_of_range"` plus
-   `BC_TEST_ERROR_DETAILS: '{"totalChars":87314,"message":"Der Text hat 87314
-   Zeichen; offset 999999 liegt dahinter."}'` ⇒ der Werkzeugtext nennt `87314` und
+   `BC_TEST_ERROR_DETAILS: '{"totalChars":87314,"message":"The text has 87314
+   characters; offset 999999 is past its end."}'` ⇒ der Werkzeugtext nennt `87314` und
    fällt nicht auf `CALL_EXTENSION_FAILED` zurück. Ein Fall, der die Beschreibung
    auf `offset`/`maxChars`/`chars`/`totalChars` prüft, ist mit
    `READ_TOOL_DESCRIPTION` schon da.
@@ -525,8 +525,8 @@ Gemessen über den Dienst (`systemctl --user restart`, neue Erweiterung geladen)
 - **Haltepunkt.** `offset = totalChars` (447 007) ⇒ `text: ""`, `chars: 0`,
   `truncated: false`.
 - **Fehlerfall.** `offset: 999999` ⇒ `offset_out_of_range` mit der echten Zahl:
-  „Der `offset` liegt hinter dem Ende des Textes: Der Text hat 78958 Zeichen;
-  offset 999999 liegt dahinter." (gemessen auf der Wikipedia-Seite, daher die
+  „`offset` is past the end of the text: The text has 78958 characters;
+  offset 999999 is past its end." (gemessen auf der Wikipedia-Seite, daher die
   andere Gesamtzahl).
 - **Befund: eine lebende Seite wächst zwischen den Aufrufen.** Auf
   `https://de.wikipedia.org/wiki/Firefox` meldeten die vier Aufrufe

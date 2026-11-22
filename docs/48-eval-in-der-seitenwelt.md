@@ -181,7 +181,7 @@ Beweis: Kriterien 5, 6, 7 und `optionsHtml_forTheEvalSwitch_shouldNameWhatItUnlo
   | `return document.querySelector("h3")` | `{"kind":"node","tag":"h3","selector":"h3#…"}` |
   | Promise mit 10-ms-Timer | `42`, `elapsedMs` 304 |
   | `return 1` mit `frame` | `frame_not_found`, „geantwortete Rahmen: 3" |
-  | `throw new Error("kaputt")` | `Der Code im Agenten-Tab ist gescheitert: kaputt` |
+  | `throw new Error("kaputt")` | `The code in the agent tab failed: kaputt` |
   | kein `return` | `null` |
   | Promise über 2 s | `eval_timeout` |
   | 20 000 Zeichen | `eval_result_too_large` |

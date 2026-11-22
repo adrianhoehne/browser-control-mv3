@@ -29,7 +29,7 @@ Der `func` baut den Code heute mit `new Function(code)()`. Das ist eine
 **synchrone** Funktion, und `await` ist darin ein Syntaxfehler. Der Agent hört:
 
 ```
-Der Code im Agenten-Tab ist gescheitert: await is only valid in async functions
+The code in the agent tab failed: await is only valid in async functions
 and async generators and modules
 ```
 

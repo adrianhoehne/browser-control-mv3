@@ -82,25 +82,25 @@ Antwort:
 | Feld | Wert |
 |---|---|
 | `name` | `browser_click` |
-| `description` | Klickt das erste Element, das dem CSS-Selektor entspricht, im Agenten-Tab und liefert den Seitentext danach (auf 20 000 Zeichen gekürzt). |
+| `description` | Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Clicks the first element that matches the CSS selector in the agent tab, waits until the page has settled (3 s at most) and returns the page text afterwards (cut to 20 000 characters); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last. |
 | `inputSchema` | `{"type":"object","properties":{"selector":{"type":"string"},"frame":{"type":"string","minLength":1}},"required":["selector"],"additionalProperties":false}` |
 
 `tools/call`:
 
 - **Erfolg**: `{"content":[{"type":"text","text":"<JSON, 2 Leerzeichen eingerückt>"}]}`.
 - **`selector` fehlt oder ist kein String**: JSON-RPC-Fehler `{code:-32602, message:"invalid params"}`.
-- **unbekanntes Argument**: `isError` mit „browser_click erwartet nur `selector` und `frame`."
-  (Tabelle je Werkzeug, wie bei `browser_navigate`).
-- **`invalid_selector`**: `isError`, „Der Selektor ist ungültig: <selektor>."
-- **`no_match`**: `isError`, „Kein Element passt zu: <selektor>."
-- **`not_clickable`**: `isError`, „Das Element ist nicht sichtbar oder deaktiviert: <selektor>."
+- **unbekanntes Argument**: `isError` mit „browser_click takes only `selector`, `frame` and `tab`."
+  (Tabelle je Werkzeug, wie bei `browser_navigate`; englisch seit `docs/54`).
+- **`invalid_selector`**: `isError`, „The selector is invalid: <selektor>."
+- **`no_match`**: `isError`, „No element matches: <selektor>."
+- **`not_clickable`**: `isError`, „The element is not visible or is disabled: <selektor>."
 - **`no_agent_tab`**: `TOOL_TEXTS.NO_AGENT_TAB`, wörtlich derselbe Satz wie bei
-  `browser_read` („Kein Agenten-Tab — zuerst browser_navigate aufrufen.").
+  `browser_read` („No agent tab — call browser_navigate first.").
 - **`not_readable`** (die Seite ließ sich nach dem Klick nicht lesen) und
   **`read_failed`** (der eingespritzte Code lieferte kein brauchbares Objekt)
   gehen **unverändert** durch — sie sind aussagekräftiger als ein Sammelcode.
 - **`superseded`**, **`click_failed`**, **Zeitüberschreitung**: `isError` mit
-  „Die Extension konnte die Anfrage nicht ausführen (code=<code>)." —
+  „The extension could not carry out the request (code=<code>)." —
   `CALL_EXTENSION_FAILED(code)`, wie bei den anderen Werkzeugen.
 
 ## Hub
@@ -167,7 +167,7 @@ Fehlerzeilen; wer wissen will, was nicht passte, liest die Werkzeug-Antwort.
    lässt und `tabId`, `url`, `title`, `clicked`, `text`, `truncated`, `via`
    enthält.
 4. `invalid_selector`, `no_match` und `not_clickable` kommen als `isError` mit
-   den deutschen Sätzen an (Beleg: `test/mcp.test.js`), und in allen drei Fällen
+   den englischen Sätzen an (Beleg: `test/mcp.test.js`; englisch seit `docs/54`), und in allen drei Fällen
    wurde **kein** `click()` ausgeführt (Beleg: `test/extension.test.js`, der
    Teststub zählt die Klicks). Überlappung: der abgelöste
    Aufruf antwortet `superseded`, löst **kein** Lesen mehr aus und hinterlässt
@@ -351,7 +351,7 @@ Fehlerzeilen; wer wissen will, was nicht passte, liest die Werkzeug-Antwort.
 - **`about:` hat in der Klick-Antwort kein `complete`.** Die Regel aus Spec 04
   landet auf `url`/`title` (Vorher-Stand) plus leerem `text` und
   `via: "innerText"`.
-- **Der Selektor wird zitiert, wie er kommt** — in den deutschen Sätzen und,
+- **Der Selektor wird zitiert, wie er kommt** — in den englischen Sätzen und,
   entschärft, in der Logzeile. In `formatClickLine` werden `[\r\n]+` durch ein
   Leerzeichen ersetzt: ein mehrzeiliger CSS-Selektor (`div\n a` ist gültig)
   würde sonst eine Logzeile mit Seiteninhalt vortäuschen — dieselbe Regel, die

@@ -8,6 +8,40 @@ Log oder einer Spec widerspricht, gilt der Beleg und diese Datei ist falsch.
 
 **Eine Übergabe-Datei gibt es nicht mehr.** Bis 2026-11-12 lag hier `docs/HANDOVER.md` (Stand, Entscheidungen, Betrieb); für die Veröffentlichung ist sie entfallen, weil sie Betriebsdaten trug. Der Stand steht in dieser Datei, das Verfahren in `CONTRIBUTING.md`, die Einrichtung in `INSTALL.md`.
 
+## Stand (2026-11-22): alles, was der Agent liest, ist englisch (`docs/54`)
+
+**Die Werkzeugbeschreibungen und alle Meldungen sind englisch — gebaut, die
+Spec-Review steht noch aus.** Übersetzt sind die Refusals der Bridge
+(`bridge-rs/src/mcp/texts.rs`, 51 Texte), die 13 Argument-Refusals und die 14
+Werkzeugbeschreibungen (`tools.rs`), die Meldungen der Extension
+(`extension/bridge.js`) und die gepinnten Sätze in `mcp.rs` bzw.
+`test/extension.test.js`.
+Fehlercodes (`eval_not_allowed`, `page_not_readable`, …) sind unverändert; die
+Logzeilen `bc: …`, die Kommentare und die Dokumentation bleiben deutsch.
+
+- **Die Spec-Messung war zu klein:** sie zählte Umlaute per `grep` und übersah
+  damit die Argument-Refusals in `tools.rs`, die Werkzeugbeschreibungen (seit
+  `c15f8b9` laut Spec englisch — waren sie nicht, `docs/53` hatte nur die
+  `browser_help`-Anleitungen gebaut) und jede Meldung ohne Umlaut.
+- **Neu: `bridge-rs/tests/texts.rs`** (`texts_shouldContainNoGermanUmlauts`) prüft
+  `texts.rs`, `tools.rs` und `help.rs` zeilenweise, Kommentarzeilen ausgenommen. Er fängt
+  vergessene Zeilen, die niemand pinnt — nicht aber einen deutschen Satz ohne
+  Umlaut; dafür sind die gepinnten Assertions da.
+- **Fixtures amendiert** (Freigabe des Betreibers): `1-initialize-and-tools-list.txt`
+  trägt jetzt die englischen Beschreibungen, `2-tools.txt` und
+  `3-extension-failures.txt` die englischen Sätze.
+- **Beweise:** `cargo test` 287 Fälle grün (117 in `mcp.rs`), `clippy -D warnings`
+  auf `x86_64-unknown-linux-musl` und `x86_64-pc-windows-gnu`, `npm test` 547
+  Fälle, `npm run check` 0, `parity.sh --impl rust --check` 7/7, `--self-test` 7/7.
+- **Review Runde 1 (2026-11-22):** `🔧 Fix these and I'll sign off`; alle Befunde
+  eingearbeitet. `docs/53` und `CONTRIBUTING.md` sind nachgezogen. Ein deutscher
+  Satzteil war durchgerutscht (`(entries: keine)` in `bridge.js`) und heißt jetzt
+  `none`; ein neuer Node-Fall pinnt den Satz. Drei Review-Runden; die dritte
+  blockierte an den alten Zitaten in weiteren Specs und wurde nach der
+  Projektregel geteilt. `docs/55-alte-zitate-in-specs.md` ist seit 2026-11-22
+  `active`: 73 Inventarzeilen, 38 Vertragsstellen nachgezogen, 21 Belege
+  markiert, 14 Ausschlüsse. `docs/54` steht weiter auf `proposed`, bis die nächste Runde zustimmt.
+
 ## Stand (2026-11-18): `ws://` nur für Loopback, sonst `wss://` oder SSH-Tunnel
 
 **Ein unverschlüsselter Dial ins Netz ist keine Verbindung, sondern eine
@@ -365,6 +399,8 @@ Live-Messung fehlen). — **Überholt:** `docs/28` ist seit 2026-11-18 `active`
 **Sprache der Optionsseite (2026-11-15):** die sichtbaren Texte der
 Erweiterungs-Einstellungen sind **englisch** (Betreiberentscheid, das Projekt ist
 öffentlich). Werkzeugfehler und Logzeilen bleiben deutsch.
+**Überholt seit `docs/54` (2026-11-22):** deutsch bleiben nur die Logzeilen; die
+Werkzeugbeschreibungen und alle Meldungen im Agentenpfad sind englisch.
 
 **Was bleibt (dokumentiert, nicht behoben):** das Etikett einer YouTube-Spur
 kann lügen (auf `wKv-g1uEoDY` ist die einzige Spur `ja` etikettiert und
@@ -1115,6 +1151,11 @@ Spec unter `## Testing` bzw. in dem Log, das der Lauf erzeugt.
 `scripts/parity/expected/1-initialize-and-tools-list.txt` geändert werden darf,
 wenn sich die Werkzeugliste absichtlich ändert. `CONTRIBUTING.md:117` verbietet das
 Handanlegen; diese Freigabe ist die Ausnahme, datiert und je Änderung.
+
+**Alle drei Parity-Fixtures.** Dieselbe Freigabe umfasst `2-tools.txt` und
+`3-extension-failures.txt`: beide enthalten ausschließlich Bridge-Texte, und
+`docs/54` nennt sie in Kriterium 3 und Stufe 1. Am 2026-11-22 von Hand ersetzt
+(englische Sätze), `parity --check` und `--self-test` danach 7/7.
 
 **Nachtrag zu `f38dcc1`.** Dieser Commit hat sieben Werkzeugbeschreibungen in
 derselben Fixture von Hand ersetzt, um den URL-Fehlgriff kleiner Modelle zu

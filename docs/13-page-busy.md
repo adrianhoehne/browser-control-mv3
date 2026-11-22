@@ -8,7 +8,7 @@ status: active
 Drei Messungen aus dem Alltag, alle am 2026-10-23:
 
 1. **Erster `click` direkt nach `navigate`** antwortete
-   „Diese Seite kann die Extension nicht lesen (interne Seite oder Sonderformat)",
+   „Diese Seite kann die Extension nicht lesen (interne Seite oder Sonderformat)" (so die Antwort damals; englisch seit `docs/54`),
    obwohl die Seite gewöhnlich war — `inspect` funktionierte im selben Moment, der
    zweite Versuch ging durch.
 2. **`thomas-innovation.de`** stand im Tab als „Problem loading page", und
@@ -28,7 +28,7 @@ Code die Antwort trägt:
 
 | Zustand des Tabs | Code | Bedeutung |
 |---|---|---|
-| `status: "loading"` | **`page_busy`** | Die Seite lädt noch — ein neuer Versuch ist sinnvoll |
+| `status: "loading"` | **`page_busy`** | die Seite lädt noch — ein neuer Versuch ist sinnvoll |
 | alles andere | `not_readable` | Die Seite gibt nichts her (intern, PDF, Sonderformat) |
 | `tabs.get` scheitert, Tab weg | `no_agent_tab` | Es gibt keinen Agenten-Tab mehr |
 
@@ -56,7 +56,7 @@ Code die Antwort trägt:
 Neuer Code `page_busy`, Fehlerobjekt **ohne** Zusatzfelder:
 
 ```json
-{"ok":false,"error":{"code":"page_busy","message":"Die Seite lädt noch."}}
+{"ok":false,"error":{"code":"page_busy","message":"The page is still loading."}}
 ```
 
 Alles andere unverändert.
@@ -65,7 +65,7 @@ Alles andere unverändert.
 
 | Code | Satz |
 |---|---|
-| `page_busy` | „Die Seite lädt noch — bitte gleich noch einmal versuchen." |
+| `page_busy` | „The page is still loading — try again in a moment." |
 | `no_agent_tab` bei fehlendem Tab nach der Injektion | derselbe Satz wie bisher (`TOOL_TEXTS.NO_AGENT_TAB`) |
 
 Der Satz gilt für alle vier Werkzeuge, die `read`-Fehler melden können.

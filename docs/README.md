@@ -144,7 +144,8 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `51-schattenwurzeln.md` | Geschlossene Shadow Roots erreichbar machen (`attachShadow` bei `document_start` in der Seitenwelt), hinter einem Schalter, Default aus — mit drei Pflicht-Messungen vor dem Bau | `withdrawn` |
 | `52-amo-einreichung.md` | Die Texte für die AMO-Einreichung: Beschreibung, Begründung der Berechtigungen, der Absatz zu `eval` für die Reviewer und Plan B ohne den Schalter | `proposed` |
 | `53-browser-help.md` | Ein vierzehntes Werkzeug `browser_help` liefert die ausführliche Anleitung eines Werkzeugs samt Beispiel — hinter einem Aufruf, damit `tools/list` kurz bleibt | `active` |
-| `54-refusals-englisch.md` | Alle Meldungen, die der Agent liest, werden englisch: 34 Texte in `texts.rs`, 1 in `failure.rs`, 38 in `bridge.js`, 15 Assertions, zwei Fixtures — mit einem Umlaut-Wächter als maschinellem Beweis | `proposed` |
+| `54-refusals-englisch.md` | Alle Meldungen, die der Agent liest, sind englisch: 51 Texte in `texts.rs`, 13 Argument-Refusals und 14 Werkzeugbeschreibungen in `tools.rs`, die Meldungen in `bridge.js`, drei Fixtures — mit einem Umlaut-Wächter als maschinellem Beweis; gebaut; Review-Runde 3 teilte den Zitat-Rest nach `docs/55` | `active` |
+| `55-alte-zitate-in-specs.md` | Die aktiven Specs zitierten die alten deutschen Werkzeugsätze: 73 Inventarzeilen in 27 Dateien, 38 Vertragsstellen nachgezogen, 21 Belege mit Datum markiert, 14 Ausschlüsse | `active` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.

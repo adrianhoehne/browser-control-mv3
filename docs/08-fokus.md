@@ -76,13 +76,13 @@ Antwort:
 | Feld | Wert |
 |---|---|
 | `name` | `browser_focus` |
-| `description` | Holt den Agenten-Tab nach vorn und sein Fenster in den Vordergrund; die Seite wird dabei nicht verändert, und `focused` kommt aus einer Abfrage nach dem Fokussieren. |
+| `description` | Brings the agent tab to the front and its window to the foreground; the page itself is not changed, and `focused` comes from a query after focusing. With `tab` exactly that tab, without `tab` the one used last. |
 | `inputSchema` | `{"type":"object","properties":{},"additionalProperties":false}` |
 
 `tools/call`:
 
 - **Erfolg**: `{"content":[{"type":"text","text":"<JSON, 2 Leerzeichen eingerückt>"}]}`.
-- **Argument übergeben**: `isError`, „browser_focus erwartet keine Argumente."
+- **Argument übergeben**: `isError`, „browser_focus takes only `tab`." (englisch seit `docs/54`)
   (Tabelle je Werkzeug, wie bei `browser_status`/`browser_read`).
 - **`no_agent_tab`**: `TOOL_TEXTS.NO_AGENT_TAB` (wörtlich wie bei `read`).
 - **`focus_failed`**, Zeitüberschreitung: `CALL_EXTENSION_FAILED(code)`.

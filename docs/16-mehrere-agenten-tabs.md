@@ -79,8 +79,8 @@ Neue Methoden `open_tab` und `close_tab` in `PROTOCOL.METHODS`, beide Seiten.
 | `browser_close_tab` | `{tab?}` |
 | bestehende sechs | zusätzlich `tab?` |
 
-Sätze: `too_many_tabs` ⇒ „Es sind schon fünf Agenten-Tabs offen — erst einen
-schließen." `no_agent_tab` bleibt der heutige Satz.
+Sätze: `too_many_tabs` ⇒ „Five agent tabs are already open — close one first."
+(englisch seit `docs/54`). `no_agent_tab` bleibt der heutige Satz.
 
 ## Hub
 
@@ -465,7 +465,7 @@ Nach Reload der Extension und Neustart von pi, im echten Profil:
 - **Schließen lässt die anderen stehen:** `browser_close_tab({tab:5})` →
   `{tabId:5, closed:true}`; danach waren 3, 4 und 6 markiert.
 - **Obergrenze greift:** aufgefüllt bis fünf Tabs (3, 4, 6, 7, 8), der sechste
-  antwortete „Es sind schon fünf Agenten-Tabs offen — erst einen schließen."
+  antwortete „Es sind schon fünf Agenten-Tabs offen — erst einen schließen." (so die Antwort damals; englisch seit `docs/54`)
 - **`close_tab` ohne `tab`** schloss den zuletzt benutzten (8).
 - Aufgeräumt: drei Tabs bleiben, davon einer markiert.
 

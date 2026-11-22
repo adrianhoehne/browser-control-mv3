@@ -139,7 +139,7 @@ Antwort:
 | Feld | Wert |
 |---|---|
 | `name` | `browser_type` |
-| `description` | Schreibt Text in das Feld, das dem CSS-Selektor entspricht, sendet optional Enter und liefert den Seitentext danach (auf 20 000 Zeichen gekürzt). |
+| `description` | Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Writes text into the field that matches the CSS selector, optionally sends Enter and returns the page text afterwards (cut to 20 000 characters). With `tab` exactly that tab, without `tab` the one used last. |
 | `inputSchema` | `{"type":"object","properties":{"selector":{"type":"string"},"text":{"type":"string"},"submit":{"type":"boolean"},"frame":{"type":"string","minLength":1}},"required":["selector","text"],"additionalProperties":false}` |
 
 `tools/call`:
@@ -149,14 +149,14 @@ Antwort:
 - **`submit` ist kein Boolean** (etwa `"true"`): ebenfalls `-32602` — sonst
   käme der Modellfehler als „die Extension konnte die Anfrage nicht ausführen"
   zurück, was die falsche Erklärung ist.
-- **unbekanntes Argument**: `isError`, „browser_type erwartet nur `selector`,
-  `text` und `submit`."
-- **`invalid_selector`**: `isError`, „Der Selektor ist ungültig: <selektor>."
-- **`no_match`**: `isError`, „Kein Element passt zu: <selektor>."
-- **`not_typeable`**: `isError`, „Das Element ist kein beschreibbares Feld oder
-  deaktiviert: <selektor>."
-- **`password_not_allowed`**: `isError`, „Passwortfelder sind gesperrt. In den
-  Optionen der Erweiterung freischalten."
+- **unbekanntes Argument**: `isError`, „browser_type takes only `selector`,
+  `text`, `submit`, `frame` and `tab`." (englisch seit `docs/54`)
+- **`invalid_selector`**: `isError`, „The selector is invalid: <selektor>."
+- **`no_match`**: `isError`, „No element matches: <selektor>."
+- **`not_typeable`**: `isError`, „The element is not a writable field or is
+  disabled: <selektor>."
+- **`password_not_allowed`**: `isError`, „Password fields are locked. Unlock
+  them in the extension options."
 - **`no_agent_tab`**: `TOOL_TEXTS.NO_AGENT_TAB` (wörtlich wie bei `read`).
 - **`not_readable`/`read_failed`**: unverändert durchgereicht (wie bei `click`).
 - **`superseded`/`type_failed`/Zeitüberschreitung**: `CALL_EXTENSION_FAILED(code)`.
@@ -247,7 +247,7 @@ steht nie in einer Logzeile** (er kann ein Passwort sein), nur seine Länge; bei
    und `tabId`, `url`, `title`, `typed`, `submitted`, `text`, `truncated`, `via`
    enthält.
 4. `not_typeable` und `password_not_allowed` kommen als `isError` mit den
-   deutschen Sätzen an; in beiden Fällen wurde **kein** Wert gesetzt und kein
+   englischen Sätzen an (seit `docs/54`); in beiden Fällen wurde **kein** Wert gesetzt und kein
    Ereignis ausgelöst. Beim erfolgreichen Tippen in ein Feld mit eigenem
    `value` (React-Schatten) gilt: `nativeSets === 1` **und** der Schatten steht
    danach unverändert (Beleg: die Seiten-Attrappe zählt Werte und Ereignisse).

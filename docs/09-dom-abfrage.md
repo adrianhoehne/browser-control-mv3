@@ -93,7 +93,7 @@ wie oben.
 | Feld | Wert |
 |---|---|
 | `name` | `browser_inspect` |
-| `description` | Listet die Elemente des Agenten-Tabs auf (per CSS-Selektor und/oder Textsuche) mit Tag, id, class, Link, sichtbarem Text, Sichtbarkeit und einem fertigen Selektor zum Weiterverwenden. Ändert nichts an der Seite. |
+| `description` | Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Lists the elements of the agent tab (by CSS selector and/or text search) with tag, id, class, link, visible text, visibility and a ready-made selector to reuse. `my-card >>> button` steps right of the `>>>` into the open shadow tree of `my-card` (several levels allowed); every step is a simple selector — type, `#id`, `.class`, `[attr="value"]` or `:nth-of-type(n)`; closed shadow trees stay out of reach, and without `>>>` nothing changes. Changes nothing on the page. With `tab` exactly that tab, without `tab` the one used last. |
 | `inputSchema` | `{"type":"object","properties":{"selector":{"type":"string"},"text":{"type":"string"},"limit":{"type":"integer","minimum":1,"maximum":200},"includeHidden":{"type":"boolean"},"frame":{"type":"string","minLength":1}},"additionalProperties":false}` |
 
 `tools/call`:
@@ -102,11 +102,11 @@ wie oben.
 - **weder `selector` noch `text`**: `isError`, „browser_inspect braucht `selector` oder `text`."
 - **`limit`/`includeHidden` falscher Typ, fremder Schlüssel**: `-32602` bzw.
   der Tabellensatz je Werkzeug.
-- **`invalid_selector`**: `isError`, „Der Selektor ist ungültig: <selektor>."
+- **`invalid_selector`**: `isError`, „The selector is invalid: <selektor>."
 - **`not_readable`**: `isError`, derselbe Satz wie bei `browser_read`.
 - **`no_agent_tab`**: `TOOL_TEXTS.NO_AGENT_TAB`.
 - **`invalid_params`** (etwa `limit: 201` von einem Client, der das Schema nicht
-  liest): eigener Satz, „Der Parameter ist ungültig." — **ohne Feldnamen**, weil
+  liest): eigener Satz, „The parameter is invalid." — **ohne Feldnamen**, weil
   der Hub nur den Code weiterreicht und die Bridge die Spanne bewusst nicht
   prüft (die Grenze ist die Regel der Extension). Der Satz lautet also für jeden
   `invalid_params` gleich, statt einen Feldnamen zu erfinden.

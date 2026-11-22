@@ -217,7 +217,7 @@ dann in `bridge.js` liegen.
    zweimal zu fahren kostet zwei Betreiber-Tage für eine Zahl.
 10. **Ohne Tab keine Verbindung, mit Tab binnen 10 s zurück.** (Betreiber.) Tab
     schließen ⇒ die Bridge loggt `extension disconnected` und ein Werkzeugaufruf
-    antwortet „Keine Extension verbunden". Binnen **10 s** (gewählt: `onRemoved`
+    antwortet „No extension connected". Binnen **10 s** (gewählt: `onRemoved`
     plus `tabs.create` plus Laden; Reserve) steht ein neuer Tab, die Bridge loggt
     `extension connected` und `browser_status` antwortet wieder.
 11. **Der Tab überlebt den Browser-Neustart.** (Betreiber.) Firefox beenden und

@@ -170,7 +170,7 @@ live und nach dem Commit zu messen; **Kernannahme** ist Kriterium 6 (live).
 | 2 | dieselbe Seite | `browser_read` mit `frame: "example.org"` antwortet `url: "https://example.org/"`, `title: "Example Domain"`, `text` aus dem Rahmen (917 Zeichen), `settled: true`, `waitedMs: 999` |
 | 6 (`about:blank`) | `w3schools.com/html/html_youtube.asp` | Die Liste enthält **drei** `about:blank`-Rahmen mit `top: false` — Einträge, die nur entstehen, wenn der Schnipsel **in** ihnen lief. `matchAboutBlank` injiziert also wirklich. |
 | 6 (Ruhe im Rahmen) | wie oben | `read` mit `frame` liefert `settled: true` / `waitedMs: 999`, `read` ohne `frame` auf derselben Seite `settled: false` / `waitedMs: 0` — die Ruhe-Erkennung wartet im adressierten Rahmen, nicht im Tab |
-| 3 | `w3schools.com/html/tryit.asp?…` | `frame: "nichtvorhanden"` ⇒ „Zu diesem `frame` passt kein Rahmen … (geantwortete Rahmen: 55)" |
+| 3 | `w3schools.com/html/tryit.asp?…` | `frame: "nichtvorhanden"` ⇒ „No frame matches this `frame` … (frames that answered: 55)" |
 | 4 | dieselbe Seite | `frame: "pubmatic"` und `frame: "tryit.asp?filename=tryhtml_intro"` ⇒ mehrere Kandidaten im Satz (2 bzw. 4), kein Rahmen wird gelesen |
 
 **Befund, der als Lücke bleibt:** auf der Werbe-Seite nennt `frame_not_found`

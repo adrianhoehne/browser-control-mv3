@@ -218,7 +218,7 @@ fünf Assertions in `test/mcp.test.js` indizieren die Tabelle nach Position, und
   `EVAL_RESULT_LIMIT = 10000`, `EVAL_MESSAGE_LIMIT = 500`, `ALLOW_EVAL = "allowEval"`,
   `EVAL_NOT_ALLOWED_CODE`, `EVAL_FAILED_CODE`, `EVAL_TIMEOUT_CODE`,
   `EVAL_RESULT_TOO_LARGE_CODE`, `EVAL_RESULT_UNSERIALIZABLE_CODE`, dazu die
-  deutschen Sätze.
+  englischen Sätze (seit `docs/54`).
 - `evalRequestParams(params)` prüft **nur** `code`: String, nicht leer,
   höchstens 20 000 Zeichen. `tab` prüft `addressedAgentTab` (Typ und
   Untergrenze), nicht diese Funktion. Die Reihenfolge in `evalAgentTab` ist

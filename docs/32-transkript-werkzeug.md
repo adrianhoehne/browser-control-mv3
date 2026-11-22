@@ -351,7 +351,7 @@ Kriterium 9 rot aus, wird **vorwärts** korrigiert und die rote Zeile steht in
   die Caption-Daten).
 - **Die Fehlerform des Hauses:** je Werkzeug eine Fehlerklasse mit `code`
   (`ReadError` `:1641`, `FramesError` `:5296`), ein Mapper `…ErrorFor(error)`,
-  ein eigener Code und ein **eigener deutscher Satz in `extensionFailureText`**
+  ein eigener Code und ein **eigener englischer Satz in `extensionFailureText`**
   (`bridge/mcp.mjs:1331`) — ohne den Zweig fallen die Codes auf den
   `status`-Satz und nennen die falsche Handlung.
 - **Die Werkzeugtabelle wächst nur am Ende.** `TOOLS` (`bridge/mcp.mjs:63`) ist
@@ -596,10 +596,10 @@ Satz „33 Segmente, 19 777 Zeichen" der Vergleichspunkt für den neuen Weg ist.
 | `browser_transcript({tab: 7})` auf `v=<video-en>` | 133 Segmente; die ersten drei wörtlich: „Das ist eine Drei." (0:04), „Sie ist schlampig geschrieben …" (0:06), „Es ist doch verrückt …" (0:14) — **wie M2 vorhergesagt** |
 | `totalChars` | **19 777** — exakt 19 645 Zeichen Segmenttext + 132 Verbinder |
 | `{offset: 19777}` (genau am Ende) | `segments: []`, `chars: 0`, `truncated: false` |
-| `{offset: 19800}` (dahinter) | Fehler „Der `offset` liegt hinter dem Ende des Textes: Der Text hat 19777 Zeichen; offset 19800 liegt dahinter." |
-| `{maxChars: 0}` | Fehler „Der Parameter ist ungültig: maxChars muss eine ganze Zahl von 1 bis 100000 sein." |
+| `{offset: 19800}` (dahinter) | Fehler „Der `offset` liegt hinter dem Ende des Textes: Der Text hat 19777 Zeichen; offset 19800 liegt dahinter." (so die Antwort damals; englisch seit `docs/54`) |
+| `{maxChars: 0}` | Fehler „Der Parameter ist ungültig: maxChars muss eine ganze Zahl von 1 bis 100000 sein." (so die Antwort damals; englisch seit `docs/54`) |
 | Tab 7 **im Hintergrund** (nach `browser_focus` auf einen anderen Tab) | **liefert weiter Segmente** — die Seite war einmal gerendert und behält sie |
-| `{tab: 8}` auf `example.org` | Fehler „Das Transkript ließ sich nicht lesen — nur YouTube-Watch-Seiten haben eines." |
+| `{tab: 8}` auf `example.org` | Fehler „Das Transkript ließ sich nicht lesen — nur YouTube-Watch-Seiten haben eines." (so die Antwort damals; englisch seit `docs/54`) |
 
 **Zwei Dinge, die der Lauf zeigt und die vorher nur behauptet waren:**
 
