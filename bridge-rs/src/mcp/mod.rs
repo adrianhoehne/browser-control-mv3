@@ -12,6 +12,7 @@
 //! through [`ToolContext::log`]; both are injected, so nothing in this module prints.
 
 pub mod failure;
+pub mod help;
 pub mod texts;
 pub mod tools;
 

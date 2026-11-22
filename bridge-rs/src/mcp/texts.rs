@@ -193,3 +193,21 @@ pub fn call_extension_failed(code: &str) -> String {
 
 /// `TOOL_TEXTS.BRIDGE_FAILED`
 pub const BRIDGE_FAILED: &str = r#"Die Bridge konnte den Status nicht lesen."#;
+
+/// `browser_help` ohne `tool`: derselbe Ton wie die anderen Refusals.
+pub fn help_asked_for_nothing() -> String {
+    "browser_help erwartet `tool` — den Namen eines Werkzeugs, zum Beispiel `browser_read`.".to_string()
+}
+
+/// `browser_help` mit einem Argument, das es nicht kennt.
+pub fn help_asked_for_something_else() -> String {
+    "browser_help erwartet nur `tool`.".to_string()
+}
+
+/// `browser_help` mit einem Namen, den der Vertrag nicht kennt: die gueltigen dazu.
+pub fn help_unknown_tool(name: &str, known: &[&str]) -> String {
+    format!(
+        "`{name}` ist kein Werkzeug dieses Vertrags. Gueltig sind: {}.",
+        known.join(", ")
+    )
+}

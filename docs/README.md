@@ -143,7 +143,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `50-await-in-eval.md` | `await` auf oberster Ebene im `eval`-Code: der `func` baut den Rumpf als async-Funktion — kleine Änderung an `docs/19`, am 2026-11-19 zweimal gestolpert | `active` |
 | `51-schattenwurzeln.md` | Geschlossene Shadow Roots erreichbar machen (`attachShadow` bei `document_start` in der Seitenwelt), hinter einem Schalter, Default aus — mit drei Pflicht-Messungen vor dem Bau | `withdrawn` |
 | `52-amo-einreichung.md` | Die Texte für die AMO-Einreichung: Beschreibung, Begründung der Berechtigungen, der Absatz zu `eval` für die Reviewer und Plan B ohne den Schalter | `proposed` |
-| `53-browser-help.md` | Ein vierzehntes Werkzeug `browser_help` liefert die ausführliche Anleitung eines Werkzeugs samt Beispiel — hinter einem Aufruf, damit `tools/list` kurz bleibt | `proposed` |
+| `53-browser-help.md` | Ein vierzehntes Werkzeug `browser_help` liefert die ausführliche Anleitung eines Werkzeugs samt Beispiel — hinter einem Aufruf, damit `tools/list` kurz bleibt | `active` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.

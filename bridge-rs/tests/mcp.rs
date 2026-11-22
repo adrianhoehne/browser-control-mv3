@@ -514,6 +514,10 @@ fn transcript_call(id: i64, arguments: Option<Value>) -> Value {
     call_request(id, "browser_transcript", arguments)
 }
 
+fn help_call(id: i64, tool: &str) -> Value {
+    call_request(id, "browser_help", Some(json!({ "tool": tool })))
+}
+
 /* ---------------------------------------------------------- the results */
 
 // The answers the extension is played back with. Shaped like the fixture of the Node suite
@@ -989,7 +993,7 @@ async fn mcp_withAStringIdOrZeroAsId_shouldAnswerUnderExactlyThatId() {
 }
 
 #[tokio::test]
-async fn mcp_toolsList_shouldOfferExactlyTheThirteenToolsOfTheContract() {
+async fn mcp_toolsList_shouldOfferExactlyTheFourteenToolsOfTheContract() {
     // GIVEN a bridge with nobody connected:
     let seam = Seam::nobody(config());
 
@@ -1022,6 +1026,7 @@ async fn mcp_toolsList_shouldOfferExactlyTheThirteenToolsOfTheContract() {
             "browser_screenshot",
             "browser_frames",
             "browser_transcript",
+            "browser_help",
         ]
     );
 
@@ -1250,10 +1255,15 @@ async fn mcp_toolsList_shouldOfferExactlyTheThirteenToolsOfTheContract() {
     }
 
     // Eleven schemas share one `tab` property in the module; JSON makes eleven independent
-    // copies on the wire, and the eleven must still agree word for word. `status` (position
-    // 0) and `open_tab` (position 7) are the two that take none: `status` reports every
-    // window, and `open_tab`'s tab does not exist until it answers.
-    for (index, tool) in tools.iter().enumerate().filter(|(index, _)| *index != 0 && *index != 7) {
+    // copies on the wire, and the eleven must still agree word for word. Three take none:
+    // `status` (0) reports every window, `open_tab` (7) has no tab until it answers, and
+    // `browser_help` (13) answers from the bridge without touching a browser (spec 53).
+    let takes_no_tab = [0, 7, 13];
+    for (index, tool) in tools
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| !takes_no_tab.contains(index))
+    {
         assert_eq!(
             tool["inputSchema"]["properties"]["tab"],
             json!({ "type": "integer", "minimum": 1 }),
@@ -4184,4 +4194,59 @@ fn mcp_process_theAnswerToTheLastLineBeforeStdinEof_shouldReachStdout() {
 
     // ... and everything was written before the process said goodbye with 0.
     assert_eq!(exit_code, 0);
+}
+
+/// `browser_help` liefert fuer jedes Werkzeug die sechs Abschnitte — und es antwortet
+/// ohne verbundene Extension, weil Lesen keinen Browser braucht (spec 53).
+#[tokio::test]
+async fn help_forEveryTool_shouldAnswerWithTheSixSections() {
+    // GIVEN a bridge with nobody connected, and the names the tool table offers,
+    let names: Vec<String> = {
+        let seam = Seam::nobody(config());
+        let answer = answer_of(seam.ask(&json!({ "jsonrpc": "2.0", "id": 30, "method": "tools/list" }))).await;
+        answer["result"]["tools"]
+            .as_array()
+            .expect("a tool array")
+            .iter()
+            .map(|tool| tool["name"].as_str().expect("a name").to_string())
+            .collect()
+    };
+
+    // WHEN every name is asked for its manual,
+    for name in names {
+        let mut seam = Seam::nobody(config());
+        let answer = seam.call(help_call(31, &name)).await;
+        let text = answer["result"]["content"][0]["text"].as_str().unwrap_or_default();
+
+        // THEN all six sections are there — no tool may ship a half manual,
+        for section in ["## Purpose", "## Arguments", "## Returns", "## Example", "## Pitfalls", "## Related"] {
+            assert!(text.contains(section), "{name} is missing {section}");
+        }
+    }
+}
+
+/// Ein unbekannter Name nennt die gueltigen: ein Aufruf genuegt zur Korrektur.
+#[tokio::test]
+async fn help_withAnUnknownTool_shouldNameTheValidOnes() {
+    // GIVEN a bridge with nobody connected,
+    let mut seam = Seam::nobody(config());
+
+    // WHEN a name outside the contract is asked for,
+    let answer = seam.call(help_call(32, "gibtsnicht")).await;
+
+    // THEN the refusal names the wrong name and every valid one,
+    let text = answer["result"]["content"][0]["text"].as_str().unwrap_or_default();
+    assert_eq!(answer["result"]["isError"], true);
+    assert!(text.contains("gibtsnicht"));
+    assert!(text.contains("browser_read"));
+}
+
+/// Der Satz, der den Anlassfall verhindert haette: `browser_read` nimmt keine URL.
+#[tokio::test]
+async fn help_forRead_shouldSayThatItTakesNoUrl() {
+    let mut seam = Seam::nobody(config());
+    let answer = seam.call(help_call(33, "browser_read")).await;
+    let text = answer["result"]["content"][0]["text"].as_str().unwrap_or_default();
+    assert!(text.contains("no URL"), "the manual has to say it: {text}");
+    assert!(text.contains("browser_navigate"));
 }

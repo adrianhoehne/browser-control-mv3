@@ -1,6 +1,6 @@
 ---
 description: Ein vierzehntes Werkzeug browser_help liefert auf Anforderung die ausführliche Anleitung eines Werkzeugs samt Beispiel — ohne die Werkzeugliste zu vergrößern.
-status: proposed
+status: active
 ---
 
 # `browser_help` — die Anleitung auf Abruf
@@ -178,6 +178,17 @@ sind `tools/call`-Antworten, und kein Kriterium braucht dort einen `help`-Fall.
 ### Runde 1 — steht aus
 
 ## Log
+
+- **2026-11-22, gebaut und gemessen.** `browser_help` ist das vierzehnte Werkzeug;
+  die dreizehn Anleitungen liegen in `bridge-rs/src/mcp/help.rs` und sind **nicht**
+  Teil von `tools/list`. Gemessen: `awk 'NR==5'
+  scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m` ⇒ **8 238**
+  Zeichen (vorher 7 825, Grenze 8 500).
+  Stufe 0 (Fixture-Amendierung) mit der Freigabe des Betreibers ausgeführt.
+  Abnahme: 117 Rust-Fälle grün, `clippy -D warnings` sauber, `parity --check` 7/7,
+  546 Node-Tests, `npm run check` 0.
+  **Sprache:** Anleitungen und Beschreibungen englisch; die Refusals bleiben
+  deutsch, wie in `## Sprache` festgehalten.
 
 - **2026-11-22, Anlass:** lokales Modell ruft `browser_read` mit `url` auf; die
   Bridge antwortet freundlich, aber die Client-Schicht verschluckt die Antwort.

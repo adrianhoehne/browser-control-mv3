@@ -20,7 +20,7 @@ use serde_json::{json, Map, Value};
 
 use crate::mcp::failure::failure_text_for;
 use crate::mcp::texts;
-use crate::mcp::{error_message, is_json_object, result_message, RpcError, ToolContext};
+use crate::mcp::{error_message, help, is_json_object, result_message, RpcError, ToolContext};
 use crate::protocol;
 
 pub const BROWSER_STATUS: &str = "browser_status";
@@ -36,6 +36,7 @@ pub const BROWSER_EVAL: &str = "browser_eval";
 pub const BROWSER_SCREENSHOT: &str = "browser_screenshot";
 pub const BROWSER_FRAMES: &str = "browser_frames";
 pub const BROWSER_TRANSCRIPT: &str = "browser_transcript";
+pub const BROWSER_HELP: &str = "browser_help";
 
 /// The wire name of the tab every tab-addressed tool may name. `tabId` is the name the
 /// extension *answers* with; a second spelling here would travel to it as an argument
@@ -355,6 +356,20 @@ pub fn tool_list() -> Value {
                 "additionalProperties": false,
             },
         }),
+        json!({
+            "name": BROWSER_HELP,
+            "description": BROWSER_HELP_DESCRIPTION,
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "tool": {
+                        "type": "string",
+                    },
+                },
+                "required": ["tool"],
+                "additionalProperties": false,
+            },
+        }),
     ])
 }
 
@@ -399,6 +414,9 @@ const BROWSER_SCREENSHOT_DESCRIPTION: &str =
 
 const BROWSER_FRAMES_DESCRIPTION: &str =
     r#"Listet die Rahmen (iframes) des Agenten-Tabs mit ihrer Adresse; `frame` bei den anderen Werkzeugen nimmt einen Teilstring davon. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+
+const BROWSER_HELP_DESCRIPTION: &str =
+    r#"Answers with the long manual of one tool — purpose, arguments, returns, an example, the pitfalls and the related tools. Needs no browser, so it works without a connected extension. Start here when a call was refused for a reason you do not understand."#;
 
 const BROWSER_TRANSCRIPT_DESCRIPTION: &str =
     r#"Liest das Transkript des YouTube-Video-Tabs als Segmente mit Zeitstempel und Text aus der Untertitelspur des Videos `requestedLanguage` nennt die gewählte Spur, `deliveredLanguage` die Sprache der gelieferten Spurendatei, `source` den Ort, an dem das Datenmodell des Players gefunden wurde. `offset` überspringt so viele Zeichen der verketteten Segmenttexte (Default 0), `maxChars` begrenzt den Ausschnitt (Default 20 000, höchstens 100 000); `segments` enthält genau die Segmente dieses Fensters, `chars` und `totalChars` sagen, wo man steht, und `truncated` blättert weiter. Der Tab muss im Vordergrund sein — vorher browser_focus aufrufen, sonst antwortet das Werkzeug `transcript_needs_focus`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
@@ -494,6 +512,7 @@ pub async fn call_tool(id: &Value, params: Option<&Value>, context: &ToolContext
         BROWSER_INSPECT => inspect_tool(id, params, context).await,
         BROWSER_EVAL => eval_tool(id, params, context).await,
         BROWSER_TRANSCRIPT => transcript_tool(id, params, context).await,
+        BROWSER_HELP => help_tool(id, params),
         _ => tool_error(id, &texts::unknown_tool(name)),
     }
 }
@@ -1236,5 +1255,34 @@ fn answer_message(id: &Value, result: &Value, answer: AnswerShape) -> Value {
     match answer {
         AnswerShape::Text => text_result_message(id, result),
         AnswerShape::Screenshot => screenshot_result_message(id, result),
+    }
+}
+
+/// `tools/call` for `browser_help`: no hub, no browser, no waiting.
+///
+/// The one tool that answers without a connected extension on purpose: a model that
+/// does not know how a tool works should be able to read up on it while nothing runs
+/// (spec 53). The refusal for an unknown name lists every valid one, so a single call
+/// is enough to correct the mistake.
+fn help_tool(id: &Value, params: Option<&Value>) -> Value {
+    let args = match params.and_then(|p| p.get("arguments")) {
+        Some(value) if is_json_object(value) => value.as_object().cloned().unwrap_or_default(),
+        _ => Map::new(),
+    };
+    let only_tool = args.keys().all(|key| key == "tool");
+    let requested = args.get("tool").and_then(Value::as_str);
+    match (only_tool, requested) {
+        (true, Some(name)) => match help::manual_for(name) {
+            // Raw text, not `text_result_message`: that helper pretty-prints a `Value`,
+            // which would wrap the Markdown in quotes and `\n` escapes. The manual is a
+            // document, not data.
+            Some(text) => result_message(
+                id,
+                json!({ "content": [{ "type": "text", "text": text }] }),
+            ),
+            None => tool_error(id, &texts::help_unknown_tool(name, &help::known_names())),
+        },
+        (false, _) => tool_error(id, &texts::help_asked_for_something_else()),
+        (true, None) => tool_error(id, &texts::help_asked_for_nothing()),
     }
 }

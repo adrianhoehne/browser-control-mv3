@@ -1027,7 +1027,7 @@ async fn http_withTheSameAnswerAsStdio_shouldMatch() {
             .and_then(|result| result.get("tools"))
             .and_then(Value::as_array)
             .map(Vec::len),
-        Some(13),
+        Some(14),
     );
 }
 
