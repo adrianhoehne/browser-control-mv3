@@ -54,7 +54,7 @@ nicht im Produkt und läuft nicht zur Laufzeit.
 |---|---|---|
 | feste Add-on-ID | `browser-control-mv3@bergkaese.dev` (eigene ID, getrennt vom eingefrorenen `browser-control`) | vorhanden |
 | `manifest_version` 3 | seit `docs/43` | vorhanden |
-| Version | **`0.6.2`** — `0.6.0` ist der Merge-Release und bleibt unsigniert; `0.6.1` war die erste signierte Fassung, `0.6.2` trägt die englischen Texte (`docs/54`, `docs/55`) | muss je Release steigen |
+| Version | **`0.7.0`** — `0.6.0` bleibt unsigniert, `0.6.1` war die erste signierte Fassung; `0.7.0` bringt das vierzehnte Werkzeug `browser_help` (`docs/53`) und die englischen Texte (`docs/54`, `docs/55`) | muss je Release steigen |
 | **Daten-Erklärung** | **fehlt** | siehe `## Die Daten-Erklärung` |
 | Lizenz | `LICENSE`/`MIT` im Repo | im Einreichungsformular angeben |
 | Zusammenfassung, Kategorie | — | im Formular, englisch |

@@ -7,7 +7,13 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 Nichts offen.
 
-## [0.6.2] — 2026-11-22
+## [0.7.0] — 2026-11-22
+
+**Ein neues Werkzeug: `browser_help`.** Es antwortet mit der ausführlichen
+Anleitung eines Werkzeugs — Zweck, Argumente, Rückgabefelder, ein Beispiel, die
+typischen Fehlgriffe und die verwandten Werkzeuge. Es braucht keinen Browser und
+antwortet auch ohne verbundene Erweiterung. Die Werkzeugliste bleibt kurz, weil
+die Anleitungen hinter dem Aufruf liegen.
 
 **Alles, was der Agent liest, ist englisch.** Die Refusals der Bridge, die
 Meldungen der Erweiterung und die vierzehn Werkzeugbeschreibungen sind
@@ -15,9 +21,10 @@ Meldungen der Erweiterung und die vierzehn Werkzeugbeschreibungen sind
 neuer Wächter (`bridge-rs/tests/texts.rs`) prüft `texts.rs`, `tools.rs` und
 `help.rs` auf Umlaute, damit keine deutsche Zeile unbemerkt zurückkommt.
 
-Dazu: `docs/54` (Refusals und Beschreibungen), `docs/55` (die alten Zitate in
-den aktiven Specs), `docs/53` und `CONTRIBUTING.md` nachgezogen. Kein Verhalten
-geändert — dieselben Codes, dieselben Fälle, nur der Satz.
+Dazu: `docs/53` (`browser_help`), `docs/54` (Refusals und Beschreibungen),
+`docs/55` (die alten Zitate in den aktiven Specs) und `CONTRIBUTING.md`
+nachgezogen. Kein Verhalten der dreizehn bestehenden Werkzeuge geändert —
+dieselben Codes, dieselben Fälle, nur der Satz.
 
 ## [0.6.1] — 2026-11-20
 
