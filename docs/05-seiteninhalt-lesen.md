@@ -155,31 +155,32 @@ unter `## Risiken`: `textContent` enthält auch, was nicht sichtbar ist.
 | Feld | Wert |
 |---|---|
 | `name` | `browser_read` |
-| `description` | Liest Titel, Adresse und den Text des Agenten-Tabs (standardmäßig 20 000 Zeichen; `offset`/`maxChars` blättern, `chars`/`totalChars` sagen, wo man steht); `via` sagt, ob sichtbarer Text oder Textinhalt; `mode: article` liest nur den Artikelkörper — ohne Navigation, Fußzeile und Cookie-Banner. |
+| `description` | Reads the **current** agent tab and takes **no** URL — call `browser_navigate` first. Reads the title, the address and the text of the agent tab; `offset` skips that many characters of the text (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000). `offset`/`maxChars` page through the text; `chars` and `totalChars` tell you where you are. `via` says whether it is visible text or text content. `mode: article` reads only the article body — without navigation, footer and cookie banner. Waits first until the page has settled (3 s at most) and reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last. (englisch seit `docs/54`) |
 | `inputSchema` | `{"type":"object","properties":{"offset":{"type":"integer","minimum":0},"maxChars":{"type":"integer","minimum":1,"maximum":100000},"mode":{"type":"string","enum":["text","article"]},"tab":{"type":"integer","minimum":1}},"additionalProperties":false}` |
 
 `tools/call`:
 
 - **Erfolg**: `{"content":[{"type":"text","text":"<JSON, 2 Leerzeichen eingerückt>"}]}`.
-- **Argument übergeben**: `{"content":[{"type":"text","text":"browser_read
-  erwartet nur `offset`, `maxChars`, `mode` und `tab`."}],"isError":true}` (Präzedenz aus
+- **Argument übergeben**: `{"content":[{"type":"text","text":"browser_read takes
+  only `offset`, `maxChars`, `mode`, `frame` and `tab`."}],"isError":true}` (englisch seit
+  `docs/54`, mit `frame` seit Spec 24; Präzedenz aus
   Spec 03). Ein Argument mit falschem Typ ist dagegen ein Protokollfehler
   (`-32602`, weil das Schema `integer` bzw. `string` sagt); die *Bereiche* und den
   *Enum-Wert* von `mode` prüft die Extension und antwortet `invalid_params`, ohne zu
   injizieren.
-- **`no_agent_tab`**: `{"content":[{"type":"text","text":"Kein Agenten-Tab —
-  zuerst browser_navigate aufrufen."}],"isError":true}`.
-- **`not_readable`**: `{"content":[{"type":"text","text":"Diese Seite kann die
-  Extension nicht lesen (interne Seite oder Sonderformat)."}],"isError":true}`.
+- **`no_agent_tab`**: `{"content":[{"type":"text","text":"No agent tab — call
+  browser_navigate first."}],"isError":true}`.
+- **`not_readable`**: `{"content":[{"type":"text","text":"The extension cannot
+  read this page (internal page or special format)."}],"isError":true}`.
 - **keine Extension / Zeitüberschreitung**: dieselben zwei Sätze wie bisher.
 - **`offset_out_of_range`**: eigener Satz mit den Zahlen aus der Meldung der
-  Extension („Der Text hat 87314 Zeichen; offset 999999 liegt dahinter.") —
+  Extension ("The text has 87314 characters; offset 999999 is past its end.") —
   `read` fällt dafür **nicht** auf den allgemeinen Satz zurück.
-- **`invalid_params`**: eigener Satz mit der Meldung der Extension („Der
-  Parameter ist ungültig: maxChars muss eine ganze Zahl von 1 bis 100000 sein.");
+- **`invalid_params`**: eigener Satz mit der Meldung der Extension ("The
+  parameter is invalid: maxChars must be an integer from 1 to 100000.");
   ohne brauchbare Meldung derselbe Satz ohne Zusatz. `read` fällt dafür **nicht**
   auf den allgemeinen Satz zurück.
-- **anderer Code**: `"Die Extension konnte die Anfrage nicht ausführen
+- **anderer Code**: `"The extension could not carry out the request
   (code=<code>)."` — derselbe Satz, den `browser_navigate` schon nutzt; er wird
   als `TOOL_TEXTS.CALL_EXTENSION_FAILED(code)` geführt und von beiden Werkzeugen
   verwendet (kein zweiter Schlüssel mit gleichem Wortlaut).
@@ -223,8 +224,8 @@ der Satz „das ist der Unterschied zu `status` und `navigate`".)
 | `test/hub.test.js` — erfolgreiche `read`-Antwort | Logzeile `read tab=… url=… chars=… truncated=… via=…`; der Seitentext steht **nicht** in der Logzeile |
 | `test/mcp.test.js` — `tools/list` | Dreizehn Werkzeuge (elf bis Spec 24, dreizehn ab Spec 32); `browser_read` mit `offset`/`maxChars`/`mode`/`frame`/`tab` (Reihenfolge wie im Schema) und `additionalProperties:false` |
 | dito — `browser_read` mit Fake-Extension | Text ist JSON mit den **sechs** Feldern, die die Fixture trägt (`tabId`/`url`/`title`/`text`/`truncated`/`via`); die Fensterfelder `offset`/`chars`/`totalChars` belegt `test/extension.test.js` (`read_withoutAWindow_shouldAnswerTheDefaultWindowFromTheStart`, `read_whenThePageReportsATooLargeTotalChars_shouldPassItThroughUnchanged`). `mode`/`root`/`fellBack` fehlen hier, weil die Fixture sie nicht trägt — die Bridge reicht die Leseantwort unverändert durch, also belegt dieser Fall die Durchreichung, nicht das Ankommen des Modus |
-| dito — Argument übergeben | `isError:true`, „browser_read erwartet nur `offset`, `maxChars`, `mode`, `frame` und `tab`." |
-| dito — Fixture antwortet `no_agent_tab` / `not_readable` | je `isError:true` mit dem passenden deutschen Satz |
+| dito — Argument übergeben | `isError:true`, "browser_read takes only `offset`, `maxChars`, `mode`, `frame` and `tab`." (englisch seit `docs/54`) |
+| dito — Fixture antwortet `no_agent_tab` / `not_readable` | je `isError:true` mit dem passenden englischen Satz (seit `docs/54`) |
 
 ## Acceptance criteria
 
@@ -248,8 +249,8 @@ der Satz „das ist der Unterschied zu `status` und `navigate`".)
    `properties` und `additionalProperties: false`.
 3. Mit Fake-Extension liefert `browser_read` Text, der sich als JSON parsen lässt
    und `tabId`, `url`, `title`, `text`, `truncated`, `via` enthält.
-4. `no_agent_tab` und `not_readable` kommen als `isError` mit den deutschen
-   Sätzen an — nicht als Protokollfehler.
+4. `no_agent_tab` und `not_readable` kommen als `isError` mit den englischen
+   Sätzen an (seit `docs/54`) — nicht als Protokollfehler.
 5. Eine Logzeile für `read` enthält **keinen** Seitentext (nur `tab`, `url`,
    `chars`, `truncated`, `via` — damit beim Abnahmelauf sichtbar ist, ob die
    Zeichen aus dem Rückfall kommen). Beleg: `test/hub.test.js`.
@@ -257,8 +258,8 @@ der Satz „das ist der Unterschied zu `status` und `navigate`".)
    laden** (das Manifest hat sich geändert — neue Berechtigung; Firefox fragt
    beim Laden nicht nach, weil es eine temporäre Erweiterung ist) und pi neu
    starten. Ohne den Reload antwortet der alte Background mit
-   `unsupported_method`, und die MCP-Schicht macht daraus „Die Extension konnte
-   die Anfrage nicht ausführen (code=unsupported_method)" — das ist kein Bug,
+   `unsupported_method`, und die MCP-Schicht macht daraus "The extension could
+   not carry out the request (code=unsupported_method)" (englisch seit `docs/54`) — das ist kein Bug,
    sondern der fehlende Handgriff. Danach ruft der Orchestrator `browser_read`
    auf.
 

@@ -17,7 +17,7 @@ nicht in die Liste.
   Fehlgriffe und die verwandten Werkzeuge.
 - **Die Werkzeugliste bleibt klein.** Gemessene Grenze, mit Befehl:
   `awk 'NR==5' scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m`
-  ⇒ heute **7 825** Zeichen, nach dem Bau **≤ 8 500**. `browser_help` selbst
+  ⇒ vor dem Bau **7 825** Zeichen, nach dem Bau **≤ 8 500**. `browser_help` selbst
   bekommt eine einzeilige Beschreibung (≈ 150 Zeichen).
 - **Unbekannter Name ist ein benannter Fehler**, keine leere Antwort, und nennt die
   gültigen Namen.
@@ -29,15 +29,15 @@ nicht in die Liste.
 | Name | `browser_help` |
 | Argument | `tool` — Pflicht, einer der dreizehn Werkzeugnamen (auch `browser_help` selbst) |
 | Antwort | ein Textfeld: Markdown, **englisch** (siehe `## Sprache`) |
-| Unbekanntes `tool` | deutscher Satz mit `isError: true`, der die gültigen Namen nennt |
-| Fehlendes `tool` | derselbe deutsche Satz (die Bridge prüft Argumente selbst, nicht die Extension) |
-| Schlüssel außer `tool` | derselbe deutsche Satz — `additionalProperties: false` braucht einen Arm |
-| `tool` mit falschem Typ | derselbe deutsche Satz |
+| Unbekanntes `tool` | englischer Satz mit `isError: true`, der die gültigen Namen nennt: `` `name` is not a tool of this contract. Valid names: … `` |
+| Fehlendes `tool` | eigener englischer Satz: `` browser_help needs `tool` — the name of a tool, for example `browser_read`. `` |
+| Schlüssel außer `tool` | eigener englischer Satz: `` browser_help takes only `tool`. `` — `additionalProperties: false` braucht einen Arm |
+| `tool` mit falschem Typ | derselbe Satz wie bei fehlendem `tool` |
 
-**Kein Draht-Code.** Refusals der Bridge sind ein deutscher Satz ohne Code; Codes
+**Kein Draht-Code.** Refusals der Bridge sind ein englischer Satz ohne Code; Codes
 gehören der Extension (`bridge-rs/src/mcp/failure.rs`). `help_unknown_tool` ist der
 **Zweigname in der Bridge**, kein Token auf der Leitung. Der Fall pinnt den Satz,
-nach dem Muster von `browser_status erwartet keine Argumente.`
+nach dem Muster von `browser_status takes no arguments.` (englisch seit `docs/54`).
 
 **Kein Tab, keine Seite, kein Netz.** `browser_help` antwortet aus der Bridge, ohne
 die Erweiterung zu fragen — es ist der einzige Werkzeugaufruf, der auch ohne
@@ -71,17 +71,16 @@ The two or three tools used in the same flow.
 
 ## Sprache
 
-**Alles, was der Agent liest, ist englisch** (Betreiberentscheid 2026-11-22):
+**Alles, was der Agent liest, ist englisch** (Betreiberentscheidung 2026-11-22):
 Werkzeugbeschreibungen, Beispiele und die `browser_help`-Anleitungen. Bis heute galt
-Deutsch für Agenten-Meldungen; dieser Entscheid ersetzt es für genau diese Texte.
+Deutsch für Agenten-Meldungen; diese Entscheidung ersetzt sie für genau diese Texte.
 
-**Nicht betroffen:** die Refusals der Bridge (deutsche Sätze wie
-„browser_read erwartet nur …") und die Logzeilen. Sie werden in einem eigenen
-Increment umgestellt, weil sie in Tests und Parity-Fixtures gepinnt sind.
+**Nicht betroffen:** die Logzeilen der Bridge und der Erweiterung — sie liest der
+Betreiber auf seiner Konsole, sie bleiben deutsch.
 
-> **OFFENE FRAGE:** soll die Umstellung auf Englisch auch die Refusals erfassen?
-> Dann sind `texts.rs`, `failure.rs`, mehrere Node-Tests und zwei Fixtures
-> betroffen — ein eigener Schnitt mit eigener Spec.
+**Nachgezogen in `docs/54` (2026-11-22):** die Refusals der Bridge und die
+Meldungen der Extension sind inzwischen ebenfalls englisch. Die vier Stellen, an
+denen diese Spec vorher das Gegenteil sagte, sind dort aufgeführt und korrigiert.
 
 ## Wo die Texte liegen
 
@@ -92,8 +91,8 @@ Normalbetrieb nichts.
 **Der Text für `browser_read` ist der wichtigste** und enthält den Satz, der den
 heutigen Fehlgriff verhindert hätte:
 
-> `browser_read` liest den **aktuellen Agenten-Tab**. Es öffnet nichts und nimmt
-> **keine** URL. Reihenfolge: `browser_navigate` → `browser_read`.
+> `browser_read` reads the **current agent tab**. It opens nothing and takes
+> **no URL**. Order: `browser_navigate` → `browser_read`.
 
 ## Non-goals
 
@@ -108,7 +107,7 @@ heutigen Fehlgriff verhindert hätte:
 |---|---|---|
 | `bridge-rs/tests/mcp.rs` | `help_forEveryTool_shouldAnswerWithTheSixSections` | alle dreizehn Anleitungen haben die sechs Abschnitte |
 | `bridge-rs/tests/mcp.rs` | `help_withAnUnknownTool_shouldNameTheValidOnes` | `help_unknown_tool`, Meldung enthält `browser_read` |
-| `bridge-rs/tests/mcp.rs` | `help_shouldAnswerWithoutAConnectedExtension` | antwortet ohne Erweiterung |
+| `bridge-rs/tests/mcp.rs` | `help_forEveryTool_shouldAnswerWithTheSixSections` | antwortet ohne Erweiterung (`Seam::nobody`) |
 | `bridge-rs/tests/mcp.rs` | `help_forRead_shouldSayThatItTakesNoUrl` | der Satz, der den Anlassfall verhindert |
 | `scripts/parity/expected/…` | Fixture 1 und 2 | die Werkzeugliste und ein `help`-Aufruf |
 
@@ -118,7 +117,7 @@ heutigen Fehlgriff verhindert hätte:
    `tools/list` bleibt **unter 8 500 Zeichen**.
 2. **Jede Anleitung vollständig.** Der Test über alle dreizehn Namen ⇒ grün.
 3. **Unbekannt nennt die gültigen Namen.**
-   `browser_help({"tool":"gibtsnicht"})` ⇒ deutscher Satz, `isError: true`, mit den
+   `browser_help({"tool":"gibtsnicht"})` ⇒ englischer Satz, `isError: true`, mit den
    dreizehn Namen (kein Draht-Code).
 4. **Ohne Extension.** Der Fall antwortet, statt `no_extension` zu liefern.
 5. **Der Rest bleibt grün.** Rust-Tests, `clippy -D warnings`, `npm test` und
@@ -131,7 +130,7 @@ heutigen Fehlgriff verhindert hätte:
 Dateien: `bridge-rs/src/mcp/help.rs` (neu, dreizehn Anleitungen),
 `bridge-rs/src/mcp/tools.rs` (Name, Schema, Dispatch), 
 `bridge-rs/src/mcp/mod.rs` (Modul), `bridge-rs/tests/mcp.rs` (vier Fälle **und**
-der Zähl-Pin `mcp_toolsList_shouldOfferExactlyTheThirteenToolsOfTheContract:992`
+der Zähl-Pin `mcp_toolsList_shouldOfferExactlyTheFourteenToolsOfTheContract:995`
 samt Namensarray), `bridge-rs/tests/http.rs` (`Some(13)` auf `:1030`).
 
 Die Werkzeugzählung ist an zwei Stellen gepinnt; sie gehört in **eine** Stufe,
@@ -177,18 +176,23 @@ sind `tools/call`-Antworten, und kein Kriterium braucht dort einen `help`-Fall.
 
 ### Runde 1 — steht aus
 
+Diese Spec war beim Bau bereits `active`; ihre Review-Runde ist nie nachgeholt
+worden. Der Nachtrag in `docs/54` (Stufe 3) hat die Sprache korrigiert, nicht die
+fehlende Runde ersetzt.
+
 ## Log
 
 - **2026-11-22, gebaut und gemessen.** `browser_help` ist das vierzehnte Werkzeug;
   die dreizehn Anleitungen liegen in `bridge-rs/src/mcp/help.rs` und sind **nicht**
   Teil von `tools/list`. Gemessen: `awk 'NR==5'
   scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m` ⇒ **8 238**
-  Zeichen (vorher 7 825, Grenze 8 500).
+  Zeichen (Stand `c15f8b9`; vorher 7 825, Grenze 8 500; seit `docs/54` englische
+  Beschreibungen, aktuell **8 062** Zeichen).
   Stufe 0 (Fixture-Amendierung) mit der Freigabe des Betreibers ausgeführt.
   Abnahme: 117 Rust-Fälle grün, `clippy -D warnings` sauber, `parity --check` 7/7,
   546 Node-Tests, `npm run check` 0.
-  **Sprache:** Anleitungen und Beschreibungen englisch; die Refusals bleiben
-  deutsch, wie in `## Sprache` festgehalten.
+  **Sprache:** Anleitungen und Beschreibungen englisch; die Refusals wurden
+  nachträglich in `docs/54` ebenfalls englisch.
 
 - **2026-11-22, Anlass:** lokales Modell ruft `browser_read` mit `url` auf; die
   Bridge antwortet freundlich, aber die Client-Schicht verschluckt die Antwort.

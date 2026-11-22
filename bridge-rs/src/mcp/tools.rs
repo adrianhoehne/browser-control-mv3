@@ -1,4 +1,4 @@
-//! The thirteen tools: their names, their schemas, the argument checks and the
+//! The fourteen tools: their names, their schemas, the argument checks and the
 //! `tools/call` implementations — ported from `bridge/mcp.mjs`.
 //!
 //! The table is the contract with the client, so it is copied and not composed:
@@ -82,7 +82,7 @@ const TRANSCRIPT_ARGUMENTS: [&str; 3] = ["offset", "maxChars", TAB_ARGUMENT];
 /// The tool table.
 ///
 /// Built per `tools/list` instead of shared through a `static`: a `serde_json::Value`
-/// cannot be frozen, and thirteen `json!` literals cost less than the `OnceLock` that
+/// cannot be frozen, and fourteen `json!` literals cost less than the `OnceLock` that
 /// would hide them behind a lazy initialiser. `tools/list` is called once per client
 /// session, not per tool call.
 pub fn tool_list() -> Value {
@@ -376,50 +376,51 @@ pub fn tool_list() -> Value {
 /* -------------------------------------------------------------- descriptions */
 
 /// The descriptions are the part of the contract a client shows *before* the first
-/// call, so they are copied word for word — including the backticks, the German quotes
-/// and the two-space thousands. `test/mcp.rs` pins the whole table against
+/// call, so they are the contract themselves — including the backticks and the
+/// two-space thousands. English since `docs/54`: the agent reads them before every
+/// call. `tests/mcp.rs` pins the whole table against
 /// `scripts/parity/expected/1-initialize-and-tools-list.txt` byte for byte.
 const BROWSER_STATUS_DESCRIPTION: &str =
-    r#"Zeigt die Fenster und Tabs des Betreiber-Browsers im Default-Container, samt Verbindungszustand der Extension, und markiert den Agenten-Tab mit `agent: true`."#;
+    r#"Shows the windows and tabs of the operator's browser in the Default container, along with the extension's connection state, and marks the agent tab with `agent: true`."#;
 
 const BROWSER_NAVIGATE_DESCRIPTION: &str =
-    r#"Öffnet eine http(s)-URL im Agenten-Tab des Betreiber-Browsers (Default-Container), wartet, bis die Seite geladen ist, und danach, bis sie sich beruhigt hat (höchstens 3 s); meldet `settled`/`waitedMs`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Opens an http(s) URL in the agent tab of the operator's browser (Default container), waits until the page has loaded and then until it has settled (3 s at most); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_READ_DESCRIPTION: &str =
-    r#"Liest den **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Liest Titel, Adresse und den Text des Agenten-Tabs; `offset` überspringt so viele Zeichen des Textes (Default 0), `maxChars` begrenzt den Ausschnitt (Default 20 000, höchstens 100 000). `offset`/`maxChars` blättern durch den Text; `chars` und `totalChars` sagen, wo man steht. `via` sagt, ob sichtbarer Text oder Textinhalt. `mode: article` liest nur den Artikelkörper — ohne Navigation, Fußzeile und Cookie-Banner. Wartet vorher, bis sich die Seite beruhigt hat (höchstens 3 s), und meldet `settled`/`waitedMs`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Reads the **current** agent tab and takes **no** URL — call `browser_navigate` first. Reads the title, the address and the text of the agent tab; `offset` skips that many characters of the text (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000). `offset`/`maxChars` page through the text; `chars` and `totalChars` tell you where you are. `via` says whether it is visible text or text content. `mode: article` reads only the article body — without navigation, footer and cookie banner. Waits first until the page has settled (3 s at most) and reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_CLICK_DESCRIPTION: &str =
-    r#"Arbeitet auf dem **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Klickt das erste Element, das dem CSS-Selektor entspricht, im Agenten-Tab, wartet, bis sich die Seite beruhigt hat (höchstens 3 s), und liefert den Seitentext danach (auf 20 000 Zeichen gekürzt); meldet `settled`/`waitedMs`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Clicks the first element that matches the CSS selector in the agent tab, waits until the page has settled (3 s at most) and returns the page text afterwards (cut to 20 000 characters); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_TYPE_DESCRIPTION: &str =
-    r#"Arbeitet auf dem **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Schreibt Text in das Feld, das dem CSS-Selektor entspricht, sendet optional Enter und liefert den Seitentext danach (auf 20 000 Zeichen gekürzt). Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Writes text into the field that matches the CSS selector, optionally sends Enter and returns the page text afterwards (cut to 20 000 characters). With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_FOCUS_DESCRIPTION: &str =
-    r#"Holt den Agenten-Tab nach vorn und sein Fenster in den Vordergrund; die Seite wird dabei nicht verändert, und `focused` kommt aus einer Abfrage nach dem Fokussieren. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Brings the agent tab to the front and its window to the foreground; the page itself is not changed, and `focused` comes from a query after focusing. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_INSPECT_DESCRIPTION: &str =
-    r#"Arbeitet auf dem **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Listet die Elemente des Agenten-Tabs auf (per CSS-Selektor und/oder Textsuche) mit Tag, id, class, Link, sichtbarem Text, Sichtbarkeit und einem fertigen Selektor zum Weiterverwenden. `my-card >>> button` springt rechts vom `>>>` in den offenen Schattenbaum von `my-card` (mehrere Stufen erlaubt); jedes Glied ist ein einfacher Selektor — Typ, `#id`, `.class`, `[attr="wert"]` oder `:nth-of-type(n)`; geschlossene Schattenbäume bleiben unerreichbar, und ohne `>>>` ändert sich nichts. Ändert nichts an der Seite. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Lists the elements of the agent tab (by CSS selector and/or text search) with tag, id, class, link, visible text, visibility and a ready-made selector to reuse. `my-card >>> button` steps right of the `>>>` into the open shadow tree of `my-card` (several levels allowed); every step is a simple selector — type, `#id`, `.class`, `[attr="value"]` or `:nth-of-type(n)`; closed shadow trees stay out of reach, and without `>>>` nothing changes. Changes nothing on the page. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_OPEN_TAB_DESCRIPTION: &str =
-    r#"Öffnet einen weiteren Agenten-Tab im Default-Container (höchstens fünf) und liefert `tabId`, `url` und `title`. Wartet, bis die Seite geladen ist, aber nicht auf Ruhe — ein `browser_read` danach soll nicht `page_busy` kosten."#;
+    r#"Opens another agent tab in the Default container (five at most) and returns `tabId`, `url` and `title`. Waits until the page has loaded, but not for it to settle — a `browser_read` afterwards should not cost `page_busy`."#;
 
 const BROWSER_CLOSE_TAB_DESCRIPTION: &str =
-    r#"Schließt einen Agenten-Tab und entfernt ihn aus der Liste; ohne `tab` den zuletzt benutzten. Liefert `tabId` und `closed`."#;
+    r#"Closes an agent tab and removes it from the list; without `tab` the one used last. Returns `tabId` and `closed`."#;
 
 const BROWSER_EVAL_DESCRIPTION: &str =
-    r#"Wertet Code im **aktuellen** Agenten-Tab aus und nimmt **keine** URL — vorher `browser_navigate`. Wertet Code im Seitenkontext des Agenten-Tabs aus und liefert das Ergebnis als JSON; Code darf die Seite ändern, auch Passwortfelder füllen. `code` läuft als Funktionsrumpf: Das Ergebnis kommt mit `return` zurück, ohne `return` ist es `null`. Nur möglich, wenn „Code-Auswertung erlauben" in den Einstellungen der Erweiterung eingeschaltet ist — sonst `eval_not_allowed`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Evaluates code in the **current** agent tab and takes **no** URL — call `browser_navigate` first. Runs code in the page context of the agent tab and returns the result as JSON; code may change the page, including filling password fields. `code` runs as a function body: the result comes back with `return`, without `return` it is `null`. Only possible when "Allow code evaluation" is switched on in the extension settings — otherwise `eval_not_allowed`. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_SCREENSHOT_DESCRIPTION: &str =
-    r#"Arbeitet auf dem **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Fotografiert den sichtbaren Ausschnitt des Agenten-Tabs und liefert das Bild als MCP-Bildinhalt (höchstens 3 MiB; PNG, bei Überschreiten verkleinert und als JPEG neu kodiert). Die Zahlen dazu — `format`, `width`, `height`, `bytes` und `scaled` — stehen als Textblock daneben. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Photographs the visible viewport of the agent tab and returns the picture as MCP image content (3 MiB at most; PNG, scaled down and re-encoded as JPEG when larger). The numbers for it — `format`, `width`, `height`, `bytes` and `scaled` — stand next to it as a text block. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_FRAMES_DESCRIPTION: &str =
-    r#"Listet die Rahmen (iframes) des Agenten-Tabs mit ihrer Adresse; `frame` bei den anderen Werkzeugen nimmt einen Teilstring davon. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Lists the frames (iframes) of the agent tab with their address; `frame` in the other tools takes a substring of it. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_HELP_DESCRIPTION: &str =
     r#"Answers with the long manual of one tool — purpose, arguments, returns, an example, the pitfalls and the related tools. Needs no browser, so it works without a connected extension. Start here when a call was refused for a reason you do not understand."#;
 
 const BROWSER_TRANSCRIPT_DESCRIPTION: &str =
-    r#"Liest das Transkript des YouTube-Video-Tabs als Segmente mit Zeitstempel und Text aus der Untertitelspur des Videos `requestedLanguage` nennt die gewählte Spur, `deliveredLanguage` die Sprache der gelieferten Spurendatei, `source` den Ort, an dem das Datenmodell des Players gefunden wurde. `offset` überspringt so viele Zeichen der verketteten Segmenttexte (Default 0), `maxChars` begrenzt den Ausschnitt (Default 20 000, höchstens 100 000); `segments` enthält genau die Segmente dieses Fensters, `chars` und `totalChars` sagen, wo man steht, und `truncated` blättert weiter. Der Tab muss im Vordergrund sein — vorher browser_focus aufrufen, sonst antwortet das Werkzeug `transcript_needs_focus`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
+    r#"Reads the transcript of the YouTube video tab as segments with timestamp and text, taken from the video's subtitle track. `requestedLanguage` names the chosen track, `deliveredLanguage` the language of the delivered track file, `source` where the player's data model was found. `offset` skips that many characters of the concatenated segment texts (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000); `segments` holds exactly the segments of this window, `chars` and `totalChars` tell you where you are, and `truncated` pages on. The tab must be in the foreground — call browser_focus first, otherwise the tool answers `transcript_needs_focus`. With `tab` exactly that tab, without `tab` the one used last."#;
 
 /* ----------------------------------------------------------------- dispatch */
 
@@ -1228,24 +1229,22 @@ fn mime_type_for(format: &str) -> Option<&'static str> {
 /// expect an argument, and a shared wording would have to lie about the rest.
 fn unexpected_arguments(tool: &str) -> &'static str {
     match tool {
-        BROWSER_STATUS => "browser_status erwartet keine Argumente.",
-        BROWSER_NAVIGATE => "browser_navigate erwartet nur `url` und `tab`.",
-        BROWSER_READ => "browser_read erwartet nur `offset`, `maxChars`, `mode`, `frame` und `tab`.",
-        BROWSER_CLICK => "browser_click erwartet nur `selector`, `frame` und `tab`.",
-        BROWSER_TYPE => {
-            "browser_type erwartet nur `selector`, `text`, `submit`, `frame` und `tab`."
-        }
-        BROWSER_FOCUS => "browser_focus erwartet nur `tab`.",
+        BROWSER_STATUS => "browser_status takes no arguments.",
+        BROWSER_NAVIGATE => "browser_navigate takes only `url` and `tab`.",
+        BROWSER_READ => "browser_read takes only `offset`, `maxChars`, `mode`, `frame` and `tab`.",
+        BROWSER_CLICK => "browser_click takes only `selector`, `frame` and `tab`.",
+        BROWSER_TYPE => "browser_type takes only `selector`, `text`, `submit`, `frame` and `tab`.",
+        BROWSER_FOCUS => "browser_focus takes only `tab`.",
         BROWSER_INSPECT => {
-            "browser_inspect erwartet nur `selector`, `text`, `limit`, `includeHidden`, `frame` und `tab`."
+            "browser_inspect takes only `selector`, `text`, `limit`, `includeHidden`, `frame` and `tab`."
         }
-        BROWSER_OPEN_TAB => "browser_open_tab erwartet nur `url`.",
-        BROWSER_CLOSE_TAB => "browser_close_tab erwartet nur `tab`.",
-        BROWSER_EVAL => "browser_eval erwartet nur `code`, `frame` und `tab`.",
-        BROWSER_SCREENSHOT => "browser_screenshot erwartet nur `tab`.",
-        BROWSER_FRAMES => "browser_frames erwartet nur `tab`.",
-        BROWSER_TRANSCRIPT => "browser_transcript erwartet nur `offset`, `maxChars` und `tab`.",
-        // Unreachable: every caller passes one of the thirteen names above.
+        BROWSER_OPEN_TAB => "browser_open_tab takes only `url`.",
+        BROWSER_CLOSE_TAB => "browser_close_tab takes only `tab`.",
+        BROWSER_EVAL => "browser_eval takes only `code`, `frame` and `tab`.",
+        BROWSER_SCREENSHOT => "browser_screenshot takes only `tab`.",
+        BROWSER_FRAMES => "browser_frames takes only `tab`.",
+        BROWSER_TRANSCRIPT => "browser_transcript takes only `offset`, `maxChars` and `tab`.",
+        // Unreachable: every caller passes one of the names above.
         _ => "",
     }
 }

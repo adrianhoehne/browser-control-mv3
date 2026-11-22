@@ -128,9 +128,12 @@ No commit without green acceptance **and** a `✅` from step 6.
   `## Additional dependencies`, `## Dependency changes`.
 - **Code: English** — identifiers, comments, file names.
 - **Visible text: English** in the extension's own options page (since
-  2026-11-15; the project is public). Everything the agent reports to the
-  operator — tool errors, log lines — stays German, and so does text that
-  appears towards a web page; that follows the page.
+  2026-11-15; the project is public) and in everything the agent reads: tool
+  descriptions, tool results and refusals (since 2026-11-22, `docs/54`).
+  **German** stay the log lines on the operator's console, the specs and this
+  file; text that appears towards a web page follows the page. One exception:
+  the browser's own localized error text, appended verbatim by the
+  `*_with_message` builders (`docs/54`, `## Bekannte Lücken`).
 
 ## Rules
 

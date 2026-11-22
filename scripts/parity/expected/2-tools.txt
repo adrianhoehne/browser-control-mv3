@@ -26,54 +26,54 @@
 # case=13
 {"jsonrpc":"2.0","id":13,"result":{"content":[{"type":"text","text":"{\n  \"requestedLanguage\": \"en\",\n  \"deliveredLanguage\": \"en\",\n  \"source\": \"ytplayer.bootstrapPlayerResponse\",\n  \"segments\": [\n    {\n      \"time\": 4,\n      \"timeText\": \"0:04\",\n      \"text\": \"Zeile eins\"\n    },\n    {\n      \"time\": 6,\n      \"timeText\": \"0:06\",\n      \"text\": \"Zeile zwei\"\n    },\n    {\n      \"time\": 14,\n      \"timeText\": \"0:14\",\n      \"text\": \"Zeile drei\"\n    }\n  ],\n  \"totalChars\": 32,\n  \"chars\": 32,\n  \"offset\": 0,\n  \"truncated\": false\n}"}]}}
 # case=1
-{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"Die Extension konnte den Status nicht liefern (code=status_failed)."}],"isError":true}}
+{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"The extension could not deliver the status (code=status_failed)."}],"isError":true}}
 # case=2
-{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"Die Extension konnte die Anfrage nicht ausführen (code=navigate_failed)."}],"isError":true}}
+{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"The extension could not carry out the request (code=navigate_failed)."}],"isError":true}}
 # case=3
-{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"Diese Seite kann die Extension nicht lesen (interne Seite oder Sonderformat)."}],"isError":true}}
+{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"The extension cannot read this page (internal page or special format)."}],"isError":true}}
 # case=4
-{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"Kein Element passt zu: a#video-title-link."}],"isError":true}}
+{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"No element matches: a#video-title-link."}],"isError":true}}
 # case=5
-{"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"Das Element ist kein beschreibbares Feld oder deaktiviert: input#q."}],"isError":true}}
+{"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"The element is not a writable field or is disabled: input#q."}],"isError":true}}
 # case=6
-{"jsonrpc":"2.0","id":6,"result":{"content":[{"type":"text","text":"Kein Agenten-Tab — zuerst browser_navigate aufrufen."}],"isError":true}}
+{"jsonrpc":"2.0","id":6,"result":{"content":[{"type":"text","text":"No agent tab — call browser_navigate first."}],"isError":true}}
 # case=7
-{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"Der Parameter ist ungültig."}],"isError":true}}
+{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"The parameter is invalid."}],"isError":true}}
 # case=8
-{"jsonrpc":"2.0","id":8,"result":{"content":[{"type":"text","text":"Es sind schon fünf Agenten-Tabs offen — erst einen schließen."}],"isError":true}}
+{"jsonrpc":"2.0","id":8,"result":{"content":[{"type":"text","text":"Five agent tabs are already open — close one first."}],"isError":true}}
 # case=9
-{"jsonrpc":"2.0","id":9,"result":{"content":[{"type":"text","text":"Kein Agenten-Tab — zuerst browser_navigate aufrufen."}],"isError":true}}
+{"jsonrpc":"2.0","id":9,"result":{"content":[{"type":"text","text":"No agent tab — call browser_navigate first."}],"isError":true}}
 # case=10
-{"jsonrpc":"2.0","id":10,"result":{"content":[{"type":"text","text":"Der Code im Agenten-Tab ist gescheitert: the fake extension was told to answer ok:false"}],"isError":true}}
+{"jsonrpc":"2.0","id":10,"result":{"content":[{"type":"text","text":"The code in the agent tab failed: the fake extension was told to answer ok:false"}],"isError":true}}
 # case=11
-{"jsonrpc":"2.0","id":11,"result":{"content":[{"type":"text","text":"Der Agenten-Tab ließ sich nicht fotografieren: the fake extension was told to answer ok:false"}],"isError":true}}
+{"jsonrpc":"2.0","id":11,"result":{"content":[{"type":"text","text":"The agent tab could not be photographed: the fake extension was told to answer ok:false"}],"isError":true}}
 # case=12
-{"jsonrpc":"2.0","id":12,"result":{"content":[{"type":"text","text":"Die Seite lädt noch — bitte gleich noch einmal versuchen."}],"isError":true}}
+{"jsonrpc":"2.0","id":12,"result":{"content":[{"type":"text","text":"The page is still loading — try again in a moment."}],"isError":true}}
 # case=13
-{"jsonrpc":"2.0","id":13,"result":{"content":[{"type":"text","text":"Die Seite ist nicht gerendert: the fake extension was told to answer ok:false"}],"isError":true}}
+{"jsonrpc":"2.0","id":13,"result":{"content":[{"type":"text","text":"The page is not rendered: the fake extension was told to answer ok:false"}],"isError":true}}
 # case=1
-{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"browser_status erwartet keine Argumente."}],"isError":true}}
+{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"browser_status takes no arguments."}],"isError":true}}
 # case=2
-{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"browser_navigate erwartet nur `url` und `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":2,"result":{"content":[{"type":"text","text":"browser_navigate takes only `url` and `tab`."}],"isError":true}}
 # case=3
-{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"browser_read erwartet nur `offset`, `maxChars`, `mode`, `frame` und `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"browser_read takes only `offset`, `maxChars`, `mode`, `frame` and `tab`."}],"isError":true}}
 # case=4
-{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"browser_click erwartet nur `selector`, `frame` und `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"browser_click takes only `selector`, `frame` and `tab`."}],"isError":true}}
 # case=5
-{"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"browser_type erwartet nur `selector`, `text`, `submit`, `frame` und `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"browser_type takes only `selector`, `text`, `submit`, `frame` and `tab`."}],"isError":true}}
 # case=6
-{"jsonrpc":"2.0","id":6,"result":{"content":[{"type":"text","text":"browser_focus erwartet nur `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":6,"result":{"content":[{"type":"text","text":"browser_focus takes only `tab`."}],"isError":true}}
 # case=7
-{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"browser_inspect erwartet nur `selector`, `text`, `limit`, `includeHidden`, `frame` und `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"browser_inspect takes only `selector`, `text`, `limit`, `includeHidden`, `frame` and `tab`."}],"isError":true}}
 # case=8
-{"jsonrpc":"2.0","id":8,"result":{"content":[{"type":"text","text":"browser_open_tab erwartet nur `url`."}],"isError":true}}
+{"jsonrpc":"2.0","id":8,"result":{"content":[{"type":"text","text":"browser_open_tab takes only `url`."}],"isError":true}}
 # case=9
-{"jsonrpc":"2.0","id":9,"result":{"content":[{"type":"text","text":"browser_close_tab erwartet nur `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":9,"result":{"content":[{"type":"text","text":"browser_close_tab takes only `tab`."}],"isError":true}}
 # case=10
-{"jsonrpc":"2.0","id":10,"result":{"content":[{"type":"text","text":"browser_eval erwartet nur `code`, `frame` und `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":10,"result":{"content":[{"type":"text","text":"browser_eval takes only `code`, `frame` and `tab`."}],"isError":true}}
 # case=11
-{"jsonrpc":"2.0","id":11,"result":{"content":[{"type":"text","text":"browser_screenshot erwartet nur `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":11,"result":{"content":[{"type":"text","text":"browser_screenshot takes only `tab`."}],"isError":true}}
 # case=12
-{"jsonrpc":"2.0","id":12,"result":{"content":[{"type":"text","text":"browser_frames erwartet nur `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":12,"result":{"content":[{"type":"text","text":"browser_frames takes only `tab`."}],"isError":true}}
 # case=13
-{"jsonrpc":"2.0","id":13,"result":{"content":[{"type":"text","text":"browser_transcript erwartet nur `offset`, `maxChars` und `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":13,"result":{"content":[{"type":"text","text":"browser_transcript takes only `offset`, `maxChars` and `tab`."}],"isError":true}}

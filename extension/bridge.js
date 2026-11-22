@@ -265,76 +265,76 @@
 
   // Quoted from the wire protocol: the bridge maps the code back to this very
   // sentence, so both sides say the same thing about the same mistake.
-  const INVALID_URL_MESSAGE = "Nur http:// und https:// sind erlaubt.";
-  const NO_DEFAULT_WINDOW_MESSAGE = "Kein normales, nicht-privates Fenster gefunden.";
-  const MISSING_URL_MESSAGE = "navigate braucht eine URL als String.";
-  const NO_AGENT_TAB_MESSAGE = "Es gibt keinen Agenten-Tab zum Lesen.";
+  const INVALID_URL_MESSAGE = "Only http:// and https:// are allowed.";
+  const NO_DEFAULT_WINDOW_MESSAGE = "No normal, non-private window found.";
+  const MISSING_URL_MESSAGE = "navigate needs a URL as a string.";
+  const NO_AGENT_TAB_MESSAGE = "There is no agent tab to read.";
   // The sentence the operator reads in the MCP tool text. The bridge keeps its own
   // copy of it — the extension cannot be imported from Node, so the two are kept in
   // step by hand — and both suites assert this exact string, so a rewrite on one
   // side turns a test red instead of drifting silently.
-  const TOO_MANY_TABS_MESSAGE = "Es sind schon fünf Agenten-Tabs offen — erst einen schließen.";
-  const MISSING_OPEN_URL_MESSAGE = "open_tab braucht eine URL als String.";
-  const NOT_READABLE_MESSAGE = "Die Seite gibt keinen lesbaren Inhalt her.";
-  const PAGE_BUSY_MESSAGE = "Die Seite lädt noch.";
-  const READ_FAILED_MESSAGE = "Das Ergebnis der Injektion war unbrauchbar.";
-  const MISSING_SELECTOR_MESSAGE = "click braucht einen Selektor als String.";
-  const SUPERSEDED_MESSAGE = "Ein neuerer Aufruf hat diesen abgelöst.";
-  const INVALID_SELECTOR_MESSAGE = "Der Selektor ist ungültig.";
-  const NO_MATCH_MESSAGE = "Kein Element passt zu diesem Selektor.";
-  const NOT_CLICKABLE_MESSAGE = "Das Element ist nicht sichtbar oder deaktiviert.";
-  const CLICK_FAILED_MESSAGE = "Das Ergebnis der Klick-Injektion war unbrauchbar.";
-  const MISSING_TEXT_MESSAGE = "type braucht einen Text als String.";
-  const INVALID_SUBMIT_MESSAGE = "submit muss true oder false sein.";
-  const NOT_TYPEABLE_MESSAGE = "Das Element ist kein beschreibbares Feld oder deaktiviert.";
+  const TOO_MANY_TABS_MESSAGE = "Five agent tabs are already open — close one first.";
+  const MISSING_OPEN_URL_MESSAGE = "open_tab needs a URL as a string.";
+  const NOT_READABLE_MESSAGE = "The page gives no readable content.";
+  const PAGE_BUSY_MESSAGE = "The page is still loading.";
+  const READ_FAILED_MESSAGE = "The result of the injection was unusable.";
+  const MISSING_SELECTOR_MESSAGE = "click needs a selector as a string.";
+  const SUPERSEDED_MESSAGE = "A newer call replaced this one.";
+  const INVALID_SELECTOR_MESSAGE = "The selector is invalid.";
+  const NO_MATCH_MESSAGE = "No element matches this selector.";
+  const NOT_CLICKABLE_MESSAGE = "The element is not visible or is disabled.";
+  const CLICK_FAILED_MESSAGE = "The result of the click injection was unusable.";
+  const MISSING_TEXT_MESSAGE = "type needs a text as a string.";
+  const INVALID_SUBMIT_MESSAGE = "submit must be true or false.";
+  const NOT_TYPEABLE_MESSAGE = "The element is not a writable field or is disabled.";
   const PASSWORD_NOT_ALLOWED_MESSAGE =
-    "Passwortfelder sind gesperrt. In den Optionen der Erweiterung freischalten.";
-  const TYPE_FAILED_MESSAGE = "Das Ergebnis der Tipp-Injektion war unbrauchbar.";
-  const MISSING_INSPECT_FILTER_MESSAGE = "inspect braucht selector oder text.";
+    "Password fields are locked. Unlock them in the extension options.";
+  const TYPE_FAILED_MESSAGE = "The result of the type injection was unusable.";
+  const MISSING_INSPECT_FILTER_MESSAGE = "inspect needs selector or text.";
   // One sentence for both filters: the caller has to fix the same thing either way,
   // and the empty string is a *set* filter — its meaning is the page's decision.
-  const INSPECT_FILTER_TYPE_MESSAGE = "selector und text müssen Strings sein.";
+  const INSPECT_FILTER_TYPE_MESSAGE = "selector and text must be strings.";
   const INSPECT_LIMIT_MESSAGE =
-    `limit muss eine ganze Zahl von ${INSPECT_LIMIT_MIN} bis ${INSPECT_LIMIT_MAX} sein.`;
+    `limit must be an integer from ${INSPECT_LIMIT_MIN} to ${INSPECT_LIMIT_MAX}.`;
   // One sentence per boundary: a caller that mixed up both numbers hears which of
   // them is wrong instead of "the parameters are invalid".
-  const READ_OFFSET_MESSAGE = `offset muss eine ganze Zahl ab ${READ_OFFSET_DEFAULT} sein.`;
+  const READ_OFFSET_MESSAGE = `offset must be an integer starting at ${READ_OFFSET_DEFAULT}.`;
   const READ_MAX_CHARS_MESSAGE =
-    `maxChars muss eine ganze Zahl von ${READ_MAX_CHARS_MIN} bis ${READ_MAX_CHARS_LIMIT} sein.`;
+    `maxChars must be an integer from ${READ_MAX_CHARS_MIN} to ${READ_MAX_CHARS_LIMIT}.`;
   // Spelled out instead of derived from `READ_MODES`: a third mode would be a contract
   // change, and whoever adds it should have to read this sentence rather than have it
   // change under the caller's feet.
-  const READ_MODE_MESSAGE = 'mode muss "text" oder "article" sein.';
+  const READ_MODE_MESSAGE = 'mode must be "text" or "article".';
   // The empty string is a *set* value and no usable address: `includes("")` matches
   // every frame, so it would silently become "the first frame that answers".
-  const FRAME_MESSAGE = "frame muss ein String sein.";
+  const FRAME_MESSAGE = "frame must be a string.";
   // Not the page's words: the caller reads the bridge's sentence for both codes, and
   // these two only have to say what happened in a log or a `details.message`.
-  const FRAME_NOT_FOUND_MESSAGE = "Kein Rahmen passt zum angegebenen frame.";
-  const FRAME_AMBIGUOUS_MESSAGE = "Mehrere Rahmen passen zum angegebenen frame.";
-  const FRAMES_FAILED_MESSAGE = "Das Ergebnis der Rahmen-Injektion war unbrauchbar.";
-  const INSPECT_INCLUDE_HIDDEN_MESSAGE = "includeHidden muss true oder false sein.";
-  const INSPECT_FAILED_MESSAGE = "Das Ergebnis der Abfrage-Injektion war unbrauchbar.";
-  const FOCUS_FAILED_MESSAGE = "Das Aktualisieren von Tab oder Fenster ist fehlgeschlagen.";
-  const TRANSCRIPT_FAILED_MESSAGE = "Das Transkript der Seite konnte nicht gelesen werden.";
+  const FRAME_NOT_FOUND_MESSAGE = "No frame matches the given frame.";
+  const FRAME_AMBIGUOUS_MESSAGE = "Several frames match the given frame.";
+  const FRAMES_FAILED_MESSAGE = "The result of the frame injection was unusable.";
+  const INSPECT_INCLUDE_HIDDEN_MESSAGE = "includeHidden must be true or false.";
+  const INSPECT_FAILED_MESSAGE = "The result of the query injection was unusable.";
+  const FOCUS_FAILED_MESSAGE = "Updating the tab or the window failed.";
+  const TRANSCRIPT_FAILED_MESSAGE = "The transcript of the page could not be read.";
   // The page passed both gates and handed out no player response at all. Its own sentence
   // because the caller's next step differs from "the video has no subtitles": here the
   // page is not the shape this tool knows, and a reload may well help.
   const TRANSCRIPT_NO_MODEL_MESSAGE =
-    "Das Datenmodell des Players war auf dieser Seite nicht zu finden.";
+    "The player's data model could not be found on this page.";
   // Not a page that failed: a page this tool does not read. The sentence names the one
   // address shape it accepts, because that is what the caller has to change.
   const TRANSCRIPT_NOT_YOUTUBE_MESSAGE =
-    "Das Werkzeug liest nur YouTube-Watch-Seiten (youtube.com/watch).";
+    "The tool reads only YouTube watch pages (youtube.com/watch).";
   // The menu answers below are failures of the *player's* menu, not of the video: the track
   // may well exist, but this snippet was not able to address it. None of them names an
   // entry of the list as an address — the entries are language names (M13).
   const TRANSCRIPT_MENU_ROW_MISSING_MESSAGE =
-    "Die Spuren-Zeile im Einstellungsmenü des Players wurde nicht gefunden.";
+    "The track row in the player's settings menu was not found.";
   const TRANSCRIPT_MENU_ROW_AMBIGUOUS_MESSAGE =
-    "Mehrere Zeilen im Einstellungsmenü des Players tragen einen Sprachnamen.";
+    "Several rows in the player's settings menu carry a language name.";
   // No player element at all: the page is a watch page, but nothing here can be moved.
-  const TRANSCRIPT_NO_PLAYER_MESSAGE = "Der Player der Seite wurde nicht gefunden.";
+  const TRANSCRIPT_NO_PLAYER_MESSAGE = "The player of the page was not found.";
   // The refusals of the menu snippet — all decided *before* it clicks an entry, which is why
   // a run that ends in one of them has no track to put back (review m5).
   const TRANSCRIPT_MENU_REFUSALS = [
@@ -348,19 +348,19 @@
   // and was clicked, so this is not a wrong menu: the pick did not happen, and waiting for a
   // file the player will never fetch would only turn this into a timeout (review m6).
   function transcriptMenuNotSetMessageFor(trackName) {
-    return `Die Spur "${trackName}" ist nach dem Klick im Menü nicht gesetzt.`;
+    return `The track "${trackName}" is not set after the click in the menu.`;
   }
   // The video has no subtitle track. Since spec 33 the panel is not read any more and the
   // code means "the model carries no `captionTracks`" — the name is the one `docs/32` put
   // on the wire, and renaming it would be a new code. The sentence below still describes
   // the panel, because the bridge replaces it with its own; that rewrite is its stage.
-  const NO_TRANSCRIPT_PANEL_MESSAGE = "Auf dieser Seite ist kein Transkript-Panel zu finden.";
+  const NO_TRANSCRIPT_PANEL_MESSAGE = "No transcript panel can be found on this page.";
   // `focus` takes no arguments but `tab`, so a caller that passes anything else is
   // told instead of having its argument silently dropped.
-  const FOCUS_PARAMS_MESSAGE = "focus nimmt keine Parameter außer tab.";
+  const FOCUS_PARAMS_MESSAGE = "focus takes no parameters besides tab.";
   // The one sentence for a `tab` no tool can act on: `"31"`, `0` and `-1` are all the
   // same mistake to the caller, who named a tab that is not a tab id.
-  const INVALID_TAB_MESSAGE = "tab muss eine positive ganze Zahl sein.";
+  const INVALID_TAB_MESSAGE = "tab must be a positive integer.";
   // Never the content: this line lands on the operator's console, and the page
   // may be their mailbox.
   const UNUSABLE_READ_RESULT_LOG_LINE = "bc: read result without usable text";
@@ -411,25 +411,25 @@
 // page's rule, not our bug (spec 48).
 const EVAL_CSP_CODE = "eval_blocked_by_the_page";
 const EVAL_CSP_MESSAGE =
-  "Die Seite verbietet eigenes Skript (CSP) — Werte lassen sich mit `read` oder `inspect` holen.";
+  "The page forbids its own script (CSP) — read the values with `read` or `inspect` instead.";
 const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
 
   // Quoted from the wire protocol and kept in step with the bridge by hand, like
   // `TOO_MANY_TABS_MESSAGE`: both suites assert this exact sentence, so a rewrite on
   // one side turns a test red instead of drifting silently.
   const EVAL_NOT_ALLOWED_MESSAGE =
-    "Code-Auswertung ist in den Einstellungen der Erweiterung nicht erlaubt.";
+    "Code evaluation is not allowed in the extension settings.";
   // The sentence for every outcome nobody can read — our own bugs included. A page's
   // own error text never lands here; it arrives through `EvalError` below.
-  const EVAL_FAILED_MESSAGE = "Das Ergebnis der Auswertung war unbrauchbar.";
+  const EVAL_FAILED_MESSAGE = "The result of the evaluation was unusable.";
   const EVAL_TIMEOUT_MESSAGE =
-    `Der Code hat nicht innerhalb von ${EVAL_TIMEOUT_MS} ms geantwortet.`;
+    `The code did not answer within ${EVAL_TIMEOUT_MS} ms.`;
   const EVAL_RESULT_TOO_LARGE_MESSAGE =
-    `Das Ergebnis ist größer als ${EVAL_RESULT_LIMIT} Zeichen JSON.`;
-  const EVAL_RESULT_UNSERIALIZABLE_MESSAGE = "Das Ergebnis lässt sich nicht auf JSON abbilden.";
-  const MISSING_EVAL_CODE_MESSAGE = "eval braucht code als String.";
-  const EMPTY_EVAL_CODE_MESSAGE = "code darf nicht leer sein.";
-  const EVAL_CODE_TOO_LONG_MESSAGE = `code darf höchstens ${EVAL_CODE_LIMIT} Zeichen lang sein.`;
+    `The result is larger than ${EVAL_RESULT_LIMIT} characters of JSON.`;
+  const EVAL_RESULT_UNSERIALIZABLE_MESSAGE = "The result cannot be represented as JSON.";
+  const MISSING_EVAL_CODE_MESSAGE = "eval needs code as a string.";
+  const EMPTY_EVAL_CODE_MESSAGE = "code must not be empty.";
+  const EVAL_CODE_TOO_LONG_MESSAGE = `code must be at most ${EVAL_CODE_LIMIT} characters long.`;
 
   /* ------------------------------------------------------------ screenshot */
 
@@ -468,14 +468,14 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
   // `EVAL_NOT_ALLOWED_MESSAGE`: both suites assert this exact sentence, so a rewrite on
   // one side turns a test red instead of drifting silently.
   const SCREENSHOT_NOT_ALLOWED_MESSAGE =
-    "Bildschirmfotos sind in den Einstellungen der Erweiterung nicht erlaubt.";
+    "Screenshots are not allowed in the extension settings.";
   // The sentence for every outcome nobody can read — our own bugs included. A browser's
   // own rejection text never lands here; `captureAgentTab` cuts it into a
   // `ScreenshotError` instead.
-  const SCREENSHOT_FAILED_MESSAGE = "Das Bild konnte nicht aufgenommen werden.";
+  const SCREENSHOT_FAILED_MESSAGE = "The picture could not be taken.";
   // `screenshot` takes no arguments but `tab`, so a caller that passes anything else is
   // told instead of having its argument silently dropped — same rule as `focus`.
-  const SCREENSHOT_PARAMS_MESSAGE = "screenshot nimmt keine Parameter außer tab.";
+  const SCREENSHOT_PARAMS_MESSAGE = "screenshot takes no parameters besides tab.";
   const SCREENSHOT_OPTION_READ_FAILED_LOG_LINE =
     "bc: Option für Bildschirmfotos nicht lesbar, Aufnahme bleibt gesperrt";
 
@@ -2685,7 +2685,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * passes it through, so the same two numbers cannot be formatted twice.
    */
   function offsetOutOfRangeMessageFor(offset, totalChars) {
-    return `Der Text hat ${totalChars} Zeichen; offset ${offset} liegt dahinter.`;
+    return `The text has ${totalChars} characters; offset ${offset} is past its end.`;
   }
 
   /**
@@ -4310,8 +4310,8 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * extension writes the sentence and the bridge only passes it through.
    */
   function screenshotTooLargeMessageFor(picture) {
-    return `Das Bild ist auch nach dem Verkleinern zu groß: ${picture.bytes} Bytes bei ` +
-      `${picture.width} × ${picture.height} (Grenze ${SCREENSHOT_MAX_BYTES}).`;
+    return `The picture is too large even after scaling down: ${picture.bytes} bytes at ` +
+      `${picture.width} × ${picture.height} (limit ${SCREENSHOT_MAX_BYTES}).`;
   }
 
   /* ----------------------------------------------------------------- frames */
@@ -4691,14 +4691,14 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * start a loop that cannot end (spec 32, criterion 5).
    */
   function needsFocusMessageFor(visibilityState) {
-    const state = typeof visibilityState === "string" ? visibilityState : "unbekannt";
+    const state = typeof visibilityState === "string" ? visibilityState : "unknown";
     if (state === "visible") {
-      return 'Der Tab ist im Vordergrund (document.visibilityState: "visible"), die Seite ist ' +
-        "aber noch nicht aufgebaut. Ein erneuter browser_focus hilft nicht; warte kurz und " +
-        "versuche es erneut.";
+      return 'The tab is in the foreground (document.visibilityState: "visible"), but the page ' +
+        "is not built yet. Another browser_focus does not help; wait a moment and " +
+        "try again.";
     }
-    return `Der Tab ist nicht im Vordergrund (document.visibilityState: "${state}"); die Seite ` +
-      "ist deshalb nicht gerendert. Rufe browser_focus auf und versuche es dann erneut.";
+    return `The tab is not in the foreground (document.visibilityState: "${state}"); the page ` +
+      "is therefore not rendered. Call browser_focus and then try again.";
   }
 
   /** Whether the track was produced by speech recognition rather than uploaded. */
@@ -4739,8 +4739,8 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
       const named = candidates.map((track) => track.audioTrackId);
       throw new TranscriptError(
         TRANSCRIPT_FAILED_CODE,
-        "Die Originalspur ist nicht eindeutig (" +
-          `${named.length === 0 ? "kein Audiotrack ohne .3-Suffix" : named.join(", ")}).`,
+        "The original track is not unambiguous (" +
+          `${named.length === 0 ? "no audio track without the .3 suffix" : named.join(", ")}).`,
       );
     }
     return candidates[0];
@@ -4773,7 +4773,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
       if (chosen !== null) return chosen;
       throw new TranscriptError(
         TRANSCRIPT_FAILED_CODE,
-        "Die Originalspur des Videos verweist auf keine Transkriptspur.",
+        "The video's original track points at no subtitle track.",
       );
     }
     const originalTrack = model.captionTracks[index];
@@ -4785,7 +4785,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     if (!isUsableTranscriptTrack(originalTrack) || originalTrack.languageCode === "") {
       throw new TranscriptError(
         TRANSCRIPT_FAILED_CODE,
-        "Die Originalspur des Videos verweist auf keine Transkriptspur.",
+        "The video's original track points at no subtitle track.",
       );
     }
     if (originalTrack.languageCode === "en" || originalTrack.languageCode === "de") {
@@ -4807,7 +4807,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     const ambiguous = uploaded.length > 1 ? uploaded : automatic;
     throw new TranscriptError(
       TRANSCRIPT_FAILED_CODE,
-      `Die englische Spur ist nicht eindeutig (${ambiguous.map(transcriptTrackLabel).join(", ")}).`,
+      `The English track is not unambiguous (${ambiguous.map(transcriptTrackLabel).join(", ")}).`,
     );
   }
 
@@ -4850,7 +4850,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     const ambiguous = uploaded.length > 1 ? uploaded : automatic;
     throw new TranscriptError(
       TRANSCRIPT_FAILED_CODE,
-      "Ohne Originalspur-Index ist die Transkriptspur nicht eindeutig " +
+      "Without an original-track index the subtitle track is not unambiguous " +
         `(${ambiguous.map(transcriptTrackLabel).join(", ")}).`,
     );
   }
@@ -4939,7 +4939,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
 
   /** The sentence for a track file that is not in the resource list. */
   function noCaptionFileMessageFor(languageCode) {
-    return `Die Spurendatei zur Sprache "${languageCode}" wurde auf dieser Seite nicht gefunden.`;
+    return `The track file for language "${languageCode}" was not found on this page.`;
   }
 
   /**
@@ -5184,9 +5184,9 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
 
   /** A list of menu entries as one sentence fragment — language names, never an address. */
   function transcriptMenuCandidatesOf(candidates) {
-    if (!Array.isArray(candidates)) return "keine";
+    if (!Array.isArray(candidates)) return "none";
     const named = candidates.filter((text) => typeof text === "string");
-    return named.length === 0 ? "keine" : named.join(", ");
+    return named.length === 0 ? "none" : named.join(", ");
   }
 
   /**
@@ -5217,20 +5217,20 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
       }
       throw new TranscriptError(
         TRANSCRIPT_FAILED_CODE,
-        `Das Spuren-Menü des Players hat ${entry.count} Einträge statt ${entry.expectedCount}.`,
+        `The player's track menu has ${entry.count} entries instead of ${entry.expectedCount}.`,
       );
     }
     if (entry.outcome === "no_match") {
       throw new TranscriptError(
         TRANSCRIPT_FAILED_CODE,
-        `Der Menüeintrag "${trackName}" wurde nicht gefunden ` +
-          `(Einträge: ${transcriptMenuCandidatesOf(entry.candidates)}).`,
+        `The menu entry "${trackName}" was not found ` +
+          `(entries: ${transcriptMenuCandidatesOf(entry.candidates)}).`,
       );
     }
     if (entry.outcome === "ambiguous") {
       throw new TranscriptError(
         TRANSCRIPT_FAILED_CODE,
-        `Der Menüeintrag "${trackName}" ist nicht eindeutig ` +
+        `The menu entry "${trackName}" is not unambiguous ` +
           `(${transcriptMenuCandidatesOf(entry.candidates)}).`,
       );
     }

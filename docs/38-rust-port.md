@@ -12,6 +12,11 @@ und `--self-test`. Dieser Teil portiert die Bridge dagegen und schaltet um.
 **Voraussetzung:** Teil 1 ist gebaut — Werkzeugkette, baubares Gerüst,
 sieben Artefakte. Ohne ihn gibt es nichts, wogegen gemessen wird.
 
+**Nachtrag 2026-11-22 (`docs/54`):** die Sätze der Werkzeugschicht sind
+inzwischen englisch. Wo diese Spec „deutsche Sätze" sagt (`## Ziel`,
+`## Das Inventar`, `## Testing`, Kriterium 4), gilt: kopiert und byteweise
+geprüft, nur eben auf Englisch. Die Parität misst unverändert.
+
 ## Ziel
 
 - **Die Module nach Rust**, eines nach dem anderen, jedes gegen den Maßstab

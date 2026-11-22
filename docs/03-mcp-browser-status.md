@@ -66,21 +66,20 @@ deshalb ist stdout in dieser Spec ein Kanal, kein Ausgabegerät.
 | `tools/list` | das Tool `browser_status` (Spec 04 ergänzte `browser_navigate`, Spec 05 `browser_read`), siehe unten |
 | `tools/call` | siehe unten |
 | unbekannte Methode | JSON-RPC-Fehler `{code:-32601, message:"method not found"}` |
-| `tools/call` ohne brauchbares `name` | JSON-RPC-Fehler `{code:-32602, message:"invalid params"}` (die Anfrage ist malformt, nicht das Tool unbekannt) |
+| `tools/call` ohne brauchbares `name` | JSON-RPC-Fehler `{code:-32602, message:"invalid params"}` (die Anfrage ist fehlerhaft, nicht das Tool unbekannt) |
 | kaputtes JSON in einer Zeile | `{code:-32700, message:"parse error"}`, und der Server **läuft weiter** (eine schlechte Zeile ist kein Grund zu sterben) |
 | Zeile ist kein JSON-Objekt (Array, Zahl) | `{code:-32600, message:"invalid request"}` |
 
 Jeder Fehler trägt `code` **und** `message`: JSON-RPC 2.0 verlangt beides, und
 pi zeigt die Meldung sonst ohne Text an. Die Texte sind englisch, weil sie zur
-Protokollebene gehören, nicht zur Antwort an den Menschen (der Werkzeug-Text
-bleibt deutsch).
+Protokollebene gehören. Auch der Werkzeug-Text ist englisch (seit `docs/54`).
 
 `tools/list` liefert genau:
 
 | Feld | Wert |
 |---|---|
 | `name` | `browser_status` |
-| `description` | Zeigt die Fenster und Tabs des Betreiber-Browsers im Default-Container, samt Verbindungszustand der Extension, und markiert den Agenten-Tab mit `agent: true`. |
+| `description` | Shows the windows and tabs of the operator's browser in the Default container, along with the extension's connection state, and marks the agent tab with `agent: true`. (englisch seit `docs/54`) |
 | `inputSchema` | `{"type":"object","properties":{},"additionalProperties":false}` |
 
 `tools/call` mit `browser_status` (keine Argumente):
@@ -88,22 +87,22 @@ bleibt deutsch).
 - **Extension verbunden**: `{"content":[{"type":"text","text":"<JSON, 2 Leerzeichen eingerückt>"}]}`
   wobei `<JSON>` das Ergebnis aus `### Ergebnis von status` in Spec 01 ist
   (`{"extension":{…},"windows":[…]}`).
-- **keine Extension verbunden**: `{"content":[{"type":"text","text":"Keine
-  Extension verbunden — Firefox mit der Extension läuft nicht oder die
-  Verbindung ist getrennt."}],"isError":true}`.
+- **keine Extension verbunden**: `{"content":[{"type":"text","text":"No
+  extension connected — Firefox with the extension is not running, or the
+  connection was dropped."}],"isError":true}` (englisch seit `docs/54`).
 - **keine Antwort binnen `BC_CALL_TIMEOUT_MS`** (Default 20 s):
-  `{"content":[{"type":"text","text":"Die Extension hat nicht geantwortet
-  (Zeitüberschreitung)."}],"isError":true}` — kein Hänger, kein Absturz.
-- **unbekannter Tool-Name**: `{"content":[{"type":"text","text":"Unbekanntes
-  Tool: <name>"}],"isError":true}` (kein JSON-RPC-Fehler: der Client soll die
+  `{"content":[{"type":"text","text":"The extension did not answer
+  (timeout)."}],"isError":true}` — kein Hänger, kein Absturz.
+- **unbekannter Tool-Name**: `{"content":[{"type":"text","text":"Unknown
+  tool: <name>"}],"isError":true}` (kein JSON-RPC-Fehler: der Client soll die
   Meldung sehen, nicht einen Protokollfehler).
 - **`arguments` mit Inhalt**: `{"content":[{"type":"text","text":"browser_status
-  erwartet keine Argumente."}],"isError":true}` — das Schema sagt
+  takes no arguments."}],"isError":true}` — das Schema sagt
   `additionalProperties:false`, also gibt es auch keine stillschweigend
   ignorierten Argumente.
 - **`ok:false` von der Extension** (der vierte Fall, vom Architekten gefunden):
-  `{"content":[{"type":"text","text":"Die Extension konnte den Status nicht
-  liefern (code=<code>)."}],"isError":true}`.
+  `{"content":[{"type":"text","text":"The extension could not deliver the status
+  (code=<code>)."}],"isError":true}`.
 
 ## Hub-Änderung
 
@@ -173,9 +172,9 @@ Alles ohne Browser und ohne Netz (`npm test` → `node --test test/*.test.js`).
 | dito — `initialize` mit `1999-01-01` | Rückfall auf `2025-11-25` statt Fehler |
 | dito — `tools/list` | `browser_status` mit dem Schema wie oben, `additionalProperties:false` (seit Spec 04 zwei Werkzeuge, seit Spec 05 drei) |
 | dito — jede Zeile auf stdout mit `JSON.parse` | stdout trägt ausschließlich JSON-RPC; Logzeilen landen auf stderr |
-| dito — `tools/call` ohne Extension | `isError: true` und der deutsche Satz aus dem Vertrag |
+| dito — `tools/call` ohne Extension | `isError: true` und der englische Satz aus dem Vertrag (seit `docs/54`) |
 | dito — `tools/call` mit Fake-Extension | `isError` fehlt/false, der Text ist JSON mit `windows`/`tabs` aus dem Fixture |
-| dito — `tools/call` mit unbekanntem Tool | `isError: true`, „Unbekanntes Tool: …" |
+| dito — `tools/call` mit unbekanntem Tool | `isError: true`, „Unknown tool: …" (englisch seit `docs/54`) |
 | dito — unbekannte Methode | JSON-RPC-Fehler `-32601` |
 | dito — eine Zeile kaputtes JSON, danach `ping` | `-32700` und der Server antwortet danach weiter |
 | dito — Bridge beenden (stdin zu) | Prozess endet mit 0, kein Rest ohne Zeilenende im Puffer |
@@ -200,7 +199,7 @@ Alles ohne Browser und ohne Netz (`npm test` → `node --test test/*.test.js`).
    drei seit Spec 05).
 4. Bei verbundener Fake-Extension liefert `tools/call browser_status` Text, der
    sich als JSON parsen lässt und `windows` mit mindestens einem Fenster enthält;
-   ohne Extension kommt `isError: true` mit dem deutschen Satz.
+   ohne Extension kommt `isError: true` mit dem englischen Satz (seit `docs/54`).
 5. Auf stdout steht ausschließlich JSON-RPC: **jede** Zeile des Kindprozesses
    ist ein Objekt mit `jsonrpc:"2.0"` und vorhandenem `id`-Feld — bei
    Parse-Fehlern `null` (nicht bloß „irgendwie JSON"); jede Fehlerantwort trägt
@@ -301,7 +300,7 @@ Gegenfall in Stufe 4.
    Proof: `test/mcp.test.js` erweitert — `tools/list` mit
    `additionalProperties === false`; mit Fake-Extension parst der Text und
    enthält `windows.length >= 1`; ohne Extension `isError:true` und wörtlich der
-   deutsche Satz; `BC_CALL_TIMEOUT_MS=300` plus `BC_TEST_ANSWER=0` → Timeout-Satz
+   englische Satz; `BC_CALL_TIMEOUT_MS=300` plus `BC_TEST_ANSWER=0` → Timeout-Satz
    statt Hänger; unbekanntes Tool; `{"name":"browser_status","arguments":{"x":1}}`
    abgelehnt; zwei Aufrufe in einem Schreibvorgang → zwei Antworten mit den
    richtigen Ids; `BC_LOG=debug` mit verbundener Fake-Extension → das

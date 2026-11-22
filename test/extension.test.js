@@ -3527,7 +3527,7 @@ test("navigate_withANonHttpUrl_shouldRefuseWithInvalidUrlAndTouchNoTab", async (
     const answer = responsesById(socket).get(10 + index);
     assert.equal(answer.ok, false, `${url} must be refused`);
     assert.equal(answer.error.code, "invalid_url", `${url} must be an invalid_url`);
-    assert.equal(answer.error.message, "Nur http:// und https:// sind erlaubt.");
+    assert.equal(answer.error.message, "Only http:// and https:// are allowed.");
   }
 
   // ... and no tab was created or navigated for any of them.
@@ -5505,7 +5505,7 @@ test("read_withOffsetBehindTheTextEnd_shouldAnswerOffsetOutOfRangeNamingTheTotal
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "offset_out_of_range");
-  assert.equal(answer.error.message, `Der Text hat ${fullText.length} Zeichen; offset 999999 liegt dahinter.`);
+  assert.equal(answer.error.message, `The text has ${fullText.length} characters; offset 999999 is past its end.`);
   // ... the code and the message are the whole frame: the length stands in the message,
   // not in a second field `readErrorFrame` would have to grow for:
   assert.deepStrictEqual(Object.keys(answer.error), ["code", "message"]);
@@ -7872,7 +7872,7 @@ test("click_whenTheAddressedFrameIsGoneBeforeTheWait_shouldAnswerFrameNotFoundIn
   assert.equal(answer.error.code, "frame_not_found");
   assert.notEqual(answer.error.code, "click_failed");
   assert.equal(answer.error.frames, 2, "both frames answered, none matched");
-  assert.equal(answer.error.message, "Kein Rahmen passt zum angegebenen frame.");
+  assert.equal(answer.error.message, "No frame matches the given frame.");
 
   // ... no fallback was armed behind it, and the 4 s guard is gone with it.
   assert.deepStrictEqual(clock.pendingDelays(), []);
@@ -7895,7 +7895,7 @@ test("click_withAFrameThatMatchesTwoFrames_shouldAnswerFrameAmbiguousWithBothCan
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "frame_ambiguous");
-  assert.equal(answer.error.message, "Mehrere Rahmen passen zum angegebenen frame.");
+  assert.equal(answer.error.message, "Several frames match the given frame.");
   assert.deepStrictEqual(inThisRealm(answer.error.candidates), [
     "https://widget.example.net/startseite",
     WIDGET_FRAME_URL,
@@ -8268,8 +8268,8 @@ test("type_onADiv_shouldAnswerNotTypeableAndWriteNothing", async () => {
   const answer = await answerForRefusedField(createTypeElement({ tagName: "DIV" }), "not_typeable");
 
   // THEN the missing positive list would have let the setter write into it,
-  // and the German sentence names both halves of the refusal:
-  assert.equal(answer.error.message, "Das Element ist kein beschreibbares Feld oder deaktiviert.");
+  // and the sentence names both halves of the refusal:
+  assert.equal(answer.error.message, "The element is not a writable field or is disabled.");
 });
 
 test("type_onADisabledField_shouldAnswerNotTypeableAndWriteNothing", async () => {
@@ -8348,7 +8348,7 @@ test("type_onAPasswordFieldWhileTheOptionIsOff_shouldAnswerPasswordNotAllowedAnd
   assert.equal(answer.error.code, "password_not_allowed");
   assert.equal(
     answer.error.message,
-    "Passwortfelder sind gesperrt. In den Optionen der Erweiterung freischalten.",
+    "Password fields are locked. Unlock them in the extension options.",
   );
   assert.equal(element.nativeSets, 0);
   assert.deepStrictEqual(element.events, []);
@@ -9127,7 +9127,7 @@ test("type_withAFrameThatMatchesNoFrame_shouldAnswerFrameNotFoundWithTheAnswered
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "frame_not_found");
   assert.equal(answer.error.frames, 2);
-  assert.equal(answer.error.message, "Kein Rahmen passt zum angegebenen frame.");
+  assert.equal(answer.error.message, "No frame matches the given frame.");
   assert.equal(pages.mainField.nativeSets, 0);
   assert.equal(pages.widgetField.nativeSets, 0);
   assert.deepStrictEqual(clock.pendingDelays(), [], "a refused frame opens no window");
@@ -9152,7 +9152,7 @@ test("type_withAFrameThatMatchesTwoFrames_shouldAnswerFrameAmbiguousWithBothCand
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "frame_ambiguous");
-  assert.equal(answer.error.message, "Mehrere Rahmen passen zum angegebenen frame.");
+  assert.equal(answer.error.message, "Several frames match the given frame.");
   assert.deepStrictEqual(inThisRealm(answer.error.candidates), [
     "https://widget.example.net/startseite",
     WIDGET_FRAME_URL,
@@ -10468,7 +10468,7 @@ test("inspect_withAPiercingSelectorInAnAttributeValue_shouldNotSplit", async () 
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "invalid_selector");
-  assert.equal(answer.error.message, "Der Selektor ist ungültig.");
+  assert.equal(answer.error.message, "The selector is invalid.");
   assert.equal(answer.result, undefined);
 });
 
@@ -11483,6 +11483,12 @@ test("focus_withAnUnexpectedParameter_shouldAnswerInvalidParamsAndUpdateNothing"
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "invalid_params");
 
+  // ... with the English sentence from `docs/54`, without a German umlaut — the
+  // extension's refusals travel in `error.message`, and the German log lines stay
+  // German because they go to the operator's console,
+  assert.equal(answer.error.message, "focus takes no parameters besides tab.");
+  assert.equal(/[äöüß]/u.test(answer.error.message), false);
+
   // ... and nothing moved.
   assert.deepStrictEqual(tabs.calls, []);
 });
@@ -11668,7 +11674,7 @@ test("openTab_asTheSixthTab_shouldAnswerTooManyTabsAndCreateNothing", async () =
   // ... carrying the sentence word for word: the bridge maps the code back to its
   // own copy of this text, and asserting it here is what keeps the two copies from
   // drifting apart without a red test.
-  assert.equal(answer.error.message, "Es sind schon fünf Agenten-Tabs offen — erst einen schließen.");
+  assert.equal(answer.error.message, "Five agent tabs are already open — close one first.");
 
   // ... and nothing was created: the refusal is a decision, not a tab that gets
   // discarded afterwards,
@@ -11902,7 +11908,7 @@ test("eval_whenTheSwitchIsOff_shouldRefuseWithoutInjecting", async () => {
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "eval_not_allowed");
-  assert.match(answer.error.message, /Code-Auswertung/);
+  assert.match(answer.error.message, /Code evaluation/);
 
   // ... and `executeScript` was not called at all: the switch protects the page, it
   // does not merely decorate the answer. The count, not the wording, is the proof.
@@ -12938,7 +12944,7 @@ test("screenshot_whenEveryStageIsTooLarge_shouldNameTheLastStageNumbers", async 
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "screenshot_too_large");
-  assert.match(answer.error.message, /auch nach dem Verkleinern zu groß/);
+  assert.match(answer.error.message, /too large even after scaling down/);
   assert.match(answer.error.message, /3200000/);
   assert.match(answer.error.message, /1200 × 675/);
   assert.match(answer.error.message, /3145728/);
@@ -13050,7 +13056,7 @@ test("screenshot_whenTheSwitchIsOff_shouldRefuseWithoutCapturing", async () => {
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "screenshot_not_allowed");
-  assert.match(answer.error.message, /Bildschirmfotos/);
+  assert.match(answer.error.message, /Screenshots/);
 
   // ... and `captureTab` was not called at all: the switch protects the tab, it does
   // not merely decorate the answer. The count, not the wording, is the proof,
@@ -13518,7 +13524,7 @@ test("read_withAFrameThatMatchesNoFrame_shouldAnswerFrameNotFoundWithTheAnswered
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "frame_not_found");
   assert.equal(answer.error.frames, 2);
-  assert.equal(answer.error.message, "Kein Rahmen passt zum angegebenen frame.");
+  assert.equal(answer.error.message, "No frame matches the given frame.");
   assert.equal(answer.result, undefined);
 });
 
@@ -13563,7 +13569,7 @@ test("read_withAnInvalidFrame_shouldAnswerInvalidParamsAndInjectNothing", async 
     const answer = responsesById(socket).get(id);
     assert.equal(answer.ok, false, `${JSON.stringify(params)} must be refused`);
     assert.equal(answer.error.code, "invalid_params");
-    assert.equal(answer.error.message, "frame muss ein String sein.");
+    assert.equal(answer.error.message, "frame must be a string.");
   }
   assert.deepStrictEqual(tabs.scriptCalls, []);
 });
@@ -13582,7 +13588,7 @@ test("read_withAnInvalidFrameAndAnInvalidWindow_shouldAnswerTheWindowFirst", asy
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "invalid_params");
-  assert.equal(answer.error.message, `maxChars muss eine ganze Zahl von 1 bis ${READ_MAX_CHARS_LIMIT} sein.`);
+  assert.equal(answer.error.message, `maxChars must be an integer from 1 to ${READ_MAX_CHARS_LIMIT}.`);
   assert.deepStrictEqual(tabs.scriptCalls, []);
 });
 
@@ -13789,7 +13795,7 @@ test("inspect_withAFrameThatMatchesNoFrame_shouldAnswerFrameNotFoundWithTheAnswe
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "frame_not_found");
   assert.equal(answer.error.frames, 2);
-  assert.equal(answer.error.message, "Kein Rahmen passt zum angegebenen frame.");
+  assert.equal(answer.error.message, "No frame matches the given frame.");
   assert.equal(answer.result, undefined);
 });
 
@@ -13812,7 +13818,7 @@ test("inspect_withAFrameThatMatchesTwoFrames_shouldAnswerFrameAmbiguousWithTheCa
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "frame_ambiguous");
-  assert.equal(answer.error.message, "Mehrere Rahmen passen zum angegebenen frame.");
+  assert.equal(answer.error.message, "Several frames match the given frame.");
   assert.deepStrictEqual(inThisRealm(answer.error.candidates), [sharedAddress, sharedAddress]);
   assert.equal(answer.result, undefined);
 });
@@ -13835,7 +13841,7 @@ test("inspect_withAnInvalidFrame_shouldAnswerInvalidParamsAndInjectNothing", asy
     const answer = responsesById(socket).get(id);
     assert.equal(answer.ok, false, `${JSON.stringify(params)} must be refused`);
     assert.equal(answer.error.code, "invalid_params", JSON.stringify(params));
-    assert.equal(answer.error.message, "frame muss ein String sein.");
+    assert.equal(answer.error.message, "frame must be a string.");
     id += 1;
   }
 
@@ -15879,7 +15885,7 @@ test("transcript_captionWire_withoutAnEvent_shouldFail", async () => {
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "transcript_failed");
-  assert.ok(answer.error.message.includes("Spurendatei"), answer.error.message);
+  assert.ok(answer.error.message.includes("track file"), answer.error.message);
   assert.ok(answer.error.message.includes('"en"'), answer.error.message);
   assert.deepStrictEqual(page.fetched, []);
 
@@ -16246,7 +16252,7 @@ test("transcript_model_holeAtTheOriginalIndex_shouldFail", async () => {
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "transcript_failed");
-  assert.ok(answer.error.message.includes("Originalspur"), answer.error.message);
+  assert.ok(answer.error.message.includes("original track"), answer.error.message);
   assert.equal(tabs.scriptCalls.length, 2);
   assert.deepStrictEqual(page.fetched, []);
 });
@@ -16299,7 +16305,7 @@ test("transcript_inABackgroundTab_shouldFailWithNeedsFocus", async () => {
   // out of a focus loop it cannot win.
   const hydratingAnswer = responsesById(hydratingStarted.socket).get(2);
   assert.equal(hydratingAnswer.error.code, "transcript_needs_focus");
-  assert.ok(hydratingAnswer.error.message.includes("browser_focus hilft nicht"));
+  assert.ok(hydratingAnswer.error.message.includes("Another browser_focus does not help"));
 });
 
 test("transcript_onANonYouTubePage_shouldFail", async () => {
@@ -16322,7 +16328,7 @@ test("transcript_onANonYouTubePage_shouldFail", async () => {
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "transcript_failed");
   assert.equal(answer.error.code === "transcript_needs_focus", false);
-  assert.ok(answer.error.message.includes("YouTube-Watch-Seiten"));
+  assert.ok(answer.error.message.includes("YouTube watch pages"));
 
   // ... and the model was never read: the gate is the first and only injection.
   assert.equal(tabs.scriptCalls.length, 1);
@@ -16517,7 +16523,7 @@ test("transcript_menuEntry_withTwoMatches_shouldFail", async () => {
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "transcript_failed");
-  assert.ok(answer.error.message.includes("nicht eindeutig"), answer.error.message);
+  assert.ok(answer.error.message.includes("not unambiguous"), answer.error.message);
   assert.deepStrictEqual(page.playerMenu.entryClicks, []);
   assert.deepStrictEqual(page.video.writes, []);
 });
@@ -16545,7 +16551,7 @@ test("transcript_menuSetDidNotTakeEffect_shouldFail", async () => {
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "transcript_failed");
   assert.ok(answer.error.message.includes('"Englisch"'), answer.error.message);
-  assert.ok(answer.error.message.includes("nicht gesetzt"), answer.error.message);
+  assert.ok(answer.error.message.includes("not set"), answer.error.message);
 
   // ... nothing was fetched and the playhead was never touched, but the pick that did happen
   // was put back: the entry that was marked before is marked again (review m5).
@@ -16663,7 +16669,7 @@ test("transcript_captionRow_ambiguous_shouldFail", async () => {
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "transcript_failed");
-  assert.ok(answer.error.message.includes("Mehrere Zeilen"), answer.error.message);
+  assert.ok(answer.error.message.includes("Several rows"), answer.error.message);
   assert.deepStrictEqual(page.playerMenu.entryClicks, []);
   assert.deepStrictEqual(page.video.writes, []);
 });
@@ -16690,9 +16696,39 @@ test("transcript_captionRow_absent_shouldFail", async () => {
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "transcript_failed");
-  assert.ok(answer.error.message.includes("wurde nicht gefunden"), answer.error.message);
+  assert.ok(answer.error.message.includes("was not found"), answer.error.message);
   assert.equal(tabs.scriptCalls.length, 3);
   assert.deepStrictEqual(page.video.writes, []);
+  assert.deepStrictEqual(page.playerMenu.entryClicks, []);
+});
+
+test("transcript_captionRow_noCandidate_shouldAnswerAnEmptyListAsNone", async () => {
+  // GIVEN a menu that lists no entry carrying a language name, so the candidate list
+  // the page hands back is empty,
+  const english = createCaptionTrack({ languageCode: "en", name: "Englisch" });
+  const page = createTranscriptMenuPage({
+    captionTracks: [english],
+    audioTracks: [createOriginalAudioTrack(0)],
+    texts: { en: "This is a 3." },
+    entryTexts: ["", "", ""],
+    contentName: "Englisch",
+    checkedText: "Englisch",
+  });
+  const { tabs } = createTranscriptTabs(page);
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the tool is called,
+  await sendTranscript(socket, 2);
+
+  // THEN the empty list reads `none` — an empty list used to be spelled `keine`, the one
+  // German word that could still reach the caller inside an English sentence:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "transcript_failed");
+  assert.equal(
+    answer.error.message,
+    'The menu entry "Englisch" was not found (entries: none).',
+  );
   assert.deepStrictEqual(page.playerMenu.entryClicks, []);
 });
 
@@ -16728,7 +16764,7 @@ test("transcript_captionRow_miscount_shouldFail", async () => {
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "transcript_failed");
-  assert.ok(answer.error.message.includes("4 Einträge statt 3"), answer.error.message);
+  assert.ok(answer.error.message.includes("4 entries instead of 3"), answer.error.message);
 
   // ... and nothing was clicked, fetched or moved: the refusal comes before the pick,
   assert.deepStrictEqual(page.playerMenu.entryClicks, []);
@@ -16836,7 +16872,7 @@ test("transcript_captionRow_miscountWithAPairEntry_namesTheRealCount", async () 
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "transcript_failed");
-  assert.ok(answer.error.message.includes("5 Einträge statt 4"), answer.error.message);
+  assert.ok(answer.error.message.includes("5 entries instead of 4"), answer.error.message);
 
   // ... and the refusal still comes before the pick: nothing was clicked, fetched or moved,
   assert.deepStrictEqual(page.playerMenu.entryClicks, []);

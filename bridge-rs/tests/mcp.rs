@@ -19,10 +19,10 @@
 //! and the shape of the answer — without a port, a browser or (except for the one process case)
 //! a child process.
 //!
-//! The German sentences are quoted into this file instead of imported from
-//! `mcp::texts`: a test that compares a constant with itself cannot notice a changed
-//! wording. The quotes come from `bridge/mcp.mjs` through `test/mcp.test.js`, character
-//! for character.
+//! The sentences are quoted into this file instead of imported from `mcp::texts`: a
+//! test that compares a constant with itself cannot notice a changed wording. They are
+//! English since `docs/54` and are the contract the agent reads, character for
+//! character.
 //!
 //! The case names are the Node ones so the mapping stays readable; `docs/38`,
 //! `### What could go wrong` names the allow for the missing snake case.
@@ -697,100 +697,99 @@ fn transcript_result() -> Value {
 
 // The visible texts, quoted from the contract — all of them, descriptions and sentences.
 // Duplicated on purpose: a test that imports the sentence it checks cannot notice a
-// changed sentence. The paragraphs below are lifted from `test/mcp.test.js` character for
-// character, which is where the template's own quotes live.
+// changed sentence. English since `docs/54`; the sentences are the contract the agent
+// reads.
 
-const TOOL_DESCRIPTION: &str = r#"Zeigt die Fenster und Tabs des Betreiber-Browsers im Default-Container, samt Verbindungszustand der Extension, und markiert den Agenten-Tab mit `agent: true`."#;
-const NAVIGATE_TOOL_DESCRIPTION: &str = r#"Öffnet eine http(s)-URL im Agenten-Tab des Betreiber-Browsers (Default-Container), wartet, bis die Seite geladen ist, und danach, bis sie sich beruhigt hat (höchstens 3 s); meldet `settled`/`waitedMs`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const READ_TOOL_DESCRIPTION: &str = r#"Liest den **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Liest Titel, Adresse und den Text des Agenten-Tabs; `offset` überspringt so viele Zeichen des Textes (Default 0), `maxChars` begrenzt den Ausschnitt (Default 20 000, höchstens 100 000). `offset`/`maxChars` blättern durch den Text; `chars` und `totalChars` sagen, wo man steht. `via` sagt, ob sichtbarer Text oder Textinhalt. `mode: article` liest nur den Artikelkörper — ohne Navigation, Fußzeile und Cookie-Banner. Wartet vorher, bis sich die Seite beruhigt hat (höchstens 3 s), und meldet `settled`/`waitedMs`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const CLICK_TOOL_DESCRIPTION: &str = r#"Arbeitet auf dem **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Klickt das erste Element, das dem CSS-Selektor entspricht, im Agenten-Tab, wartet, bis sich die Seite beruhigt hat (höchstens 3 s), und liefert den Seitentext danach (auf 20 000 Zeichen gekürzt); meldet `settled`/`waitedMs`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const TYPE_TOOL_DESCRIPTION: &str = r#"Arbeitet auf dem **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Schreibt Text in das Feld, das dem CSS-Selektor entspricht, sendet optional Enter und liefert den Seitentext danach (auf 20 000 Zeichen gekürzt). Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const FOCUS_TOOL_DESCRIPTION: &str = r#"Holt den Agenten-Tab nach vorn und sein Fenster in den Vordergrund; die Seite wird dabei nicht verändert, und `focused` kommt aus einer Abfrage nach dem Fokussieren. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const INSPECT_TOOL_DESCRIPTION: &str = r#"Arbeitet auf dem **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Listet die Elemente des Agenten-Tabs auf (per CSS-Selektor und/oder Textsuche) mit Tag, id, class, Link, sichtbarem Text, Sichtbarkeit und einem fertigen Selektor zum Weiterverwenden. `my-card >>> button` springt rechts vom `>>>` in den offenen Schattenbaum von `my-card` (mehrere Stufen erlaubt); jedes Glied ist ein einfacher Selektor — Typ, `#id`, `.class`, `[attr="wert"]` oder `:nth-of-type(n)`; geschlossene Schattenbäume bleiben unerreichbar, und ohne `>>>` ändert sich nichts. Ändert nichts an der Seite. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const OPEN_TAB_TOOL_DESCRIPTION: &str = r#"Öffnet einen weiteren Agenten-Tab im Default-Container (höchstens fünf) und liefert `tabId`, `url` und `title`. Wartet, bis die Seite geladen ist, aber nicht auf Ruhe — ein `browser_read` danach soll nicht `page_busy` kosten."#;
-const CLOSE_TAB_TOOL_DESCRIPTION: &str = r#"Schließt einen Agenten-Tab und entfernt ihn aus der Liste; ohne `tab` den zuletzt benutzten. Liefert `tabId` und `closed`."#;
-const EVAL_TOOL_DESCRIPTION: &str = r#"Wertet Code im **aktuellen** Agenten-Tab aus und nimmt **keine** URL — vorher `browser_navigate`. Wertet Code im Seitenkontext des Agenten-Tabs aus und liefert das Ergebnis als JSON; Code darf die Seite ändern, auch Passwortfelder füllen. `code` läuft als Funktionsrumpf: Das Ergebnis kommt mit `return` zurück, ohne `return` ist es `null`. Nur möglich, wenn „Code-Auswertung erlauben" in den Einstellungen der Erweiterung eingeschaltet ist — sonst `eval_not_allowed`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const EVAL_FUNCTION_BODY_SENTENCE: &str = r#"`code` läuft als Funktionsrumpf"#;
-const SCREENSHOT_TOOL_DESCRIPTION: &str = r#"Arbeitet auf dem **aktuellen** Agenten-Tab und nimmt **keine** URL — vorher `browser_navigate`. Fotografiert den sichtbaren Ausschnitt des Agenten-Tabs und liefert das Bild als MCP-Bildinhalt (höchstens 3 MiB; PNG, bei Überschreiten verkleinert und als JPEG neu kodiert). Die Zahlen dazu — `format`, `width`, `height`, `bytes` und `scaled` — stehen als Textblock daneben. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const FRAMES_TOOL_DESCRIPTION: &str = r#"Listet die Rahmen (iframes) des Agenten-Tabs mit ihrer Adresse; `frame` bei den anderen Werkzeugen nimmt einen Teilstring davon. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const TRANSCRIPT_TOOL_DESCRIPTION: &str = r#"Liest das Transkript des YouTube-Video-Tabs als Segmente mit Zeitstempel und Text aus der Untertitelspur des Videos `requestedLanguage` nennt die gewählte Spur, `deliveredLanguage` die Sprache der gelieferten Spurendatei, `source` den Ort, an dem das Datenmodell des Players gefunden wurde. `offset` überspringt so viele Zeichen der verketteten Segmenttexte (Default 0), `maxChars` begrenzt den Ausschnitt (Default 20 000, höchstens 100 000); `segments` enthält genau die Segmente dieses Fensters, `chars` und `totalChars` sagen, wo man steht, und `truncated` blättert weiter. Der Tab muss im Vordergrund sein — vorher browser_focus aufrufen, sonst antwortet das Werkzeug `transcript_needs_focus`. Mit `tab` genau diesen Tab, ohne `tab` den zuletzt benutzten."#;
-const NO_EXTENSION_TEXT: &str = r#"Keine Extension verbunden — Firefox mit der Extension läuft nicht oder die Verbindung ist getrennt."#;
-const NO_ANSWER_TEXT: &str = r#"Die Extension hat nicht geantwortet (Zeitüberschreitung)."#;
-const UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_status erwartet keine Argumente."#;
-const NAVIGATE_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_navigate erwartet nur `url` und `tab`."#;
-const READ_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_read erwartet nur `offset`, `maxChars`, `mode`, `frame` und `tab`."#;
-const CLICK_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_click erwartet nur `selector`, `frame` und `tab`."#;
-const TYPE_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_type erwartet nur `selector`, `text`, `submit`, `frame` und `tab`."#;
-const FOCUS_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_focus erwartet nur `tab`."#;
-// `test/mcp.test.js` declares two more sentences here and never uses them
-// (`browser_inspect`/`browser_close_tab` with an undeclared argument); a constant no case
-// reads would be dead weight, and `scripts/parity.sh` comparison 2 pins both sentences
-// through the real process anyway.
-const OPEN_TAB_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_open_tab erwartet nur `url`."#;
-const EVAL_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_eval erwartet nur `code`, `frame` und `tab`."#;
-const SCREENSHOT_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_screenshot erwartet nur `tab`."#;
-const FRAMES_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_frames erwartet nur `tab`."#;
-const TRANSCRIPT_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_transcript erwartet nur `offset`, `maxChars` und `tab`."#;
-const INVALID_URL_TEXT: &str = r#"Nur http:// und https:// sind erlaubt."#;
-const NO_AGENT_TAB_TEXT: &str = r#"Kein Agenten-Tab — zuerst browser_navigate aufrufen."#;
-const TOO_MANY_TABS_TEXT: &str = r#"Es sind schon fünf Agenten-Tabs offen — erst einen schließen."#;
-const NOT_READABLE_TEXT: &str = r#"Diese Seite kann die Extension nicht lesen (interne Seite oder Sonderformat)."#;
-const PAGE_BUSY_TEXT: &str = r#"Die Seite lädt noch — bitte gleich noch einmal versuchen."#;
+const TOOL_DESCRIPTION: &str = r#"Shows the windows and tabs of the operator's browser in the Default container, along with the extension's connection state, and marks the agent tab with `agent: true`."#;
+const NAVIGATE_TOOL_DESCRIPTION: &str = r#"Opens an http(s) URL in the agent tab of the operator's browser (Default container), waits until the page has loaded and then until it has settled (3 s at most); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
+const READ_TOOL_DESCRIPTION: &str = r#"Reads the **current** agent tab and takes **no** URL — call `browser_navigate` first. Reads the title, the address and the text of the agent tab; `offset` skips that many characters of the text (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000). `offset`/`maxChars` page through the text; `chars` and `totalChars` tell you where you are. `via` says whether it is visible text or text content. `mode: article` reads only the article body — without navigation, footer and cookie banner. Waits first until the page has settled (3 s at most) and reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
+const CLICK_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Clicks the first element that matches the CSS selector in the agent tab, waits until the page has settled (3 s at most) and returns the page text afterwards (cut to 20 000 characters); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
+const TYPE_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Writes text into the field that matches the CSS selector, optionally sends Enter and returns the page text afterwards (cut to 20 000 characters). With `tab` exactly that tab, without `tab` the one used last."#;
+const FOCUS_TOOL_DESCRIPTION: &str = r#"Brings the agent tab to the front and its window to the foreground; the page itself is not changed, and `focused` comes from a query after focusing. With `tab` exactly that tab, without `tab` the one used last."#;
+const INSPECT_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Lists the elements of the agent tab (by CSS selector and/or text search) with tag, id, class, link, visible text, visibility and a ready-made selector to reuse. `my-card >>> button` steps right of the `>>>` into the open shadow tree of `my-card` (several levels allowed); every step is a simple selector — type, `#id`, `.class`, `[attr="value"]` or `:nth-of-type(n)`; closed shadow trees stay out of reach, and without `>>>` nothing changes. Changes nothing on the page. With `tab` exactly that tab, without `tab` the one used last."#;
+const OPEN_TAB_TOOL_DESCRIPTION: &str = r#"Opens another agent tab in the Default container (five at most) and returns `tabId`, `url` and `title`. Waits until the page has loaded, but not for it to settle — a `browser_read` afterwards should not cost `page_busy`."#;
+const CLOSE_TAB_TOOL_DESCRIPTION: &str = r#"Closes an agent tab and removes it from the list; without `tab` the one used last. Returns `tabId` and `closed`."#;
+const EVAL_TOOL_DESCRIPTION: &str = r#"Evaluates code in the **current** agent tab and takes **no** URL — call `browser_navigate` first. Runs code in the page context of the agent tab and returns the result as JSON; code may change the page, including filling password fields. `code` runs as a function body: the result comes back with `return`, without `return` it is `null`. Only possible when "Allow code evaluation" is switched on in the extension settings — otherwise `eval_not_allowed`. With `tab` exactly that tab, without `tab` the one used last."#;
+const EVAL_FUNCTION_BODY_SENTENCE: &str = r#"`code` runs as a function body"#;
+const SCREENSHOT_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Photographs the visible viewport of the agent tab and returns the picture as MCP image content (3 MiB at most; PNG, scaled down and re-encoded as JPEG when larger). The numbers for it — `format`, `width`, `height`, `bytes` and `scaled` — stand next to it as a text block. With `tab` exactly that tab, without `tab` the one used last."#;
+const FRAMES_TOOL_DESCRIPTION: &str = r#"Lists the frames (iframes) of the agent tab with their address; `frame` in the other tools takes a substring of it. With `tab` exactly that tab, without `tab` the one used last."#;
+const TRANSCRIPT_TOOL_DESCRIPTION: &str = r#"Reads the transcript of the YouTube video tab as segments with timestamp and text, taken from the video's subtitle track. `requestedLanguage` names the chosen track, `deliveredLanguage` the language of the delivered track file, `source` where the player's data model was found. `offset` skips that many characters of the concatenated segment texts (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000); `segments` holds exactly the segments of this window, `chars` and `totalChars` tell you where you are, and `truncated` pages on. The tab must be in the foreground — call browser_focus first, otherwise the tool answers `transcript_needs_focus`. With `tab` exactly that tab, without `tab` the one used last."#;
+const NO_EXTENSION_TEXT: &str = r#"No extension connected — Firefox with the extension is not running, or the connection was dropped."#;
+const NO_ANSWER_TEXT: &str = r#"The extension did not answer (timeout)."#;
+const UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_status takes no arguments."#;
+const NAVIGATE_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_navigate takes only `url` and `tab`."#;
+const READ_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_read takes only `offset`, `maxChars`, `mode`, `frame` and `tab`."#;
+const CLICK_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_click takes only `selector`, `frame` and `tab`."#;
+const TYPE_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_type takes only `selector`, `text`, `submit`, `frame` and `tab`."#;
+const FOCUS_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_focus takes only `tab`."#;
+// No constant for `browser_inspect` or `browser_close_tab` here: a constant no case reads
+// would be dead weight, and `scripts/parity.sh` comparison 2 pins both sentences through
+// the real process anyway.
+const OPEN_TAB_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_open_tab takes only `url`."#;
+const EVAL_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_eval takes only `code`, `frame` and `tab`."#;
+const SCREENSHOT_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_screenshot takes only `tab`."#;
+const FRAMES_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_frames takes only `tab`."#;
+const TRANSCRIPT_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_transcript takes only `offset`, `maxChars` and `tab`."#;
+const INVALID_URL_TEXT: &str = r#"Only http:// and https:// are allowed."#;
+const NO_AGENT_TAB_TEXT: &str = r#"No agent tab — call browser_navigate first."#;
+const TOO_MANY_TABS_TEXT: &str = r#"Five agent tabs are already open — close one first."#;
+const NOT_READABLE_TEXT: &str = r#"The extension cannot read this page (internal page or special format)."#;
+const PAGE_BUSY_TEXT: &str = r#"The page is still loading — try again in a moment."#;
 const NOT_READABLE_URL: &str = r#"https://example.org/preisliste.pdf"#;
-const NOT_READABLE_PDF_TEXT: &str = r#"Diese Seite kann die Extension nicht lesen (Typ: pdf). Adresse: https://example.org/preisliste.pdf"#;
-const NOT_READABLE_WITHOUT_KIND_TEXT: &str = r#"Diese Seite kann die Extension nicht lesen. Adresse: https://example.org/preisliste.pdf"#;
+const NOT_READABLE_PDF_TEXT: &str = r#"The extension cannot read this page (kind: pdf). Address: https://example.org/preisliste.pdf"#;
+const NOT_READABLE_WITHOUT_KIND_TEXT: &str = r#"The extension cannot read this page. Address: https://example.org/preisliste.pdf"#;
 const NOT_READABLE_CONTENT_TYPE: &str = r#"application/pdf"#;
-const NOT_READABLE_PDF_WITH_TYPE_TEXT: &str = r#"Diese Seite kann die Extension nicht lesen (Typ: pdf, Content-Type: application/pdf). Adresse: https://example.org/preisliste.pdf"#;
-const NOT_READABLE_WITH_TYPE_TEXT: &str = r#"Diese Seite kann die Extension nicht lesen (Content-Type: application/pdf). Adresse: https://example.org/preisliste.pdf"#;
-const OFFSET_OUT_OF_RANGE_MESSAGE: &str = r#"Der Text hat 87314 Zeichen; offset 999999 liegt dahinter."#;
-const OFFSET_OUT_OF_RANGE_TEXT: &str = r#"Der `offset` liegt hinter dem Ende des Textes: Der Text hat 87314 Zeichen; offset 999999 liegt dahinter."#;
-const INVALID_READ_PARAMS_MESSAGE: &str = r#"maxChars muss eine ganze Zahl von 1 bis 100000 sein."#;
-const INVALID_READ_PARAMS_TEXT: &str = r#"Der Parameter ist ungültig: maxChars muss eine ganze Zahl von 1 bis 100000 sein."#;
-const CALL_EXTENSION_FAILED_TEXT: &str = r#"Die Extension konnte die Anfrage nicht ausführen (code=invalid_params)."#;
-const FRAME_NOT_FOUND_TEXT: &str = r#"Zu diesem `frame` passt kein Rahmen — mit browser_frames die Adressen prüfen."#;
-const FRAME_NOT_FOUND_WITH_COUNT_TEXT: &str = r#"Zu diesem `frame` passt kein Rahmen — mit browser_frames die Adressen prüfen (geantwortete Rahmen: 2)."#;
-const FRAME_AMBIGUOUS_TEXT: &str = r#"Mehrere Rahmen passen zu diesem `frame` — einen längeren Teilstring der Adresse angeben."#;
-const FRAME_AMBIGUOUS_WITH_CANDIDATES_TEXT: &str = r#"Mehrere Rahmen passen zu diesem `frame` — einen längeren Teilstring einer dieser Adressen angeben: https://widget.example.net/kalender/oben, https://widget.example.net/kalender/unten."#;
+const NOT_READABLE_PDF_WITH_TYPE_TEXT: &str = r#"The extension cannot read this page (kind: pdf, content-type: application/pdf). Address: https://example.org/preisliste.pdf"#;
+const NOT_READABLE_WITH_TYPE_TEXT: &str = r#"The extension cannot read this page (content-type: application/pdf). Address: https://example.org/preisliste.pdf"#;
+const OFFSET_OUT_OF_RANGE_MESSAGE: &str = r#"The text has 87314 characters; offset 999999 is past its end."#;
+const OFFSET_OUT_OF_RANGE_TEXT: &str = r#"`offset` is past the end of the text: The text has 87314 characters; offset 999999 is past its end."#;
+const INVALID_READ_PARAMS_MESSAGE: &str = r#"maxChars must be an integer from 1 to 100000."#;
+const INVALID_READ_PARAMS_TEXT: &str = r#"The parameter is invalid: maxChars must be an integer from 1 to 100000."#;
+const CALL_EXTENSION_FAILED_TEXT: &str = r#"The extension could not carry out the request (code=invalid_params)."#;
+const FRAME_NOT_FOUND_TEXT: &str = r#"No frame matches this `frame` — check the addresses with browser_frames."#;
+const FRAME_NOT_FOUND_WITH_COUNT_TEXT: &str = r#"No frame matches this `frame` — check the addresses with browser_frames (frames that answered: 2)."#;
+const FRAME_AMBIGUOUS_TEXT: &str = r#"Several frames match this `frame` — pass a longer substring of the address."#;
+const FRAME_AMBIGUOUS_WITH_CANDIDATES_TEXT: &str = r#"Several frames match this `frame` — pass a longer substring of one of these addresses: https://widget.example.net/kalender/oben, https://widget.example.net/kalender/unten."#;
 const FRAME_SUBSTRING: &str = r#"kalender"#;
 const CLICK_SELECTOR: &str = r#"a#video-title-link"#;
-const INVALID_SELECTOR_TEXT: &str = r#"Der Selektor ist ungültig: a#video-title-link."#;
-const NO_MATCH_TEXT: &str = r#"Kein Element passt zu: a#video-title-link."#;
-const NOT_CLICKABLE_TEXT: &str = r#"Das Element ist nicht sichtbar oder deaktiviert: a#video-title-link."#;
+const INVALID_SELECTOR_TEXT: &str = r#"The selector is invalid: a#video-title-link."#;
+const NO_MATCH_TEXT: &str = r#"No element matches: a#video-title-link."#;
+const NOT_CLICKABLE_TEXT: &str = r#"The element is not visible or is disabled: a#video-title-link."#;
 const TYPE_SELECTOR: &str = r#"input#q"#;
 const TYPE_TEXT: &str = r#"suchbegriff"#;
-const TYPE_NO_MATCH_TEXT: &str = r#"Kein Element passt zu: input#q."#;
-const NOT_TYPEABLE_TEXT: &str = r#"Das Element ist kein beschreibbares Feld oder deaktiviert: input#q."#;
-const PASSWORD_NOT_ALLOWED_TEXT: &str = r#"Passwortfelder sind gesperrt. In den Optionen der Erweiterung freischalten."#;
-const FOCUS_FAILED_TEXT: &str = r#"Die Extension konnte die Anfrage nicht ausführen (code=focus_failed)."#;
+const TYPE_NO_MATCH_TEXT: &str = r#"No element matches: input#q."#;
+const NOT_TYPEABLE_TEXT: &str = r#"The element is not a writable field or is disabled: input#q."#;
+const PASSWORD_NOT_ALLOWED_TEXT: &str = r#"Password fields are locked. Unlock them in the extension options."#;
+const FOCUS_FAILED_TEXT: &str = r#"The extension could not carry out the request (code=focus_failed)."#;
 const INSPECT_SELECTOR: &str = r#"a#cart-link"#;
-const INSPECT_NEEDS_FILTER_TEXT: &str = r#"browser_inspect braucht `selector` oder `text`."#;
-const INSPECT_INVALID_SELECTOR_TEXT: &str = r#"Der Selektor ist ungültig: a#cart-link."#;
-const INSPECT_INVALID_PARAMS_TEXT: &str = r#"Der Parameter ist ungültig."#;
+const INSPECT_NEEDS_FILTER_TEXT: &str = r#"browser_inspect needs `selector` or `text`."#;
+const INSPECT_INVALID_SELECTOR_TEXT: &str = r#"The selector is invalid: a#cart-link."#;
+const INSPECT_INVALID_PARAMS_TEXT: &str = r#"The parameter is invalid."#;
 const EVAL_CODE: &str = r#"return document.title"#;
-const EVAL_NOT_ALLOWED_TEXT: &str = r#"Code-Auswertung ist in den Einstellungen der Erweiterung nicht erlaubt — erst dort einschalten."#;
-const EVAL_FAILED_TEXT: &str = r#"Der Code im Agenten-Tab ist gescheitert (Ausnahme oder Syntaxfehler)."#;
-const EVAL_TIMEOUT_TEXT: &str = r#"Der Code hat nicht rechtzeitig geantwortet (Zeitüberschreitung nach 2 s)."#;
-const EVAL_RESULT_TOO_LARGE_TEXT: &str = r#"Das Ergebnis ist zu groß für eine Antwort (mehr als 10 000 Zeichen JSON) — weniger zurückgeben, zum Beispiel mit browser_inspect."#;
-const EVAL_RESULT_UNSERIALIZABLE_TEXT: &str = r#"Das Ergebnis lässt sich nicht als JSON abbilden (etwa zirkulär) — nur einfache Werte zurückgeben."#;
-const INVALID_EVAL_PARAMS_TEXT: &str = r#"Der Parameter ist ungültig."#;
+const EVAL_NOT_ALLOWED_TEXT: &str = r#"Code evaluation is not allowed in the extension settings — enable it there first."#;
+const EVAL_FAILED_TEXT: &str = r#"The code in the agent tab failed (exception or syntax error)."#;
+const EVAL_TIMEOUT_TEXT: &str = r#"The code did not answer in time (timeout after 2 s)."#;
+const EVAL_RESULT_TOO_LARGE_TEXT: &str = r#"The result is too large for one answer (more than 10 000 characters of JSON) — return less, for example with browser_inspect."#;
+const EVAL_RESULT_UNSERIALIZABLE_TEXT: &str = r#"The result cannot be represented as JSON (circular, for example) — return plain values only."#;
+const INVALID_EVAL_PARAMS_TEXT: &str = r#"The parameter is invalid."#;
 const EVAL_FAILED_PAGE_MESSAGE: &str = r#"messwert-4711: Cannot read properties of null"#;
-const EVAL_FAILED_WITH_MESSAGE_TEXT: &str = r#"Der Code im Agenten-Tab ist gescheitert: messwert-4711: Cannot read properties of null"#;
-const SCREENSHOT_NOT_ALLOWED_TEXT: &str = r#"Bildschirmfotos sind in den Einstellungen der Erweiterung nicht erlaubt — erst dort einschalten."#;
-const SCREENSHOT_FAILED_TEXT: &str = r#"Der Agenten-Tab ließ sich nicht fotografieren."#;
+const EVAL_FAILED_WITH_MESSAGE_TEXT: &str = r#"The code in the agent tab failed: messwert-4711: Cannot read properties of null"#;
+const SCREENSHOT_NOT_ALLOWED_TEXT: &str = r#"Screenshots are not allowed in the extension settings — enable them there first."#;
+const SCREENSHOT_FAILED_TEXT: &str = r#"The agent tab could not be photographed."#;
 const SCREENSHOT_BROWSER_MESSAGE: &str = r#"The operation failed for an unknown transient reason"#;
-const SCREENSHOT_FAILED_WITH_MESSAGE_TEXT: &str = r#"Der Agenten-Tab ließ sich nicht fotografieren: The operation failed for an unknown transient reason"#;
-const SCREENSHOT_TOO_LARGE_MEASUREMENT: &str = r#"Das Bild ist auch nach dem Verkleinern zu groß: 3300000 Bytes bei 1200 × 675 (Grenze 3145728)."#;
-const SCREENSHOT_TOO_LARGE_TEXT: &str = r#"Das Bild ist auch nach dem Verkleinern zu groß — es wird nicht geliefert; ein anderer Tab kann kleiner ausfallen."#;
-const SCREENSHOT_TOO_LARGE_WITH_MESSAGE_TEXT: &str = r#"Das Bild ist auch nach dem Verkleinern zu groß — es wird nicht geliefert; ein anderer Tab kann kleiner ausfallen. Messung: Das Bild ist auch nach dem Verkleinern zu groß: 3300000 Bytes bei 1200 × 675 (Grenze 3145728)."#;
-const INVALID_SCREENSHOT_PARAMS_TEXT: &str = r#"Der Parameter ist ungültig."#;
-const TRANSCRIPT_FAILED_TEXT: &str = r#"Das Transkript ließ sich nicht lesen — nur YouTube-Watch-Seiten haben eines."#;
-const TRANSCRIPT_FAILURE_REASON: &str = r#"Die Spurendatei zur Sprache "ja" wurde auf dieser Seite nicht gefunden."#;
-const TRANSCRIPT_FAILED_WITH_MESSAGE_TEXT: &str = r#"Das Transkript ließ sich nicht lesen: Die Spurendatei zur Sprache "ja" wurde auf dieser Seite nicht gefunden."#;
+const SCREENSHOT_FAILED_WITH_MESSAGE_TEXT: &str = r#"The agent tab could not be photographed: The operation failed for an unknown transient reason"#;
+const SCREENSHOT_TOO_LARGE_MEASUREMENT: &str = r#"The picture is too large even after scaling down: 3300000 bytes at 1200 × 675 (limit 3145728)."#;
+const SCREENSHOT_TOO_LARGE_TEXT: &str = r#"The picture is too large even after scaling down — it is not delivered; another tab may come out smaller."#;
+const SCREENSHOT_TOO_LARGE_WITH_MESSAGE_TEXT: &str = r#"The picture is too large even after scaling down — it is not delivered; another tab may come out smaller. Measurement: The picture is too large even after scaling down: 3300000 bytes at 1200 × 675 (limit 3145728)."#;
+const INVALID_SCREENSHOT_PARAMS_TEXT: &str = r#"The parameter is invalid."#;
+const TRANSCRIPT_FAILED_TEXT: &str = r#"The transcript could not be read — only YouTube watch pages have one."#;
+const TRANSCRIPT_FAILURE_REASON: &str = r#"The track file for language "ja" was not found on this page."#;
+const TRANSCRIPT_FAILED_WITH_MESSAGE_TEXT: &str = r#"The transcript could not be read: The track file for language "ja" was not found on this page."#;
 const TRANSCRIPT_PROBE_URL: &str = r#"https://www.youtube.com/api/timedtext?v=aaaaaaaaaaa&lang=en&expire=1&signature=platzhalter"#;
-const TRANSCRIPT_NEEDS_FOCUS_TEXT: &str = r#"Der Tab ist nicht im Vordergrund, deshalb ist die Seite nicht gerendert — zuerst browser_focus aufrufen und es dann erneut versuchen."#;
-const TRANSCRIPT_FOCUS_MESSAGE: &str = r#"Der Tab ist im Vordergrund (document.visibilityState: "visible"), die Seite ist aber noch nicht aufgebaut. Ein erneuter browser_focus hilft nicht; warte kurz und versuche es erneut."#;
-const TRANSCRIPT_NEEDS_FOCUS_WITH_MESSAGE_TEXT: &str = r#"Die Seite ist nicht gerendert: Der Tab ist im Vordergrund (document.visibilityState: "visible"), die Seite ist aber noch nicht aufgebaut. Ein erneuter browser_focus hilft nicht; warte kurz und versuche es erneut."#;
-const NO_TRANSCRIPT_PANEL_TEXT: &str = r#"Keine Untertitelspur im Video gefunden — das Video hat keine, oder die Seite ist noch nicht fertig aufgebaut."#;
+const TRANSCRIPT_NEEDS_FOCUS_TEXT: &str = r#"The tab is not in the foreground, so the page is not rendered — call browser_focus first, then try again."#;
+const TRANSCRIPT_FOCUS_MESSAGE: &str = r#"The tab is in the foreground (document.visibilityState: "visible"), but the page is not built yet. Another browser_focus does not help; wait a moment and try again."#;
+const TRANSCRIPT_NEEDS_FOCUS_WITH_MESSAGE_TEXT: &str = r#"The page is not rendered: The tab is in the foreground (document.visibilityState: "visible"), but the page is not built yet. Another browser_focus does not help; wait a moment and try again."#;
+const NO_TRANSCRIPT_PANEL_TEXT: &str = r#"No subtitle track found in the video — it has none, or the page is not built yet."#;
 
 /* ------------------------------------------------------------- JSON-RPC */
 
@@ -1000,7 +999,7 @@ async fn mcp_toolsList_shouldOfferExactlyTheFourteenToolsOfTheContract() {
     // WHEN the client asks for the tool table,
     let answer = answer_of(seam.ask(&json!({ "jsonrpc": "2.0", "id": 20, "method": "tools/list" }))).await;
 
-    // THEN there are exactly thirteen tools, in the order the contract lists them. New
+    // THEN there are exactly fourteen tools, in the order the contract lists them. New
     // tools are appended, so every position is a pin: a tool inserted in the middle would
     // shift all of them.
     let tools = answer["result"]["tools"]
@@ -1177,7 +1176,7 @@ async fn mcp_toolsList_shouldOfferExactlyTheFourteenToolsOfTheContract() {
         tools[9]["description"]
             .as_str()
             .expect("a description")
-            .contains("ohne `return` ist es `null`"),
+            .contains("without `return` it is `null`"),
         "the `return` rule is missing: {}",
         tools[9]["description"]
     );
@@ -1237,7 +1236,7 @@ async fn mcp_toolsList_shouldOfferExactlyTheFourteenToolsOfTheContract() {
     assert_eq!(keys_of(&tools[12]["inputSchema"]["properties"]), ["offset", "maxChars", "tab"]);
 
     // No schema may be more permissive than the call side: `additionalProperties: false`
-    // stands in all thirteen, and no schema gains a `required` it does not declare.
+    // stands in all fourteen, and no schema gains a `required` it does not declare.
     for tool in &tools {
         assert_eq!(
             tool["inputSchema"]["additionalProperties"],
@@ -1290,8 +1289,8 @@ async fn mcp_toolsListIsByteIdentical() {
     let seam = Seam::nobody(config());
     let answer = answer_of(seam.ask(&json!({ "jsonrpc": "2.0", "id": 2, "method": "tools/list" }))).await;
 
-    // THEN the line is identical character for character — key order, backticks, German
-    // quotes, the two-space thousands and the schema keys included. `scripts/parity.sh`
+    // THEN the line is identical character for character — key order, backticks, the
+    // two-space thousands and the schema keys included. `scripts/parity.sh`
     // comparison 1 measures the same thing through the real process; this case says why.
     assert_eq!(
         serde_json::to_string(&answer).expect("a JSON value always serialises"),
@@ -1371,8 +1370,8 @@ async fn mcp_toolsCallBrowserStatus_withoutAnExtension_shouldReturnTheNoExtensio
     // WHEN the client calls the tool anyway,
     let answer = seam.call(status_call(22)).await;
 
-    // THEN it gets the German sentence, flagged as an error — not a JSON-RPC error,
-    // because the human should read the sentence:
+    // THEN it gets the sentence from the contract, flagged as an error — not a JSON-RPC
+    // error, because the caller should read the sentence:
     assert!(is_error(&answer));
     assert_eq!(answer["result"]["content"], json!([{ "type": "text", "text": NO_EXTENSION_TEXT }]));
     assert!(answer.get("error").is_none());
@@ -1408,7 +1407,7 @@ async fn mcp_toolsCallBrowserStatus_whenTheExtensionAnswersOkFalse_shouldReturnT
         answer["result"]["content"],
         json!([{
             "type": "text",
-            "text": "Die Extension konnte den Status nicht liefern (code=permission_denied).",
+            "text": "The extension could not deliver the status (code=permission_denied).",
         }])
     );
     assert!(answer.get("error").is_none());
@@ -1541,7 +1540,7 @@ async fn mcp_toolsCallBrowserNavigate_withWhitespaceAroundTheUrl_shouldAcceptItL
 }
 
 #[tokio::test]
-async fn mcp_toolsCallBrowserNavigate_whenTheExtensionRefusesTheUrl_shouldReturnTheSameGermanSentence() {
+async fn mcp_toolsCallBrowserNavigate_whenTheExtensionRefusesTheUrl_shouldReturnTheSameSentenceFromTheContract() {
     // GIVEN an extension that refuses every navigate request with its own `invalid_url` —
     // the second floor of the same rule:
     let mut seam = Seam::connected(config()).await;
@@ -1592,8 +1591,8 @@ async fn mcp_toolsCallBrowserNavigate_shouldNotSendRefusedCallsToTheExtension() 
         .await;
     let file_url = seam.call(navigate_call(61, "file:///etc/passwd")).await;
 
-    // ... the first as a protocol error, the second as a tool error with the German
-    // sentence,
+    // ... the first as a protocol error, the second as a tool error with the sentence
+    // from the contract,
     assert_eq!(error_code(&missing_url), Some(-32602));
     assert!(is_error(&file_url));
     assert_eq!(file_url["result"]["content"], json!([{ "type": "text", "text": INVALID_URL_TEXT }]));
@@ -2123,7 +2122,7 @@ async fn mcp_toolsCallBrowserRead_whenTheAnsweredFrameCountIsAWholeFloat_shouldS
     assert!(is_error(&answer));
     assert_eq!(
         text_of(&answer),
-        r#"Zu diesem `frame` passt kein Rahmen — mit browser_frames die Adressen prüfen (geantwortete Rahmen: 3)."#
+        r#"No frame matches this `frame` — check the addresses with browser_frames (frames that answered: 3)."#
     );
     assert_ne!(text_of(&answer), FRAME_NOT_FOUND_TEXT);
 }
@@ -2170,10 +2169,10 @@ async fn mcp_toolsCallBrowserRead_withAFrameAndNoDetailsInTheRefusal_shouldAnswe
 
 /* ------------------------------------------------------------------ click */
 
-/// `Die Extension konnte die Anfrage nicht ausführen (code=…).` — the generic sentence, with
+/// `The extension could not carry out the request (code=…).` — the generic sentence, with
 /// the code the extension answered. Spelled out here, not imported.
 fn call_extension_failed(code: &str) -> String {
-    format!("Die Extension konnte die Anfrage nicht ausführen (code={code}).")
+    format!("The extension could not carry out the request (code={code}).")
 }
 
 /// The three codes a refused click answers with, each naming the selector the caller sent.
@@ -3950,7 +3949,7 @@ async fn mcp_toolsCall_withAnUnknownToolName_shouldReturnAnUnknownToolToolError(
     assert!(is_error(&answer));
     assert_eq!(
         answer["result"]["content"],
-        json!([{ "type": "text", "text": "Unbekanntes Tool: navigate" }])
+        json!([{ "type": "text", "text": "Unknown tool: navigate" }])
     );
     assert!(answer.get("error").is_none());
 }

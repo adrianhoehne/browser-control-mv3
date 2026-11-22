@@ -27,7 +27,7 @@ anderen Rückweg, und es berührt 16 Aufrufstellen.
   selbst, `sender.frameId` steht in der Nachricht — der Inhaltsfilter bleibt,
   weil ein Frame stumm bleiben darf.
 - **Alle 16 Aufrufer antworten unverändert.** Dieselben Werkzeugergebnisse,
-  dieselben Fehlercodes, dieselben deutschen Sätze.
+  dieselben Fehlercodes, dieselben englischen Sätze (seit `docs/54`).
 - **Noch MV2.** Die Umstellung auf `scripting` ist `docs/43`; hier bleibt es bei
   `browser.tabs.executeScript({file})`.
 
@@ -158,7 +158,8 @@ für `page-agent.js`), `test/extension.test.js`, `test/bridge-tab.test.js`
 6. **Die Parität bleibt.** `scripts/parity.sh --impl rust --check` ⇒ `7/7 wie
    erwartet`, `--self-test` ⇒ `7/7 rot wie erwartet`.
 7. **Der Fehlerpfad ist unverändert.** `about:debugging` öffnen und `read`
-   aufrufen ⇒ `not_readable` mit demselben deutschen Satz wie vorher
+   aufrufen ⇒ `not_readable` mit demselben englischen Satz wie vorher (seit
+   `docs/54`; der Satz bleibt, nur seine Sprache hat gewechselt)
    (`test/extension.test.js` deckt ihn; hier als Sichtprüfung des Betreibers).
 
 ## Dev plan

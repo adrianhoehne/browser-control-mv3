@@ -483,7 +483,7 @@ mod tests {
     fn bridgeFailed_shouldKeepTheSentenceTheTemplateWouldPrint() {
         assert_eq!(
             texts::BRIDGE_FAILED,
-            "Die Bridge konnte den Status nicht lesen."
+            "The bridge could not read the status."
         );
     }
 }

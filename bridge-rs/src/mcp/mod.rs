@@ -1,5 +1,5 @@
-//! The MCP tool layer: JSON-RPC 2.0 over one text message at a time, the thirteen
-//! tools, their German sentences and the `tools/call` dispatch — ported from
+//! The MCP tool layer: JSON-RPC 2.0 over one text message at a time, the fourteen
+//! tools, their sentences and the `tools/call` dispatch — ported from
 //! `bridge/mcp.mjs`.
 //!
 //! [`handle_message_text`] is the transport-independent half: one JSON-RPC text in, at
@@ -49,7 +49,7 @@ const METHOD_TOOLS_CALL: &str = "tools/call";
 /// A JSON-RPC 2.0 error: both fields are mandatory on the wire.
 ///
 /// The texts are English because this is the protocol layer; what a human reads is the
-/// German sentence inside a tool result.
+/// sentence inside a tool result — English too, since `docs/54`.
 ///
 /// `Serialize` is what keeps the wire shape and the struct from drifting apart: the error
 /// object goes out as this struct, so a renamed field is a compile error rather than a
