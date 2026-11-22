@@ -40,7 +40,10 @@ Logzeilen `bc: …`, die Kommentare und die Dokumentation bleiben deutsch.
   blockierte an den alten Zitaten in weiteren Specs und wurde nach der
   Projektregel geteilt. `docs/55-alte-zitate-in-specs.md` ist seit 2026-11-22
   `active`: 73 Inventarzeilen, 38 Vertragsstellen nachgezogen, 21 Belege
-  markiert, 14 Ausschlüsse. `docs/54` steht weiter auf `proposed`, bis die nächste Runde zustimmt.
+  markiert, 14 Ausschlüsse.
+- **Release `0.7.0` (2026-11-22):** Tag gebaut, XPI signiert (AMO `unlisted`),
+  Firefox nimmt sie an (`signedState 2`, 129 687 Bytes), Release und beide
+  portablen Zips tragen das signierte XPI. `docs/54` steht weiter auf `proposed`, bis die nächste Runde zustimmt.
 
 ## Stand (2026-11-18): `ws://` nur für Loopback, sonst `wss://` oder SSH-Tunnel
 

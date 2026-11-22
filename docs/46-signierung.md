@@ -313,3 +313,10 @@ Wegwerfprofil genügt (siehe Kriterium 5).
   wäre die falsche Unterschrift.
 - **2026-11-18, Vorgeschichte:** `docs/42`–`docs/45` liefern MV3 als
   Voraussetzung; `INSTALL.md` nennt die Signierung bisher als offenen Punkt.
+- **2026-11-22, `0.7.0` signiert und ausgeliefert.** `scripts/release-sign.sh v0.7.0
+  --fix-zips` lud `0.7.0` hoch; AMO nahm an. Firefox 152.0.3 im Wegwerfprofil meldet
+  `signedState 2` (`active=true`, `version=0.7.0`). Das XPI misst **129 687 Bytes**,
+  sha256 `c26414d32508d4f9f4554645f8468ecf6ccff7e303ccd0503c70d2c6dce4dd7c`. Beide
+  portablen Zips tragen dasselbe XPI (gleicher Hash). Der Schlusssatz des Skripts
+  prüfte die Assets ohne `--repo` und lief damit gegen `origin` (das eingefrorene
+  Repo, „release not found"); er hat `--repo` jetzt.

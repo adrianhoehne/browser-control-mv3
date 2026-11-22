@@ -78,4 +78,4 @@ if [[ "$fix_zips" == true ]]; then
   printf '\nfinal assets:\n'
   gh release view "$tag" --repo "$repo" --json assets --jq '.assets[] | "\(.name) \(.size)"'
 fi
-gh release view "$tag" --json assets --jq '.assets[] | "\(.name) \(.size)"'
+gh release view "$tag" --repo "$repo" --json assets --jq '.assets[] | "\(.name) \(.size)"'
