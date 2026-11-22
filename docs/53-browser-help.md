@@ -50,23 +50,23 @@ Sechs Abschnitte, immer in dieser Reihenfolge — damit ein Modell sich nach dem
 ersten Mal orientieren kann:
 
 ```
-## Zweck
-Ein Satz.
+## Purpose
+One sentence.
 
-## Argumente
-| Name | Pflicht | Bedeutung |
+## Arguments
+| Name | Required | Meaning |
 
-## Antwort
-Die Felder, die zurückkommen.
+## Returns
+The fields that come back.
 
-## Beispiel
-Aufruf und die erwartete Antwort (gekürzt).
+## Example
+The call and the expected answer, shortened.
 
-## Fallstricke
-Was schiefgeht und warum — der Teil, der die Fehlgriffe verhindert.
+## Pitfalls
+What goes wrong and why — the part that prevents the missteps.
 
-## Verwandt
-Die zwei, drei Werkzeuge, die im selben Ablauf gebraucht werden.
+## Related
+The two or three tools used in the same flow.
 ```
 
 ## Sprache
