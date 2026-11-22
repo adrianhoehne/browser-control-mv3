@@ -34,7 +34,8 @@ Betriebsvoraussetzung ist.
 
 - **Ein Befehl** auf dem Server: `./scripts/install.sh` kopiert das gebaute
   Bridge-Binary nach `~/.local/bin`, legt das Token an, installiert die
-  systemd-User-Unit, aktiviert und startet den Dienst und prüft ihn. Danach steht
+  systemd-User-Unit, aktiviert den Dienst, startet oder **startet neu** und prüft
+  ihn. Danach steht
   da, was in Firefox noch zu tun ist — mit Endpunkt und Token zum Einfügen.
 - **Idempotent.** Ein zweiter Lauf ändert nichts, was schon stimmt. Ein
   **vorhandenes Token wird nie überschrieben** — Rotation bleibt Handarbeit
@@ -738,3 +739,12 @@ Minor, vier Nits — **alle übernommen**; die Einzelzeilen stehen in `## Log`.
 - **Nits übernommen:** „die fünf Flags" statt „sechs Optionen"; „65 Bytes"
   einheitlich; Runde 1 mit Datum und Verdict; `loginctl enable-linger` bleibt
   außerhalb des Skripts (`## Non-goals`).
+- **2026-11-22, laufender Dienst wird neu gestartet.** `enable --now` lässt einen
+  aktiven Dienst unangetastet; nach einer Neuinstallation lief deshalb weiter das
+  alte Binary (gemessen: 0.7.0 kopiert, der Prozess antwortete mit den Texten von
+  0.6.1). `start_service` fragt jetzt `is-active`, nimmt `restart` bei laufendem
+  und `start` bei gestopptem Dienst; `enable` bleibt in beiden Wegen. Fälle:
+  `install_installsAndStartsTheUnit` (aktiv ⇒ reload, enable, restart, is-active,
+  kein `enable --now`) und `install_withAStoppedService_startsItInsteadOfRestarting`
+  (gestoppt ⇒ start, kein restart). Der systemctl-Stub führt dafür einen
+  Zustand, damit `is-active` nach dem Start `0` meldet.

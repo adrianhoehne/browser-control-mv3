@@ -475,13 +475,25 @@ ensure_unit() {
   put_file "$UNIT_FILE" 644 <"$UNIT_SOURCE"
 }
 
-# `daemon-reload` before `enable --now`: without the reload systemd does not know
-# the file yet, and `enable` would only report that the unit does not exist.
+# `daemon-reload` first: without the reload systemd does not know the file yet, and
+# `enable` would only report that the unit does not exist.
+#
+# A *running* service gets `restart`, not `enable --now`. `enable --now` leaves an
+# active unit untouched, so a reinstall would keep the old binary in memory and
+# serve the old texts (measured 2026-11-22: 0.7.0 was copied, the process kept
+# answering with 0.6.1's sentences). `enable` stays in both paths: the unit must
+# come up after a reboot either way.
 start_service() {
-  say "Dienst neu laden und starten: $SERVICE_NAME"
-
   systemctl --user daemon-reload || die 1 "systemctl --user daemon-reload ist gescheitert."
-  systemctl --user enable --now "$SERVICE_NAME" || die 1 "systemctl --user enable --now $SERVICE_NAME ist gescheitert."
+  systemctl --user enable "$SERVICE_NAME" || die 1 "systemctl --user enable $SERVICE_NAME ist gescheitert."
+
+  if systemctl --user is-active --quiet "$SERVICE_NAME"; then
+    say "Dienst läuft — neu starten mit dem neuen Binary: $SERVICE_NAME"
+    systemctl --user restart "$SERVICE_NAME" || die 1 "systemctl --user restart $SERVICE_NAME ist gescheitert."
+  else
+    say "Dienst starten: $SERVICE_NAME"
+    systemctl --user start "$SERVICE_NAME" || die 1 "systemctl --user start $SERVICE_NAME ist gescheitert."
+  fi
 
   if ! systemctl --user is-active --quiet "$SERVICE_NAME"; then
     die 1 "Der Dienst läuft nach dem Start nicht (is-active meldet nicht 'active'). Protokoll ansehen: journalctl --user -u $SERVICE_NAME"
@@ -566,7 +578,7 @@ dry_run_install() {
   fi
 
   step "Dienst"
-  say "systemctl --user daemon-reload, dann enable --now $SERVICE_NAME, danach is-active."
+  say "systemctl --user daemon-reload, dann enable $SERVICE_NAME; läuft er schon: restart, sonst start; danach is-active."
 
   step "Danach in Firefox"
   say "Handarbeit: about:debugging öffnen, extension/manifest.json laden, Endpunkt ws://127.0.0.1:$EXTENSION_PORT und das Token eintragen."

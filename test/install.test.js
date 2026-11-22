@@ -72,8 +72,13 @@ for arg in "$@"; do
     *) sub=$arg; break ;;
   esac
 done
+state="\${BC_INSTALL_STUB_LOG}.state"
 case $sub in
-  is-active) exit "\${BC_INSTALL_STUB_IS_ACTIVE:-0}" ;;
+  # The state file makes start/restart/stop visible to a later is-active, so the
+  # "is it running now?" check after the start is reachable from a test.
+  is-active) exit "$(cat "$state" 2>/dev/null || printf '%s' "\${BC_INSTALL_STUB_IS_ACTIVE:-0}")" ;;
+  start|restart) printf '0' >"$state"; exit 0 ;;
+  stop|disable) printf '1' >"$state"; exit 0 ;;
   show) printf '%s\\n' "\${BC_INSTALL_STUB_MAINPID:-4242}"; exit 0 ;;
   *) exit 0 ;;
 esac
@@ -664,19 +669,50 @@ test("install_installsAndStartsTheUnit", (t) => {
   assert.equal(fs.statSync(installedPath).mode & 0o777, 0o644);
   assert.equal(fs.readFileSync(installedPath, "utf8"), fs.readFileSync(UNIT_SOURCE_PATH, "utf8"));
 
-  // AND the call order is the one that works: reload, then enable --now, then
-  // is-active. Enabling before the reload would meet a unit systemd has not read:
+  // AND the call order is the one that works: reload, then enable, then restart
+  // (the stub reports an *active* service by default), then is-active. Enabling
+  // before the reload would meet a unit systemd has not read; `enable --now` would
+  // leave the running process on the old binary:
   const calls = stubLog(sandbox)
     .split("\n")
     .filter((line) => line.startsWith("systemctl"));
 
   const reloadIndex = calls.indexOf("systemctl --user daemon-reload");
-  const enableIndex = calls.indexOf("systemctl --user enable --now browser-control");
+  const enableIndex = calls.indexOf("systemctl --user enable browser-control");
+  const restartIndex = calls.indexOf("systemctl --user restart browser-control");
   const activeIndex = calls.indexOf("systemctl --user is-active --quiet browser-control");
 
   assert.ok(reloadIndex >= 0, `no daemon-reload in:\n${calls.join("\n")}`);
-  assert.ok(enableIndex > reloadIndex, `enable --now did not follow daemon-reload:\n${calls.join("\n")}`);
-  assert.ok(activeIndex > enableIndex, `is-active did not follow enable --now:\n${calls.join("\n")}`);
+  assert.ok(enableIndex > reloadIndex, `enable did not follow daemon-reload:\n${calls.join("\n")}`);
+  assert.ok(restartIndex > enableIndex, `restart did not follow enable:\n${calls.join("\n")}`);
+  assert.ok(
+    calls.lastIndexOf("systemctl --user is-active --quiet browser-control") > restartIndex,
+    `the final is-active did not follow restart:\n${calls.join("\n")}`,
+  );
+  assert.equal(
+    calls.includes("systemctl --user enable --now browser-control"),
+    false,
+    `enable --now would keep the old process:\n${calls.join("\n")}`,
+  );
+});
+
+test("install_withAStoppedService_startsItInsteadOfRestarting", (t) => {
+  // GIVEN an empty sandbox whose service is not running,
+  const sandbox = makeSandbox(t);
+
+  // WHEN the installer runs,
+  const run = runInstall(sandbox, [], { BC_INSTALL_STUB_IS_ACTIVE: "1" });
+
+  // THEN it starts the unit, enables it for the next boot, and does not restart:
+  assert.equal(run.status, 0, run.output);
+
+  const calls = stubLog(sandbox)
+    .split("\n")
+    .filter((line) => line.startsWith("systemctl"));
+
+  assert.ok(calls.includes("systemctl --user enable browser-control"), calls.join("\n"));
+  assert.ok(calls.includes("systemctl --user start browser-control"), calls.join("\n"));
+  assert.equal(calls.includes("systemctl --user restart browser-control"), false, calls.join("\n"));
 });
 
 test("install_isIdempotent", async (t) => {

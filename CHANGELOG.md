@@ -5,7 +5,9 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 ## [Unreleased]
 
-Nichts offen.
+**Installationsskript startet einen laufenden Dienst neu.** `enable --now` ließ
+ihn bisher unangetastet; nach einer Neuinstallation lief weiter das alte Binary.
+Jetzt entscheidet `is-active` zwischen `restart` und `start`.
 
 ## [0.7.0] — 2026-11-22
 
