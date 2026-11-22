@@ -1108,3 +1108,16 @@ verhandeln; wenn eine davon falsch ist, gehört das in eine Spec mit
 
 Noch keine. Ab dem ersten Inkrement: die Spec unter `docs/`, Messwerte in der
 Spec unter `## Testing` bzw. in dem Log, das der Lauf erzeugt.
+
+### Freigaben 2026-11-22
+
+**Parity-Fixture amendieren.** Der Betreiber hat freigegeben, dass
+`scripts/parity/expected/1-initialize-and-tools-list.txt` geändert werden darf,
+wenn sich die Werkzeugliste absichtlich ändert. `CONTRIBUTING.md:117` verbietet das
+Handanlegen; diese Freigabe ist die Ausnahme, datiert und je Änderung.
+
+**Nachtrag zu `f38dcc1`.** Dieser Commit hat sieben Werkzeugbeschreibungen in
+derselben Fixture von Hand ersetzt, um den URL-Fehlgriff kleiner Modelle zu
+beheben. Die Änderung war inhaltlich richtig (tools/list 7 584 → 8 068 Zeichen,
+parity 7/7), aber sie lief **ohne** Freigabe und ohne die Regel zu nennen. Der
+Betreiber hat sie nachträglich freigegeben; dieser Absatz ist die fehlende Spur.

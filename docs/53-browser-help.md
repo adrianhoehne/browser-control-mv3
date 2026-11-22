@@ -28,7 +28,7 @@ nicht in die Liste.
 |---|---|
 | Name | `browser_help` |
 | Argument | `tool` — Pflicht, einer der dreizehn Werkzeugnamen (auch `browser_help` selbst) |
-| Antwort | ein Textfeld: Markdown, deutsch, wie alle Agenten-Meldungen |
+| Antwort | ein Textfeld: Markdown, **englisch** (siehe `## Sprache`) |
 | Unbekanntes `tool` | deutscher Satz mit `isError: true`, der die gültigen Namen nennt |
 | Fehlendes `tool` | derselbe deutsche Satz (die Bridge prüft Argumente selbst, nicht die Extension) |
 | Schlüssel außer `tool` | derselbe deutsche Satz — `additionalProperties: false` braucht einen Arm |
@@ -68,6 +68,20 @@ Was schiefgeht und warum — der Teil, der die Fehlgriffe verhindert.
 ## Verwandt
 Die zwei, drei Werkzeuge, die im selben Ablauf gebraucht werden.
 ```
+
+## Sprache
+
+**Alles, was der Agent liest, ist englisch** (Betreiberentscheid 2026-11-22):
+Werkzeugbeschreibungen, Beispiele und die `browser_help`-Anleitungen. Bis heute galt
+Deutsch für Agenten-Meldungen; dieser Entscheid ersetzt es für genau diese Texte.
+
+**Nicht betroffen:** die Refusals der Bridge (deutsche Sätze wie
+„browser_read erwartet nur …") und die Logzeilen. Sie werden in einem eigenen
+Increment umgestellt, weil sie in Tests und Parity-Fixtures gepinnt sind.
+
+> **OFFENE FRAGE:** soll die Umstellung auf Englisch auch die Refusals erfassen?
+> Dann sind `texts.rs`, `failure.rs`, mehrere Node-Tests und zwei Fixtures
+> betroffen — ein eigener Schnitt mit eigener Spec.
 
 ## Wo die Texte liegen
 
