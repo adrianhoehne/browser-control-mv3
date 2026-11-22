@@ -103,8 +103,9 @@ heutigen Fehlgriff verhindert hätte:
 1. **Vierzehn Werkzeuge.** `tools/list` ⇒ 14 Einträge; `browser_help` ist dabei,
    `tools/list` bleibt **unter 8 500 Zeichen**.
 2. **Jede Anleitung vollständig.** Der Test über alle dreizehn Namen ⇒ grün.
-3. **Unbekannt ist benannt.** `browser_help({"tool":"gibtsnicht"})` ⇒ deutscher
-   Satz mit `isError: true`, der die gültigen Namen nennt (kein Draht-Code).
+3. **Unbekannt nennt die gültigen Namen.**
+   `browser_help({"tool":"gibtsnicht"})` ⇒ deutscher Satz, `isError: true`, mit den
+   dreizehn Namen (kein Draht-Code).
 4. **Ohne Extension.** Der Fall antwortet, statt `no_extension` zu liefern.
 5. **Der Rest bleibt grün.** Rust-Tests, `clippy -D warnings`, `npm test` und
    `parity.sh --impl rust --check` 7/7.
