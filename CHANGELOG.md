@@ -7,6 +7,18 @@ Versionierung nach [SemVer](https://semver.org/lang/de/).
 
 Nichts offen.
 
+## [0.6.2] — 2026-11-22
+
+**Alles, was der Agent liest, ist englisch.** Die Refusals der Bridge, die
+Meldungen der Erweiterung und die vierzehn Werkzeugbeschreibungen sind
+übersetzt; Fehlercodes, Logzeilen und Kommentare bleiben, wie sie sind. Ein
+neuer Wächter (`bridge-rs/tests/texts.rs`) prüft `texts.rs`, `tools.rs` und
+`help.rs` auf Umlaute, damit keine deutsche Zeile unbemerkt zurückkommt.
+
+Dazu: `docs/54` (Refusals und Beschreibungen), `docs/55` (die alten Zitate in
+den aktiven Specs), `docs/53` und `CONTRIBUTING.md` nachgezogen. Kein Verhalten
+geändert — dieselben Codes, dieselben Fälle, nur der Satz.
+
 ## [0.6.1] — 2026-11-20
 
 **`browser_eval` läuft wieder.** Unter MV3 war es tot: `new Function` ist im
