@@ -15,8 +15,10 @@ nicht in die Liste.
 - **`browser_help({tool})`** antwortet mit einer Anleitung zu genau einem Werkzeug:
   Zweck, Argumente, Antwortfelder, **ein vollständiges Beispiel**, die typischen
   Fehlgriffe und die verwandten Werkzeuge.
-- **Die Werkzeugliste wächst nicht.** `tools/list` bleibt bei **8 068 Zeichen**;
-  `browser_help` selbst bekommt eine einzeilige Beschreibung (≈ 150 Zeichen).
+- **Die Werkzeugliste bleibt klein.** Gemessene Grenze, mit Befehl:
+  `awk 'NR==5' scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m`
+  ⇒ heute **7 825** Zeichen, nach dem Bau **≤ 8 500**. `browser_help` selbst
+  bekommt eine einzeilige Beschreibung (≈ 150 Zeichen).
 - **Unbekannter Name ist ein benannter Fehler**, keine leere Antwort, und nennt die
   gültigen Namen.
 
@@ -27,8 +29,15 @@ nicht in die Liste.
 | Name | `browser_help` |
 | Argument | `tool` — Pflicht, einer der dreizehn Werkzeugnamen (auch `browser_help` selbst) |
 | Antwort | ein Textfeld: Markdown, deutsch, wie alle Agenten-Meldungen |
-| Unbekanntes `tool` | Fehler `help_unknown_tool`, Meldung nennt die gültigen Namen |
-| Fehlendes `tool` | Fehler `invalid_params` (dieselbe Form wie bei den anderen Werkzeugen) |
+| Unbekanntes `tool` | deutscher Satz mit `isError: true`, der die gültigen Namen nennt |
+| Fehlendes `tool` | derselbe deutsche Satz (die Bridge prüft Argumente selbst, nicht die Extension) |
+| Schlüssel außer `tool` | derselbe deutsche Satz — `additionalProperties: false` braucht einen Arm |
+| `tool` mit falschem Typ | derselbe deutsche Satz |
+
+**Kein Draht-Code.** Refusals der Bridge sind ein deutscher Satz ohne Code; Codes
+gehören der Extension (`bridge-rs/src/mcp/failure.rs`). `help_unknown_tool` ist der
+**Zweigname in der Bridge**, kein Token auf der Leitung. Der Fall pinnt den Satz,
+nach dem Muster von `browser_status erwartet keine Argumente.`
 
 **Kein Tab, keine Seite, kein Netz.** `browser_help` antwortet aus der Bridge, ohne
 die Erweiterung zu fragen — es ist der einzige Werkzeugaufruf, der auch ohne
@@ -94,8 +103,8 @@ heutigen Fehlgriff verhindert hätte:
 1. **Vierzehn Werkzeuge.** `tools/list` ⇒ 14 Einträge; `browser_help` ist dabei,
    `tools/list` bleibt **unter 8 500 Zeichen**.
 2. **Jede Anleitung vollständig.** Der Test über alle dreizehn Namen ⇒ grün.
-3. **Unbekannt ist benannt.** `browser_help({"tool":"gibtsnicht"})` ⇒
-   `help_unknown_tool` mit den gültigen Namen in der Meldung.
+3. **Unbekannt ist benannt.** `browser_help({"tool":"gibtsnicht"})` ⇒ deutscher
+   Satz mit `isError: true`, der die gültigen Namen nennt (kein Draht-Code).
 4. **Ohne Extension.** Der Fall antwortet, statt `no_extension` zu liefern.
 5. **Der Rest bleibt grün.** Rust-Tests, `clippy -D warnings`, `npm test` und
    `parity.sh --impl rust --check` 7/7.
@@ -104,18 +113,38 @@ heutigen Fehlgriff verhindert hätte:
 
 **Stufe 1 — der Text und das Werkzeug**
 
-Dateien: `bridge-rs/src/mcp/help.rs` (neu, dreizehn Anleitungen), 
+Dateien: `bridge-rs/src/mcp/help.rs` (neu, dreizehn Anleitungen),
 `bridge-rs/src/mcp/tools.rs` (Name, Schema, Dispatch), 
-`bridge-rs/src/mcp/mod.rs` (Modul), `bridge-rs/tests/mcp.rs` (vier Fälle).
+`bridge-rs/src/mcp/mod.rs` (Modul), `bridge-rs/tests/mcp.rs` (vier Fälle **und**
+der Zähl-Pin `mcp_toolsList_shouldOfferExactlyTheThirteenToolsOfTheContract:992`
+samt Namensarray), `bridge-rs/tests/http.rs` (`Some(13)` auf `:1030`).
+
+Die Werkzeugzählung ist an zwei Stellen gepinnt; sie gehört in **eine** Stufe,
+sonst ist der Bau nicht abnehmbar.
 
 Beweis: Kriterien 1–4.
 
-**Stufe 2 — die Fixtures**
+**Stufe 0 — die eingefrorene Fixture amortisieren (Freigabe des Betreibers)**
 
-Dateien: `scripts/parity/expected/1-initialize-and-tools-list.txt`,
-`…/2-tools.txt`.
+`scripts/parity/expected/1-initialize-and-tools-list.txt` ist ein **eingefrorenes**
+Artefakt; `CONTRIBUTING.md:117` verbietet das Handanlegen, und `--record` gibt es
+nicht mehr. Ein vierzehntes Werkzeug ändert die `tools/list`-Antwort, also **muss**
+das Artefakt amendiert werden — als bewusster, datierter Akt mit Freigabe, nicht
+als Nebenwirkung eines Werkzeugbaus.
 
-Beweis: Kriterium 5.
+Beweis: `scripts/parity.sh --self-test` vorher 7/7, nach der Amendierung `--check`
+7/7; die Fixture-Zeile wächst um genau den neuen Werkzeugeintrag.
+
+**Stufe 2 — die Fixture** entfällt. `2-tools.txt` bleibt unberührt: ihre 39 Fälle
+sind `tools/call`-Antworten, und kein Kriterium braucht dort einen `help`-Fall.
+
+## Touch boundary
+
+| erlaubt | nicht |
+|---|---|
+| `bridge-rs/src/mcp/help.rs` (neu), `bridge-rs/src/mcp/tools.rs`, `bridge-rs/src/mcp/mod.rs` | `scripts/parity/**` — **nur** in Stufe 0, mit Freigabe |
+| `bridge-rs/tests/mcp.rs`, `bridge-rs/tests/http.rs` | `extension/**` — keine Zeile ändert sich |
+| `docs/README.md`, `docs/PROJECT-STATE.md` | `bridge-rs/src/hub.rs`, `protocol.rs` — kein Protokollschritt nötig |
 
 ## Bekannte Lücken
 
