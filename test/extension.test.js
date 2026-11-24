@@ -7560,14 +7560,36 @@ test("click_withoutContainsTextAndWithoutSelector_shouldAnswerInvalidParams", as
   await sendClick(socket, 2, {});
 
   // THEN it is a parameter mistake of the caller, decided before any injection, and
-  // the sentence names the argument a click needs (`contains_text` next to `selector`):
+  // the sentence names the argument a click needs (`text` next to `selector` — the
+  // wire name of the term, spec 58, `## Der Vertrag`):
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "invalid_params");
   assert.ok(
-    answer.error.message.includes("selector") && answer.error.message.includes("contains_text"),
+    answer.error.message.includes("selector") && answer.error.message.includes("text"),
     `the refusal must name both arguments, got: ${answer.error.message}`,
   );
+  assert.deepStrictEqual(tabs.scriptCalls, []);
+});
+
+test("click_withTheMcpNameOnTheWire_shouldAnswerInvalidParams", async () => {
+  // GIVEN a stored agent tab and a page whose text would match the term:
+  const button = createInspectElement({ tagName: "BUTTON", innerText: "Kaufen" });
+  const page = createTextClickPage({ children: [button] });
+  const tabs = createClickTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the payload carries the MCP-side name instead of the wire name — spec 58,
+  // `## Der Vertrag`: one name on the wire (`text`), two in the MCP,
+  await sendClick(socket, 2, { contains_text: "Kaufen" });
+
+  // THEN that key names no target at all: the bridge reads `text`, and an unknown key
+  // is not a target. This is the boundary the wire name draws — the term is not
+  // silently picked up under its MCP name:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "invalid_params");
+  assert.equal(button.clicks, 0);
   assert.deepStrictEqual(tabs.scriptCalls, []);
 });
 
@@ -8276,7 +8298,7 @@ test("click_withContainsText_shouldClickTheInnermostMatchingElement", async () =
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN the bridge clicks by text alone,
-  await sendClick(socket, 2, { contains_text: "kaufen" });
+  await sendClick(socket, 2, { text: "kaufen" });
   await settleAsyncWork();
 
   // THEN exactly one element was clicked, and it is the innermost one — the click on
@@ -8351,7 +8373,7 @@ test("click_withABlankSelectorAndAContainsText_shouldClickByTheTermAlone", async
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN the bridge clicks together with that blank selector,
-  await sendClick(socket, 2, { selector: "   ", contains_text: "Kaufen" });
+  await sendClick(socket, 2, { selector: "   ", text: "Kaufen" });
   await settleAsyncWork();
 
   // THEN the blank selector narrows nothing and never reaches the page: `querySelector("")`
@@ -8379,7 +8401,7 @@ test("click_withTwoMatchesAndNoExactOne_shouldAnswerTextAmbiguousAndNotClick", a
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN the bridge clicks by that text,
-  await sendClick(socket, 2, { contains_text: "In den Einkaufswagen" });
+  await sendClick(socket, 2, { text: "In den Einkaufswagen" });
 
   // THEN it refuses instead of guessing — a wrong click is the most expensive mistake
   // this project knows — and the refusal carries the evidence:
@@ -8419,7 +8441,7 @@ test("click_withMoreCandidatesThanTheCap_shouldAnswerTextAmbiguousAndNotClick", 
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN the term finds exactly one hit among the examined five thousand,
-  await sendClick(socket, 2, { contains_text: "Erfundener Treffer" });
+  await sendClick(socket, 2, { text: "Erfundener Treffer" });
 
   // THEN it refuses instead of clicking: the count of a run that stopped early is a
   // lower bound, and a lower bound cannot say "this is the only target" — the second hit
@@ -8460,7 +8482,7 @@ test("click_withMoreCandidatesThanTheCapAndNoMatch_shouldAnswerNoMatchWithTrunca
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN the term stands only there,
-  await sendClick(socket, 2, { contains_text: "Hinter dem Deckel" });
+  await sendClick(socket, 2, { text: "Hinter dem Deckel" });
 
   // THEN the answer is `no_match` — but not the absolute "nothing matches": the search
   // stopped at the cap and never read the rest of the list, so the frame carries
@@ -8495,7 +8517,7 @@ test("click_withContainsTextThatMatchesNothing_shouldAnswerNoMatchWithTheTerm", 
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN nothing matches,
-  await sendClick(socket, 2, { contains_text: "gibtsnicht" });
+  await sendClick(socket, 2, { text: "gibtsnicht" });
 
   // THEN the answer names the term the caller searched for — and never `undefined`,
   // which is what a sentence built from the wrong field would say:
@@ -8518,14 +8540,14 @@ test("click_withAnEmptyContainsText_shouldAnswerInvalidParamsAndNotClick", async
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN the term is present but empty — a click target without text is none,
-  await sendClick(socket, 2, { contains_text: "" });
+  await sendClick(socket, 2, { text: "" });
 
   // THEN it is the same refusal as naming no target at all, and nothing was injected
   // or clicked:
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "invalid_params");
-  assert.equal(answer.error.message.includes("contains_text"), true);
+  assert.equal(answer.error.message.includes("text"), true);
   assert.equal(button.clicks, 0);
   assert.deepStrictEqual(tabs.scriptCalls, []);
 });

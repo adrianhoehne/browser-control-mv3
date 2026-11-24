@@ -288,8 +288,10 @@
   // The sibling of the sentence above, for a click that names its target neither by
   // selector nor by text: since spec 58 a click may aim by text alone, so "no selector"
   // is only a mistake when there is no term either. `type` keeps
-  // `MISSING_SELECTOR_MESSAGE` — it has no text search.
-  const MISSING_TARGET_MESSAGE = "click needs a selector or a contains_text as a string.";
+  // `MISSING_SELECTOR_MESSAGE` — it has no text search. The sentence names the fields
+  // of the wire, so the term is `text` here and not the `contains_text` the MCP side
+  // uses (spec 58, `## Der Vertrag`).
+  const MISSING_TARGET_MESSAGE = "click needs a selector or a text as a string.";
   const SUPERSEDED_MESSAGE = "A newer call replaced this one.";
   const INVALID_SELECTOR_MESSAGE = "The selector is invalid.";
   const NO_MATCH_MESSAGE = "No element matches this selector.";
@@ -2862,14 +2864,17 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
   /**
    * The target of a click, checked over both arguments: `{ selector, text }`.
    *
-   * A click names its target by `selector`, by `contains_text` or by both — at least one
+   * A click names its target by `selector`, by `text` or by both — at least one
    * of them, and each one as a string (spec 58, `## Der Vertrag`). Nothing more is
    * checked: every selector string goes into the page, where `querySelector` decides
    * what it means — the empty one included, as long as it is the only target.
    *
    * A term that is present but empty is the same mistake as no target at all: a click
-   * target without text is none (spec 58, `## Ziel`, 8). The returned `text` is the wire
-   * name of `contains_text` from here on; `null` means "no text search".
+   * target without text is none (spec 58, `## Ziel`, 8). `text` is the name the term has
+   * on the wire (spec 58, `## Der Vertrag`) and stays its name on the way to the page;
+   * `null` means "no text search". The MCP-side name `contains_text` is **not** read
+   * here: a payload carrying only that key names no target and is refused, because two
+   * names on the wire would be one name too many.
    *
    * A selector that is empty or nothing but whitespace narrows nothing next to a term:
    * `querySelector("")` throws, so the page would answer `invalid_selector` for a call
@@ -2879,7 +2884,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    */
   function clickRequestSelector(params) {
     const selector = params?.selector ?? null;
-    const term = params?.contains_text ?? null;
+    const term = params?.text ?? null;
     if (term !== null && (typeof term !== "string" || term.trim() === "")) {
       throw new ClickError(INVALID_PARAMS_CODE, MISSING_TARGET_MESSAGE);
     }
