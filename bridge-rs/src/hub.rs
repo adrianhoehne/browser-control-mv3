@@ -1235,6 +1235,10 @@ const DEBUG_WHITELIST: &[(&str, FieldTable)] = &[
             ("url", Rule::Full),
             ("title", Rule::Length),
             ("clicked", Rule::Length),
+            // Directly behind `clicked`, like the answer itself: `clickResult` places
+            // the field there on purpose (`docs/56`), and a boolean needs no rule
+            // beyond `full`.
+            ("scrolled", Rule::Full),
             ("text", Rule::Length),
             ("truncated", Rule::Full),
             ("via", Rule::Full),
@@ -1289,6 +1293,9 @@ const ELEMENT_FIELDS: FieldTable = &[
     ("href", Rule::Length),
     ("ariaLabel", Rule::Length),
     ("visible", Rule::Full),
+    // Behind `visible`, before `disabled` — the order both copies of `described`
+    // build the element in (`docs/62`). A boolean, so no rule beyond `full`.
+    ("offscreen", Rule::Full),
     ("disabled", Rule::Full),
     (
         "rect",

@@ -4762,7 +4762,9 @@ async fn help_forInspect_shouldNameTheInnermostRule() {
 }
 
 /// Die Anleitung nennt das Lage-Feld: `browser_inspect` liefert `offscreen` in der
-/// Rueckgabe (`docs/62`, `## Ziel`, 1 und `## Amendments` zu `docs/53`).
+/// Rueckgabe (`docs/62`, `## Ziel`, 1 und `## Amendments` zu `docs/53`). Und sie nennt
+/// die drei Felder, die sie lange verschwieg, obwohl das Werkzeug sie immer liefert
+/// (`docs/62`, `## Bekannte Luecken`: `index`, `ariaLabel`, `disabled`).
 #[tokio::test]
 async fn help_forInspect_shouldNameOffscreen() {
     // GIVEN a bridge with nobody connected — a manual needs no browser (`docs/53`):
@@ -4789,6 +4791,32 @@ async fn help_forInspect_shouldNameOffscreen() {
         !returns.contains("offscreen_after_scroll"),
         "the returns section lists fields, not error codes: {returns}"
     );
+
+    // ... and the three fields the answer always carried are named too, each in the
+    // place the wire order gives it — `index` first, `ariaLabel` behind `href`,
+    // `disabled` behind `visible` (`docs/62`: `offscreen` vor `disabled`):
+    let fields = [
+        "index",
+        "selector",
+        "tag",
+        "id",
+        "classes",
+        "text",
+        "href",
+        "ariaLabel",
+        "visible",
+        "offscreen",
+        "disabled",
+        "rect",
+    ];
+    let mut cursor = 0;
+    for field in fields {
+        let quoted = format!("`{field}`");
+        let found = returns[cursor..]
+            .find(&quoted)
+            .unwrap_or_else(|| panic!("the returns section has to name `{field}`: {returns}"));
+        cursor += found + quoted.len();
+    }
 }
 
 /// Die Anleitung nennt dieselben Namen wie das Schema — sie ist Produktivcode, kein

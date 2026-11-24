@@ -306,7 +306,7 @@ Nach `CONTRIBUTING.md`, Schritt 4, öffnet erst ein `✅ Ship it` die Umsetzung.
   MCP-Seite mit Datum; der Umlaut-Wächter deckt sie, weil sie in `texts.rs` stehen.
   `docs/53` braucht keine Änderung: es beschreibt das Verfahren der Anleitung, die
   Anleitung selbst steht in `help.rs`. Die Werkzeugliste misst 8221 Zeichen (Grenze
-  8500). Fallzahlen abgelesen: `cargo test` 303 (133 in `mcp.rs`), `npm test` 575.
+  8500). Fallzahlen abgelesen: `cargo test` 304 (133 in `mcp.rs`), `npm test` 575.
 - **2026-11-23, Drahtname korrigiert (Befund beim Bau).** Die Erweiterung las den
   Begriff aus `contains_text`, obwohl `docs/58` „ein Name auf der Leitung" zusichert
   und diese Spec `text` schickt. Behoben in `8e662af`: `clickRequestSelector` liest

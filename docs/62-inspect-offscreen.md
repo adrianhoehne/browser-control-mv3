@@ -174,14 +174,14 @@ prüft nur die sechs Überschriften). Das Feld sagt nichts über Verdeckung
 | `extension/page-agent.js` (`described` in beiden Zweigen) | `extension/bridge.js` — das Feld wird durchgereicht |
 | `test/extension.test.js` | `inspectPageSource`-Filterlogik — das ist `docs/57` |
 | `bridge-rs/src/mcp/help.rs`, `bridge-rs/tests/mcp.rs` | `scripts/parity/**` |
-| `docs/09`, `docs/27`, `docs/53`, `docs/54` (Fallzahlen), `docs/README.md`, `docs/PROJECT-STATE.md` | `docs/56`, `docs/57`, `docs/58` |
+| `docs/09`, `docs/27`, `docs/53`, `docs/54` (Fallzahlen), `docs/README.md`, `docs/PROJECT-STATE.md`, einmalig `bridge-rs/src/hub.rs` (Whitelist, 2026-11-23) | `docs/56`, `docs/57`, `docs/58` |
 
 ## Bekannte Lücken
 
-- **`hub.rs` druckt `"offscreen": "<unlisted field>"`** im Debug-Block, weil
-  `ELEMENT_FIELDS` (`:1282-1302`) das Feld nicht kennt. Die Spec lässt `hub.rs`
-  bewusst draußen; die Folge ist, dass der Betreiber den Marker bei jedem Treffer
-  sieht. Eigener, kleiner Anlass (Code-Review 2026-11-23).
+- **`hub.rs` ist am 2026-11-23 für `offscreen` geöffnet worden** (Nachtrag): das Feld
+  steht in `ELEMENT_FIELDS`, der Debug-Log zeigt den Wert statt `<unlisted field>`.
+  Die Touch boundary dieser Spec bleibt sonst geschlossen — jedes weitere Feld
+  braucht wieder eine eigene Entscheidung.
 - **Die absolute Schlüsselreihenfolge pinnt kein Fall.** `deepStrictEqual` auf einem
   Objektliteral ist ordnungsblind, und der Schatten-Fall vergleicht nur die zwei
   Kopien gegeneinander. Die Spec sagt „hinter `visible`, vor `disabled`"; ein

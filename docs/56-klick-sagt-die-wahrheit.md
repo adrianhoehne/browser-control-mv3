@@ -258,11 +258,10 @@ Bridge reicht durch und fügt nichts hinzu, `# cases=39` bleibt.
 unberührt — kein neues Argument, kein neues Werkzeug. Ein datierter Akt mit
 Betreiberfreigabe ist für dieses Inkrement nicht nötig.
 
-**Was schiefgehen kann.** Der Debug-Block der Bridge prüft gegen eine Whitelist:
-`hub.rs:1232-1244` listet die Klick-Felder, `scrolled` fehlt darin und erscheint im
-Debug-Log als `<unlisted field>` (`hub.rs:1352`). `hub.rs` steht in der Touch
-boundary auf *nicht* — es bleibt dabei; wer den Wert dort sehen will, braucht eine
-Zeile in der Tabelle und eine geöffnete Grenze. Zweitens: `scrolled` ist eine Aussage
+**Was schiefgehen kann.** Der Debug-Block der Bridge prüft gegen eine Whitelist
+(`hub.rs`). Er stand in der Touch boundary auf *nicht*; **am 2026-11-23 geöffnet**
+für eine Zeile: `scrolled` ist eingetragen, der Debug-Log zeigt den Wert statt
+`<unlisted field>`. Jedes weitere Feld braucht wieder eine eigene Entscheidung. Zweitens: `scrolled` ist eine Aussage
 über einen Lauf, in dem geklickt wurde; im Fehlerfall gibt es das Feld deshalb nicht,
 und niemand darf `false` als „nicht gescrollt“ lesen, wo gar nicht geklickt wurde.
 

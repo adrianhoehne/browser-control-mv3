@@ -527,6 +527,45 @@ fn debugBlockOf_withAnUnlistedFieldInsideAnElement_shouldPrintTheMarkerThere() {
 }
 
 #[test]
+fn debugBlockOf_withScrolledAndOffscreen_shouldPrintTheValuesInsteadOfTheMarker() {
+    // GIVEN a click result carrying `scrolled` and an inspect element carrying
+    // `offscreen` — the two booleans that arrived in later increments (`docs/56`,
+    // `docs/62`) and sit in the tables since:
+    let click = json!({
+        "tabId": 42,
+        "clicked": "a#video-title-link",
+        "scrolled": true,
+    });
+    let inspect = json!({
+        "tabId": 42,
+        "elements": [{ "index": 0, "visible": true, "offscreen": true, "disabled": false }],
+    });
+
+    // WHEN both blocks are built,
+    let click_text = block_text(protocol::methods::CLICK, &click);
+    let click_block = parse(&click_text);
+    let inspect_block = block(protocol::methods::INSPECT, &inspect);
+    let inspect_text = block_text(protocol::methods::INSPECT, &inspect);
+
+    // THEN both print their value — a boolean is a fact about the call, not page
+    // content, so neither a marker nor a length would be the truth:
+    assert_eq!(click_block["scrolled"], json!(true));
+    assert_eq!(inspect_block["elements"][0]["offscreen"], json!(true));
+    assert!(
+        !click_text.contains("<unlisted field>") && !inspect_text.contains("<unlisted field>"),
+        "a listed boolean must not print the marker: {click_text} {inspect_text}",
+    );
+
+    // ... in the order the answer carries them: `scrolled` directly behind
+    // `clicked`, `offscreen` between `visible` and `disabled`,
+    assert_eq!(keys_of(&click_block), ["tabId", "clicked", "scrolled"]);
+    assert_eq!(
+        keys_of(&inspect_block["elements"][0]),
+        ["index", "visible", "offscreen", "disabled"],
+    );
+}
+
+#[test]
 fn debugBlockOf_withAMethodWithoutATableEntry_shouldReturnNull() {
     // GIVEN the methods that are silent on purpose — eval, screenshot, open_tab,
     // close_tab and frames, which has no report branch at all — plus one name no
@@ -1332,6 +1371,7 @@ async fn hub_requestWithClickMethodUnderDebugLogging_shouldRedactTextAndClicked(
         "url": "https://example.org/",
         "title": "Beispielseite",
         "clicked": clicked,
+        "scrolled": true,
         "text": "Zeile eins\n\nZeile zwei",
         "truncated": false,
         "via": "innerText",
@@ -1358,7 +1398,27 @@ async fn hub_requestWithClickMethodUnderDebugLogging_shouldRedactTextAndClicked(
     // ... in table order, and only the fields this result actually carries:
     assert_eq!(
         keys_of(&parse(&debug_entry)),
-        ["tabId", "url", "title", "clicked", "text", "truncated", "via"],
+        [
+            "tabId",
+            "url",
+            "title",
+            "clicked",
+            "scrolled",
+            "text",
+            "truncated",
+            "via",
+        ],
+    );
+
+    // ... `scrolled` with its value, not as a marker: a boolean says where the
+    // target was, not what the page says (`docs/56`),
+    assert_eq!(parse(&debug_entry)["scrolled"], json!(true));
+    assert!(
+        !bridge
+            .lines()
+            .iter()
+            .any(|line| line.contains("\"scrolled\": \"<unlisted field>\"")),
+        "a listed boolean must not print the marker",
     );
 
     // ... and no line anywhere carries the text or the clicked element,
@@ -2230,6 +2290,7 @@ async fn hub_requestWithInspectMethodWithDebugLog_shouldRedactEveryPageString() 
         "ariaLabel": aria_label,
         "selector": selector,
         "visible": true,
+        "offscreen": true,
         "disabled": false,
         "rect": { "x": 1, "y": 2, "width": 3, "height": 4 },
     });
@@ -2289,6 +2350,33 @@ async fn hub_requestWithInspectMethodWithDebugLog_shouldRedactEveryPageString() 
     assert_eq!(debugged_element["tag"], json!("a"));
     assert_eq!(debugged_element["visible"], json!(true));
     assert_eq!(debugged_element["disabled"], json!(false));
+    // `offscreen` is a fact about the layer, not page content: it prints its value,
+    // and it prints it between `visible` and `disabled` — the order of the answer
+    // (`docs/62`). The whole element order is pinned here, so a new field cannot
+    // silently land in the wrong place:
+    assert_eq!(debugged_element["offscreen"], json!(true));
+    assert_eq!(
+        keys_of(debugged_element),
+        [
+            "index",
+            "selector",
+            "tag",
+            "id",
+            "classes",
+            "text",
+            "href",
+            "ariaLabel",
+            "visible",
+            "offscreen",
+            "disabled",
+            "rect",
+        ],
+    );
+    assert!(
+        !debug_entries[0].contains("<unlisted field>"),
+        "a listed boolean must not print the marker: {}",
+        debug_entries[0],
+    );
     assert_eq!(
         debugged_element["rect"],
         json!({ "x": 1, "y": 2, "width": 3, "height": 4 }),

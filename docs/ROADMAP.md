@@ -63,6 +63,9 @@ Handarbeit statt Code — Anleitung in `INSTALL.md`, `### Token wechseln`) und
 
 | Vorhaben | Größe |
 |---|---|
+| **`help.rs`: die `## Returns`-Zeile von `browser_read` verschweigt Felder** — `offset`, `zeroWidth`, `mode`, `root`, `fellBack` und `truncated` stehen nicht in der Anleitung, obwohl das Werkzeug sie liefert. Dieselbe Lücke, die `docs/62` für `inspect` geschlossen hat (`docs/62`, `## Bekannte Lücken`; Code-Review 2026-11-23) | winzig |
+| **`mcp.rs`: der Fall `help_forInspect_shouldNameOffscreen` prüft vier Felder**, der Name nennt eins. Umbenennen in `help_forInspect_shouldNameEveryElementField` und `docs/62`, `## Testing` mitziehen (Code-Review 2026-11-23) | winzig |
+| **Die Zwölf-Felder-Prüfung in `mcp.rs` ist eine geordnete Teilfolge**, keine Mengengleichheit — ein dreizehntes Feld, das die Anleitung vergisst, bliebe unbemerkt. `assert_eq!(fields.len(), 12)` oder eine gemeinsame `const` (Code-Review 2026-11-23) | winzig |
 | Drei Restlöcher im `navigate`-Pfad schließen oder dauerhaft als Lücke führen: `onUpdated` prüft die Adresse nicht, `complete: false` nennt die vorherige Seite, eine Weiterleitung auf die alte Adresse endet in `complete: false` (`docs/04`, `## Bekannte Lücken`) | klein |
 | Für `click` fehlt weiter ein Live-Beleg der Ruhe-Erkennung — fünf Versuche fielen auf den Rückfall (`docs/15`, `## Bekannte Lücken`) | klein |
 | ~~**Windows-Installationsanleitung fehlt.**~~ **Erledigt:** `INSTALL.md`, Abschnitt 10 (Binary, Token, Task Scheduler, Prüfung) — der Weg ist mit `docs/38`, Stufe 3 gebaut; offen bleibt nur die Betreiber-Messung auf einem Windows-Rechner | winzig |
