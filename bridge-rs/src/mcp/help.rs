@@ -159,7 +159,7 @@ Lists elements of the **current agent tab** with tag, id, class, link, visible t
 | `tab` | no | an agent tab by id |
 
 ## Returns
-`count`, `truncated`, `elements` (each with `selector`, `tag`, `id`, `classes`, `text`, `href`, `visible`, `rect`).
+`count`, `truncated`, `elements` (each with `selector`, `tag`, `id`, `classes`, `text`, `href`, `visible`, `offscreen`, `rect`).
 
 ## Example
 `browser_inspect({"contains_text":"Login","limit":5})` answers elements whose selector you can pass to `browser_click` unchanged.

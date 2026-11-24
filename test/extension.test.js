@@ -10497,7 +10497,7 @@ test("inspect_withASelectorOnTheLink_shouldAnswerEveryFieldOfTheContract", async
   // WHEN the bridge asks for that element,
   await sendInspect(socket, 2, { selector: "a#warenkorb-link" });
 
-  // THEN the answer carries the six result fields and the eleven element fields, each
+  // THEN the answer carries the six result fields and the twelve element fields, each
   // with the value the invented page really has:
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, true);
@@ -10518,6 +10518,7 @@ test("inspect_withASelectorOnTheLink_shouldAnswerEveryFieldOfTheContract", async
         href: "https://example.org/warenkorb",
         ariaLabel: null,
         visible: true,
+        offscreen: false,
         disabled: false,
         rect: { x: 0, y: 0, width: 100, height: 20 },
       },
@@ -10530,6 +10531,80 @@ test("inspect_withASelectorOnTheLink_shouldAnswerEveryFieldOfTheContract", async
   assert.equal(tabs.scriptCalls[0].tabId, 500);
   assert.deepStrictEqual(tabs.scriptCalls[0].details.target, { tabId: 500, frameIds: [0] });
   assert.deepStrictEqual(tabs.scriptCalls[0].details.files, [PAGE_AGENT_FILE]);
+});
+
+test("inspect_withAnElementOutsideTheViewport_shouldSetOffscreenTrue", async () => {
+  // GIVEN the Amazon-shaped case that started this increment (spec 62, `## Anlass`): a
+  // cart link measured far left of the page, and a button inside the window — the
+  // harness answers `innerWidth` 1024 and `innerHeight` 768, like `docs/56`:
+  const farLeft = createInspectElement({
+    tagName: "A",
+    id: "nav-assist-cart",
+    innerText: "Einkaufswagen",
+    href: "https://example.org/einkaufswagen",
+    rect: { x: -9966, y: 202, width: 353, height: 41 },
+  });
+  const inView = createInspectElement({ tagName: "BUTTON", id: "im-bild", innerText: "Im Bild" });
+  const page = createInspectPage({ children: [farLeft, inView] });
+  const tabs = createInspectTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN both are listed,
+  await sendInspect(socket, 2, { text: "", limit: 200 });
+
+  // THEN the position is answered by `offscreen` while `visible` stays the truth about
+  // `display` — the two fields say different things and both are set:
+  const delivered = inspectElementsOf(socket, 2);
+  assert.deepStrictEqual(
+    delivered.map((entry) => entry.id),
+    ["nav-assist-cart", "im-bild"],
+  );
+  assert.deepStrictEqual(
+    delivered.map((entry) => entry.offscreen),
+    [true, false],
+  );
+  assert.deepStrictEqual(
+    delivered.map((entry) => entry.visible),
+    [true, true],
+  );
+  // ... and `rect` carries the position the page reports. This stub answers the same
+  // numbers on every read, so the case cannot tell a first measurement from a later one:
+  // it shows the fields, not how often the element was asked.
+  assert.deepStrictEqual(delivered[0].rect, { x: -9966, y: 202, width: 353, height: 41 });
+});
+
+test("inspect_withAnElementWithoutArea_shouldSetOffscreenFalse", async () => {
+  // GIVEN an element with no area — its rect says `0 × 0` — and the visible paragraph
+  // next to it. `createInspectElement` would hand out `100 × 20` even for
+  // `display: "none"`, so the rect is set here on purpose; without it this case would
+  // prove nothing at all:
+  const areaLess = createInspectElement({
+    tagName: "P",
+    id: "ohne-flaeche",
+    innerText: "Ohne Fläche",
+    display: "none",
+    rect: { x: 0, y: 0, width: 0, height: 0 },
+  });
+  const visibleEntry = createInspectElement({ tagName: "P", id: "mit-flaeche", innerText: "Mit Fläche" });
+  const page = createInspectPage({ children: [areaLess, visibleEntry] });
+  const tabs = createInspectTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN both are listed — `includeHidden` is what brings the area-less one into the
+  // answer at all,
+  await sendInspect(socket, 2, { text: "fläche", includeHidden: true });
+
+  // THEN it is not called offscreen: "outside" claims a position, and an element with
+  // no area has none. `visible: false` already carries the whole truth about it:
+  const delivered = inspectElementsOf(socket, 2);
+  assert.deepStrictEqual(
+    delivered.map((entry) => entry.id),
+    ["ohne-flaeche", "mit-flaeche"],
+  );
+  assert.equal(delivered[0].offscreen, false, "an element without an area is not outside");
+  assert.equal(delivered[0].visible, false);
+  assert.equal(delivered[1].offscreen, false);
+  assert.equal(delivered[1].visible, true);
 });
 
 test("inspect_withoutIdAndWithoutHref_shouldDeliverNullInsteadOfAnEmptyString", async () => {
@@ -11397,7 +11472,10 @@ test("inspect_withAShadowHit_shouldDeliverTheSameFieldSetAsADocumentHit", async 
   const fromDocument = responsesById(socket).get(2).result.elements[0];
   const fromShadow = responsesById(socket).get(3).result.elements[0];
   assert.deepStrictEqual(Object.keys(fromShadow), Object.keys(fromDocument));
-  assert.equal(Object.keys(fromShadow).length, 11);
+  assert.equal(Object.keys(fromShadow).length, 12);
+  // ... and the twelfth field is the new one, not a field that crept in on one side:
+  assert.equal(fromShadow.offscreen, false);
+  assert.equal(fromDocument.offscreen, false);
 });
 
 test("inspect_withAnEmptyText_shouldStillMatchEveryVisibleElement", async () => {

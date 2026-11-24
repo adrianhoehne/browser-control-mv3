@@ -100,8 +100,10 @@
    * anywhere a reader could see — the Amazon keyboard-shortcut menu at `x = -9966`
    * passes the first check and fails this one.
    *
-   * Only `click` uses it. `type` has the same blind spot on purpose: typing into a
-   * field nobody can see is its own increment (spec 56, `## Non-goals`).
+   * Two ops use it: `click`, which asks twice (whether to scroll, and whether the target
+   * stayed outside after the scroll), and `inspect`, through `isOffscreen` for the
+   * `offscreen` field. `type` has the same blind spot on purpose: typing into a field
+   * nobody can see is its own increment (spec 56, `## Non-goals`).
    */
   function intersectsViewport(rect) {
     return (
@@ -110,6 +112,22 @@
       rect.x < window.innerWidth &&
       rect.y < window.innerHeight
     );
+  }
+
+  /**
+   * Whether an element lies outside the visible area of this realm — the answer of
+   * `inspect`'s `offscreen` field.
+   *
+   * The same rule as `intersectsViewport`, one caller more: the measurement is the one
+   * from `docs/56`, not a second copy of it. What it adds is the exception of spec 62
+   * (`## Ziel`, 3): an element without an area is **not** offscreen. "Outside" claims a
+   * position, and an element with no area has none — `intersectsViewport` would answer
+   * "no overlap" for it, which is true and the wrong answer at once, because
+   * `visible: false` already says everything about such an element.
+   */
+  function isOffscreen(rect) {
+    if (!(rect.width > 0 && rect.height > 0)) return false;
+    return !intersectsViewport(rect);
   }
 
   /**
@@ -868,12 +886,17 @@
       return typeof value === "string" && value !== "" ? value : null;
     }
 
-    /** One delivered element: the eleven documented fields, and nothing else. */
+    /** One delivered element: the twelve documented fields, and nothing else. */
     function described(candidate, index) {
       // An id and a link are properties, not attributes: `getAttribute("href")`
       // answers the raw markup, while the property is what a caller wants to open.
       const id = identityOf(candidate.id);
       const href = identityOf(candidate.href);
+      // Measured once *for `rect` and `offscreen`*: the rect travels as it is, and
+      // `offscreen` is read from that same reading — a second `getBoundingClientRect`
+      // there could answer a different page. `isVisible` below keeps its own read
+      // because `click` and `type` use it too, and it answers a different question.
+      const rect = rectOf(candidate);
       return {
         // The position in *this* array — not a handle. `selector` is the handle, and
         // the one `click` and `type` accept.
@@ -886,9 +909,10 @@
         href: cappedString(href, request.textLimit),
         ariaLabel: cappedString(candidate.getAttribute("aria-label"), request.textLimit),
         visible: isVisible(candidate),
+        offscreen: isOffscreen(rect),
         // `=== true`, not truthiness: an attribute or a stub may say `"true"`.
         disabled: candidate.disabled === true,
-        rect: rectOf(candidate),
+        rect,
       };
     }
 
@@ -1131,7 +1155,7 @@
     }
 
     /**
-     * One delivered element: the eleven documented fields, and nothing else.
+     * One delivered element: the twelve documented fields, and nothing else.
      *
      * The one field this copy takes as an argument instead of computing it is
      * `selector`: in a shadow tree the walk knows the host chain, and the builder of the
@@ -1140,6 +1164,10 @@
     function described(candidate, index, selector) {
       const id = identityOf(candidate.id);
       const href = identityOf(candidate.href);
+      // Measured once, exactly as in the document copy: `rect` and `offscreen` come from
+      // one `getBoundingClientRect` — the field set is the contract, the second call
+      // would be a second measurement of a page that may have moved.
+      const rect = rectOf(candidate);
       return {
         index,
         selector,
@@ -1150,8 +1178,9 @@
         href: cappedString(href, request.textLimit),
         ariaLabel: cappedString(candidate.getAttribute("aria-label"), request.textLimit),
         visible: isVisible(candidate),
+        offscreen: isOffscreen(rect),
         disabled: candidate.disabled === true,
-        rect: rectOf(candidate),
+        rect,
       };
     }
 

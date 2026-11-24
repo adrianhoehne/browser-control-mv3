@@ -4527,6 +4527,36 @@ async fn help_forInspect_shouldNameTheInnermostRule() {
     );
 }
 
+/// Die Anleitung nennt das Lage-Feld: `browser_inspect` liefert `offscreen` in der
+/// Rueckgabe (`docs/62`, `## Ziel`, 1 und `## Amendments` zu `docs/53`).
+#[tokio::test]
+async fn help_forInspect_shouldNameOffscreen() {
+    // GIVEN a bridge with nobody connected — a manual needs no browser (`docs/53`):
+    let mut seam = Seam::nobody(config());
+
+    // WHEN the manual of `browser_inspect` is asked for,
+    let answer = seam.call(help_call(36, "browser_inspect")).await;
+    let text = answer["result"]["content"][0]["text"].as_str().unwrap_or_default();
+
+    // THEN the returns section names the field — checked inside that section, because a
+    // word anywhere in the manual would not be the field list,
+    let returns = text
+        .split("## Returns")
+        .nth(1)
+        .expect("the manual has a Returns section");
+    let returns = returns.split("## ").next().unwrap_or(returns);
+    assert!(
+        returns.contains("`offscreen`"),
+        "the returns section has to name the field: {returns}"
+    );
+
+    // ... and it is the field, not the error code of another tool.
+    assert!(
+        !returns.contains("offscreen_after_scroll"),
+        "the returns section lists fields, not error codes: {returns}"
+    );
+}
+
 /// Die Anleitung nennt dieselben Namen wie das Schema — sie ist Produktivcode, kein
 /// Doku-Nachtrag (`docs/59`, Ziel 5).
 #[tokio::test]

@@ -67,7 +67,7 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 | `test/extension.test.js` | `inspect_withAnElementWithoutArea_shouldSetOffscreenFalse` | Fläche 0 ⇒ `false`, `visible: false` bleibt |
 | `test/extension.test.js` | `inspect_withASelectorOnTheLink_shouldAnswerEveryFieldOfTheContract` (bestehend, `:10199`) | der Feldvertrag **mit** `offscreen`, von elf auf zwölf Felder |
 | `test/extension.test.js` | `inspect_withAShadowHit_shouldDeliverTheSameFieldSetAsADocumentHit` (bestehend, `:10921`) | beide Quellen liefern dasselbe Feldset, `length` 11 → 12 (`:10940`) |
-| `bridge-rs/tests/mcp.rs` | `mcp_toolsCallBrowserHelp_forInspect_shouldNameOffscreen` | die Anleitung nennt das Feld |
+| `bridge-rs/tests/mcp.rs` | `help_forInspect_shouldNameOffscreen` | die Anleitung nennt das Feld (Dateikonvention `help_…`) |
 
 ## Acceptance criteria
 
@@ -182,10 +182,18 @@ prüft nur die sechs Überschriften). Das Feld sagt nichts über Verdeckung
 | `extension/page-agent.js` (`described` in beiden Zweigen) | `extension/bridge.js` — das Feld wird durchgereicht |
 | `test/extension.test.js` | `inspectPageSource`-Filterlogik — das ist `docs/57` |
 | `bridge-rs/src/mcp/help.rs`, `bridge-rs/tests/mcp.rs` | `scripts/parity/**` |
-| `docs/09`, `docs/53`, `docs/54` (Fallzahlen), `docs/README.md`, `docs/PROJECT-STATE.md` | `docs/56`, `docs/57`, `docs/58` |
+| `docs/09`, `docs/27`, `docs/53`, `docs/54` (Fallzahlen), `docs/README.md`, `docs/PROJECT-STATE.md` | `docs/56`, `docs/57`, `docs/58` |
 
 ## Bekannte Lücken
 
+- **`hub.rs` druckt `"offscreen": "<unlisted field>"`** im Debug-Block, weil
+  `ELEMENT_FIELDS` (`:1282-1302`) das Feld nicht kennt. Die Spec lässt `hub.rs`
+  bewusst draußen; die Folge ist, dass der Betreiber den Marker bei jedem Treffer
+  sieht. Eigener, kleiner Anlass (Code-Review 2026-11-23).
+- **Die absolute Schlüsselreihenfolge pinnt kein Fall.** `deepStrictEqual` auf einem
+  Objektliteral ist ordnungsblind, und der Schatten-Fall vergleicht nur die zwei
+  Kopien gegeneinander. Die Spec sagt „hinter `visible`, vor `disabled`"; ein
+  `Object.keys`-Pin wäre der Nachzug (Code-Review 2026-11-23).
 - **Das Feld sagt nichts über Verdeckung.** Ein Element kann im Bild liegen und von
   einem Overlay überdeckt sein; `offscreen` bleibt `false` (2026-11-23).
 - **`innerWidth` ist die Breite des Fensters, nicht des sichtbaren Ausschnitts.**
