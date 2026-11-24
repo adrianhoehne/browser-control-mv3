@@ -1,6 +1,6 @@
 ---
 description: Ein Klick, der auf einer nicht lesbaren Seite landet, heißt not_readable_after_click statt not_readable — die Antwort sagt, dass der Klick durchging und der Weg zurück browser_navigate ist; Teil b der Teilung vom 2026-11-23.
-status: proposed
+status: active
 ---
 
 # Der Klick sagt die Wahrheit, Teil b — die Seite danach
@@ -66,18 +66,6 @@ die Liste der Ausgänge, die der Klick-Schnipsel in der Seite meldet.
 - **Keine Änderung an der Lageprüfung.** Das ist `docs/56`.
 - **Kein Feldfeld `clicked` im Fehler.** Siehe Ziel 3.
 - **Kein neues Werkzeug.**
-
-## Amendments to previous spec docs
-
-- **`docs/06-klicken.md`**: der neue Code mit Satz und Belegfeldern.
-- **`docs/15-ruhe-fuer-click-und-navigate.md`**: dort steht zweimal, der Klick
-  antworte auf einer nicht injizierbaren Seite mit `not_readable` — im Klick-Pfad
-  heißt das künftig `not_readable_after_click`.
-- **`docs/54-refusals-englisch.md`**: der Satz kommt in die Textliste.
-- **`docs/53-browser-help.md`**: die Anleitung von `browser_click` nennt den neuen
-  Code und den Rückweg.
-
-Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Testing
 
@@ -269,3 +257,12 @@ eingearbeitet.
   und `click_whenTheClickedPageHasNoAddress_shouldAnswerTheShortSentence` (die kurze
   Satzform war nirgends gepinnt). Beide verschieben die Fallzahl; `docs/PROJECT-STATE.md`
   wird in Stufe 3 nachgezogen.
+
+- **2026-11-23, Stufe 3 nachgezogen, Spec `active`.** `docs/06` nennt den neuen Code
+  und sagt, dass `not_readable` im Klick-Pfad nur noch **vor** dem Klick gilt.
+  `docs/54` trägt den Satz mit Datum; er steht zweimal (Extension und `texts.rs`) und
+  ist an beiden Stellen gepinnt. `docs/53` braucht keine Änderung: es beschreibt das
+  Verfahren der Anleitung, die Anleitung selbst war Stufe 3. **`docs/15` bleibt
+  ebenfalls unverändert** — die zwei Stellen dort beschreiben den Vorher-Fall (die
+  Ruhe-Injektion wird abgelehnt, geklickt wird nie), und dafür bleibt `not_readable`
+  richtig. Fallzahlen abgelesen: `cargo test` 294 (124 in `mcp.rs`), `npm test` 555.

@@ -98,6 +98,10 @@ er nicht — dafür sind die gepinnten Assertions da.
    `The element stays outside the viewport after scrolling: <selector>.` Er steht
    in `texts.rs` und ist ebenso englisch und umlautfrei; der Umlaut-Wächter deckt
    ihn ohne eigenen Fall.
+   **Nachgezogen nach `docs/61`:** ein zweiter Satz im Klick-Pfad, „The click went
+   through, but the page it opened cannot be read: <url>. Go back with
+   browser_navigate." Er steht zweimal, in `extension/bridge.js` und in `texts.rs`,
+   und ist an beiden Stellen gepinnt.
 
 ## Dev plan
 

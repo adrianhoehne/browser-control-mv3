@@ -151,7 +151,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `58-klick-nach-text.md` | `browser_click` nimmt `contains_text` allein oder zusammen mit `selector` (einschränkend), bevorzugt einen exakten Treffer und lehnt bei Mehrdeutigkeit mit `text_ambiguous`, Kandidaten und einem Rat ab — **Teil a**: Erweiterung und Harness | `proposed` |
 | `59-argumentnamen.md` | Zwei Namen für zwei Bedeutungen: `browser_inspect` und `browser_click` suchen mit `contains_text`, `browser_type` schreibt mit `typed_text` — ohne Alias. **`active`:** Stufen 0 und 1 gebaut (`be7846c`), Doku nachgezogen | `active` |
 | `60-klick-nach-text-mcp.md` | **Teil b** des Textklicks: `contains_text` im Schema, die Leitung bleibt `text`, `CLICK_NEEDS_FILTER` vor dem Draht, `text_ambiguous` und `no_match` als englische Sätze, zwei eingefrorene Fixtures | `proposed` |
-| `61-klick-seite-danach.md` | **Teil b** von `docs/56`: ein Klick, der auf einer nicht lesbaren Seite landet, antwortet `not_readable_after_click` statt `not_readable` — Satz mit Rückweg `browser_navigate`, `read` bleibt unberührt | `proposed` |
+| `61-klick-seite-danach.md` | **Teil b** von `docs/56`: ein Klick, der auf einer nicht lesbaren Seite landet, antwortet `not_readable_after_click` statt `not_readable` — Satz mit Rückweg `browser_navigate`, `read` bleibt unberührt. **`active`:** Stufen 1–2 gebaut (`a78e2fc`), Doku nachgezogen | `active` |
 | `62-inspect-offscreen.md` | **Teil b** von `docs/57`: jedes Element aus `browser_inspect` trägt `offscreen`, in beiden Quellen; flächenlose Elemente bleiben `false` | `proposed` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist

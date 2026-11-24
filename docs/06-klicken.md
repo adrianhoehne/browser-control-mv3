@@ -101,9 +101,13 @@ Antwort:
   **nach** `not_clickable`: ein Element ohne Fläche wird nicht gescrollt.
 - **`no_agent_tab`**: `TOOL_TEXTS.NO_AGENT_TAB`, wörtlich derselbe Satz wie bei
   `browser_read` („No agent tab — call browser_navigate first.").
-- **`not_readable`** (die Seite ließ sich nach dem Klick nicht lesen) und
-  **`read_failed`** (der eingespritzte Code lieferte kein brauchbares Objekt)
-  gehen **unverändert** durch — sie sind aussagekräftiger als ein Sammelcode.
+- **`not_readable_after_click`** (neu in `docs/61`): `isError`, „The click went
+  through, but the page it opened cannot be read: <url>. Go back with
+  browser_navigate." — der Klick lief, die Seite danach lässt sich nicht lesen.
+- **`not_readable`** gilt im Klick-Pfad nur noch **vor** dem Klick: Ist der Tab
+  schon unlesbar (`about:config`, PDF, `view-source:`), wird nicht geklickt, und
+  der Code bleibt `not_readable`. **`read_failed`** (der eingespritzte Code
+  lieferte kein brauchbares Objekt) geht unverändert durch.
 - **`superseded`**, **`click_failed`**, **Zeitüberschreitung**: `isError` mit
   „The extension could not carry out the request (code=<code>)." —
   `CALL_EXTENSION_FAILED(code)`, wie bei den anderen Werkzeugen.
