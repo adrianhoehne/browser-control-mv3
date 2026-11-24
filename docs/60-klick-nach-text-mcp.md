@@ -271,6 +271,14 @@ der anderen Seite der Naht.
   Fehlerblock für alle Werkzeuge — ein eigenes Inkrement (2026-11-23).
 - **Zwei Specs fassen Zeile 5 derselben Fixture an** (`docs/59` und diese). Zwei
   Freigaben, zwei datierte Akte — der Betreiber nickt beide ab (2026-11-23).
+- **`matches` zählt nach dem Exakt-Vorfilter.** Am Deckel kann `matches: 1` stehen,
+  obwohl 41 Elemente den Begriff tragen. Für den Satz ist das richtig (er sagt „at
+  least"), aber wer den Feldwert als Wahrheit liest, liest falsch (Code-Review
+  `docs/58`, 2026-11-23).
+- **`truncated` hat im Klick-Pfad zwei Bedeutungen:** im Erfolgsrahmen „der
+  Seitentext war zu lang", im Fehlerrahmen „der Kandidatenlauf endete am Deckel".
+  Diese Spec übersetzt nur den zweiten Fall in Prosa und sagt es im Satz (Code-Review
+  `docs/58`, 2026-11-23).
 
 ## Open questions
 

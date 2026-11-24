@@ -54,8 +54,10 @@ const NAVIGATE_ARGUMENTS: [&str; 2] = ["url", TAB_ARGUMENT];
 /// The one required key of `browser_open_tab`; it deliberately takes no `tab`: the tab
 /// it would name does not exist until the call returns.
 const OPEN_TAB_ARGUMENTS: [&str; 1] = ["url"];
-/// The three keys `browser_click` accepts, in schema order.
-const CLICK_ARGUMENTS: [&str; 3] = ["selector", "frame", TAB_ARGUMENT];
+/// The four keys `browser_click` accepts, in schema order. Either `selector`, `contains_text`
+/// or both name the target; which of the two a call needs is the rule the schema cannot
+/// state (`docs/60`).
+const CLICK_ARGUMENTS: [&str; 4] = ["selector", CLICK_TEXT_ARGUMENT, "frame", TAB_ARGUMENT];
 /// The five keys `browser_read` accepts, in the order the schema declares them. Also
 /// the order the set ones are copied onto the wire, so the payload reads like the tool
 /// description instead of like the caller's key order.
@@ -66,6 +68,10 @@ const TYPE_TEXT_ARGUMENT: &str = "typed_text";
 /// The key `browser_inspect` takes for the substring it searches for, spelled for the
 /// caller (`docs/59`).
 const INSPECT_TEXT_ARGUMENT: &str = "contains_text";
+/// The key `browser_click` takes for the text it searches for (`docs/60`). Same spelling as
+/// the inspect key and deliberately a second constant: the two tools may drift apart, and
+/// a shared name would hide which contract a change belongs to.
+const CLICK_TEXT_ARGUMENT: &str = "contains_text";
 /// The key the extension still reads for text — on the wire, not for the caller
 /// (`docs/59`, goal 6).
 const WIRE_TEXT_ARGUMENT: &str = "text";
@@ -174,6 +180,9 @@ pub fn tool_list() -> Value {
                     "selector": {
                         "type": "string",
                     },
+                    CLICK_TEXT_ARGUMENT: {
+                        "type": "string",
+                    },
                     "frame": {
                         "type": "string",
                         "minLength": 1,
@@ -183,9 +192,6 @@ pub fn tool_list() -> Value {
                         "minimum": 1,
                     },
                 },
-                "required": [
-                    "selector",
-                ],
                 "additionalProperties": false,
             },
         }),
@@ -405,7 +411,7 @@ const BROWSER_READ_DESCRIPTION: &str =
     r#"Reads the **current** agent tab and takes **no** URL — call `browser_navigate` first. Reads the title, the address and the text of the agent tab; `offset` skips that many characters of the text (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000). `offset`/`maxChars` page through the text; `chars` and `totalChars` tell you where you are. `via` says whether it is visible text or text content. `mode: article` reads only the article body — without navigation, footer and cookie banner. Waits first until the page has settled (3 s at most) and reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_CLICK_DESCRIPTION: &str =
-    r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Clicks the first element that matches the CSS selector in the agent tab, waits until the page has settled (3 s at most) and returns the page text afterwards (cut to 20 000 characters); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
+    r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Clicks an element of the agent tab: by CSS `selector`, by `contains_text` (visible text, case-insensitive; an exact match wins over a partial one) or by both, where `selector` narrows the text search. Waits until the page has settled (3 s at most) and returns the page text afterwards (cut to 20 000 characters); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
 
 const BROWSER_TYPE_DESCRIPTION: &str =
     r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Writes text into the field that matches the CSS selector, optionally sends Enter and returns the page text afterwards (cut to 20 000 characters). With `tab` exactly that tab, without `tab` the one used last."#;
@@ -683,38 +689,45 @@ async fn read_tool(id: &Value, params: Option<&Value>, context: &ToolContext) ->
 
 /// `tools/call` for `browser_click`.
 ///
-/// Same order as `navigate`: a missing or non-string `selector` is a malformed request
-/// (`-32602`), because the schema declares it required. An *empty* string is not
-/// malformed — it goes to the page, where `querySelector` decides and answers
-/// `invalid_selector`. The bridge has no opinion on selector syntax.
+/// Three checks before the request leaves, in the order `inspect` uses: the declared type of
+/// every key (`-32602`, because the schema states it), the keys the schema forbids (the
+/// tool's own sentence), and the one rule the schema cannot state — at least one of
+/// `selector`/`contains_text`, and a term that is not empty.
+///
+/// An *empty* `selector` is not malformed — it goes to the page, where `querySelector`
+/// decides and answers `invalid_selector`. The bridge has no opinion on selector syntax.
 async fn click_tool(id: &Value, params: Option<&Value>, context: &ToolContext) -> Value {
     let args = arguments_or_empty(params);
-    let Some(selector) = args
-        .get("selector")
-        .and_then(Value::as_str)
-        .map(str::to_string)
-    else {
-        return error_message(id, RpcError::INVALID_PARAMS);
-    };
-
-    // The frame filter of spec 26: type only, like every other key — the `minLength: 1`
-    // of the schema is the contract, and the empty substring travels to the extension,
-    // which refuses it with `invalid_params` before anything is injected.
-    if !is_absent_or(&args, "frame", Value::is_string) {
-        return error_message(id, RpcError::INVALID_PARAMS);
-    }
-    if !has_declared_tab_argument(Some(&args)) {
+    if !has_declared_click_argument_types(&args) {
         return error_message(id, RpcError::INVALID_PARAMS);
     }
     if !declares_only_object(args.as_object(), &CLICK_ARGUMENTS) {
         return tool_error(id, unexpected_arguments(BROWSER_CLICK));
     }
 
-    // `frame` is copied by hand because the payload is built by hand: a key the schema
-    // declares but this line forgets would fall out silently — no error, no sentence,
-    // just a click that quietly lands in the main frame.
+    let selector = args.get("selector").and_then(Value::as_str);
+    // A term that is present but empty is no target: the sentence names both arguments and
+    // the call does not reach the page (`docs/60`, `## Ziel` 3).
+    let term = args
+        .get(CLICK_TEXT_ARGUMENT)
+        .and_then(Value::as_str)
+        .filter(|term| !term.is_empty());
+    if selector.is_none() && term.is_none() {
+        return tool_error(id, texts::CLICK_NEEDS_FILTER);
+    }
+
+    // `selector` and the term are copied by hand because the payload is built by hand: a key
+    // the schema declares but this line forgets would fall out silently — no error, no
+    // sentence, just a click that quietly lands somewhere else. The term travels as `text`,
+    // the page op's name (`docs/58`); an absent or empty one is not inserted at all, so a
+    // selector-only click keeps the request it always had.
     let mut payload = Map::new();
-    payload.insert("selector".to_string(), Value::String(selector));
+    if let Some(selector) = selector {
+        payload.insert("selector".to_string(), Value::String(selector.to_string()));
+    }
+    if let Some(term) = term {
+        payload.insert(WIRE_TEXT_ARGUMENT.to_string(), Value::String(term.to_string()));
+    }
     if let Some(frame) = args.get("frame") {
         payload.insert("frame".to_string(), frame.clone());
     }
@@ -920,6 +933,24 @@ fn has_declared_read_argument_types(args: &Value) -> bool {
         return false;
     }
     if !is_absent_or(args, "mode", Value::is_string) {
+        return false;
+    }
+    if !is_absent_or(args, "frame", Value::is_string) {
+        return false;
+    }
+    has_declared_tab_argument(Some(args))
+}
+
+/// The types the `browser_click` schema declares. Both target keys are optional *strings*;
+/// whether a call needs one of them is the rule `click_tool` checks after this one.
+fn has_declared_click_argument_types(args: &Value) -> bool {
+    if !is_json_object(args) {
+        return false;
+    }
+    if !is_absent_or(args, "selector", Value::is_string) {
+        return false;
+    }
+    if !is_absent_or(args, CLICK_TEXT_ARGUMENT, Value::is_string) {
         return false;
     }
     if !is_absent_or(args, "frame", Value::is_string) {
@@ -1278,7 +1309,9 @@ fn unexpected_arguments(tool: &str) -> &'static str {
         BROWSER_STATUS => "browser_status takes no arguments.",
         BROWSER_NAVIGATE => "browser_navigate takes only `url` and `tab`.",
         BROWSER_READ => "browser_read takes only `offset`, `maxChars`, `mode`, `frame` and `tab`.",
-        BROWSER_CLICK => "browser_click takes only `selector`, `frame` and `tab`.",
+        BROWSER_CLICK => {
+            "browser_click takes only `selector`, `contains_text`, `frame` and `tab`."
+        }
         BROWSER_TYPE => {
             "browser_type takes only `selector`, `typed_text`, `submit`, `frame` and `tab`."
         }

@@ -58,7 +58,7 @@
 # case=3
 {"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"browser_read takes only `offset`, `maxChars`, `mode`, `frame` and `tab`."}],"isError":true}}
 # case=4
-{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"browser_click takes only `selector`, `frame` and `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"browser_click takes only `selector`, `contains_text`, `frame` and `tab`."}],"isError":true}}
 # case=5
 {"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"browser_type takes only `selector`, `typed_text`, `submit`, `frame` and `tab`."}],"isError":true}}
 # case=6

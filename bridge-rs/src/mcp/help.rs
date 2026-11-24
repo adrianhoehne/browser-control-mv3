@@ -80,23 +80,26 @@ There is no `url` argument — passing one is refused before anything is injecte
 `browser_navigate`, `browser_inspect`"#;
 
 const CLICK: &str = r#"## Purpose
-Clicks the first element that matches a CSS selector in the **current agent tab**, waits for the page to settle, and returns the text afterwards.
+Clicks an element in the **current agent tab**, waits for the page to settle, and returns the text afterwards. The target is a CSS `selector`, a `contains_text`, or both.
 
 ## Arguments
 | Name | Required | Meaning |
 |---|---|---|
-| `selector` | yes | CSS selector; shadow paths use `>>>` |
+| `selector` | no | CSS selector; shadow paths use `>>>` |
+| `contains_text` | no | a substring of the visible text, case-insensitive; an exact match wins over a partial one |
 | `tab` | no | an agent tab by id |
 | `frame` | no | a substring of a frame address |
+
+One of `selector` and `contains_text` is required, and both together are allowed: the selector then narrows the search to the elements it matches. `contains_text` alone clicks the innermost element whose text carries the term.
 
 ## Returns
 `tabId`, `url`, `title`, `clicked`, `scrolled`, `text` (cut at 20000 characters), `settled`, `waitedMs`. `scrolled` says whether the target had to be scrolled into the visible area first.
 
 ## Example
-`browser_click({"selector":"a.more-info"})` answers `{"tabId":12,"url":"https://www.iana.org/help/example-domains","settled":true,"text":"…"}`.
+`browser_click({"selector":"a.more-info"})` answers `{"tabId":12,"url":"https://www.iana.org/help/example-domains","settled":true,"text":"…"}`. `browser_click({"contains_text":"In den Einkaufswagen"})` clicks the one element carrying that text; a page that carries it more than once is refused instead of clicked.
 
 ## Pitfalls
-No `url` argument. A selector that matches nothing is an error, not an empty answer. A target outside the visible area is scrolled to and clicked; one that stays outside after scrolling is refused as `offscreen_after_scroll` instead of being clicked blind. The click is a real click on the page — it can navigate, submit a form or start a download. A click that lands on a page this extension cannot read answers `not_readable_after_click`: the click went through, so do not repeat it — go back with `browser_navigate`.
+No `url` argument. Neither target, or an empty `contains_text`, is refused before anything is injected. When both are set, the selector narrows the search to the elements it matches and the term picks among them; a term that matches several elements clicks nothing and answers a sentence with the count and up to five candidate selectors — narrow it with `selector`, and `browser_inspect` lists each candidate with its own selector. A selector that matches nothing is an error, not an empty answer. A target outside the visible area is scrolled to and clicked; one that stays outside after scrolling is refused as `offscreen_after_scroll` instead of being clicked blind. The click is a real click on the page — it can navigate, submit a form or start a download. A click that lands on a page this extension cannot read answers `not_readable_after_click`: the click went through, so do not repeat it — go back with `browser_navigate`.
 
 ## Related
 `browser_inspect`, `browser_type`"#;

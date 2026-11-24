@@ -703,7 +703,7 @@ fn transcript_result() -> Value {
 const TOOL_DESCRIPTION: &str = r#"Shows the windows and tabs of the operator's browser in the Default container, along with the extension's connection state, and marks the agent tab with `agent: true`."#;
 const NAVIGATE_TOOL_DESCRIPTION: &str = r#"Opens an http(s) URL in the agent tab of the operator's browser (Default container), waits until the page has loaded and then until it has settled (3 s at most); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
 const READ_TOOL_DESCRIPTION: &str = r#"Reads the **current** agent tab and takes **no** URL — call `browser_navigate` first. Reads the title, the address and the text of the agent tab; `offset` skips that many characters of the text (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000). `offset`/`maxChars` page through the text; `chars` and `totalChars` tell you where you are. `via` says whether it is visible text or text content. `mode: article` reads only the article body — without navigation, footer and cookie banner. Waits first until the page has settled (3 s at most) and reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
-const CLICK_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Clicks the first element that matches the CSS selector in the agent tab, waits until the page has settled (3 s at most) and returns the page text afterwards (cut to 20 000 characters); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
+const CLICK_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Clicks an element of the agent tab: by CSS `selector`, by `contains_text` (visible text, case-insensitive; an exact match wins over a partial one) or by both, where `selector` narrows the text search. Waits until the page has settled (3 s at most) and returns the page text afterwards (cut to 20 000 characters); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
 const TYPE_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Writes text into the field that matches the CSS selector, optionally sends Enter and returns the page text afterwards (cut to 20 000 characters). With `tab` exactly that tab, without `tab` the one used last."#;
 const FOCUS_TOOL_DESCRIPTION: &str = r#"Brings the agent tab to the front and its window to the foreground; the page itself is not changed, and `focused` comes from a query after focusing. With `tab` exactly that tab, without `tab` the one used last."#;
 const INSPECT_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Lists the elements of the agent tab (by CSS selector and/or text search) with tag, id, class, link, visible text, visibility and a ready-made selector to reuse. `my-card >>> button` steps right of the `>>>` into the open shadow tree of `my-card` (several levels allowed); every step is a simple selector — type, `#id`, `.class`, `[attr="value"]` or `:nth-of-type(n)`; closed shadow trees stay out of reach, and without `>>>` nothing changes. Changes nothing on the page. With `tab` exactly that tab, without `tab` the one used last."#;
@@ -719,7 +719,7 @@ const NO_ANSWER_TEXT: &str = r#"The extension did not answer (timeout)."#;
 const UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_status takes no arguments."#;
 const NAVIGATE_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_navigate takes only `url` and `tab`."#;
 const READ_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_read takes only `offset`, `maxChars`, `mode`, `frame` and `tab`."#;
-const CLICK_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_click takes only `selector`, `frame` and `tab`."#;
+const CLICK_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_click takes only `selector`, `contains_text`, `frame` and `tab`."#;
 const TYPE_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_type takes only `selector`, `typed_text`, `submit`, `frame` and `tab`."#;
 const FOCUS_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_focus takes only `tab`."#;
 const INSPECT_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_inspect takes only `selector`, `contains_text`, `limit`, `includeHidden`, `frame` and `tab`."#;
@@ -753,6 +753,21 @@ const FRAME_AMBIGUOUS_TEXT: &str = r#"Several frames match this `frame` — pass
 const FRAME_AMBIGUOUS_WITH_CANDIDATES_TEXT: &str = r#"Several frames match this `frame` — pass a longer substring of one of these addresses: https://widget.example.net/kalender/oben, https://widget.example.net/kalender/unten."#;
 const FRAME_SUBSTRING: &str = r#"kalender"#;
 const CLICK_SELECTOR: &str = r#"a#video-title-link"#;
+/// The sentence of a click that names neither target (`docs/60`).
+const CLICK_NEEDS_FILTER_TEXT: &str = r#"browser_click needs `selector` or `contains_text`."#;
+/// The term the text-click cases search for.
+const CLICK_TEXT: &str = r#"In den Einkaufswagen"#;
+/// The term the `no_match` case searches for — a word no page carries.
+const CLICK_MISSING_TERM: &str = r#"gibtsnicht"#;
+const CLICK_CANDIDATE_ONE: &str = r#"div#page > ul > li:nth-of-type(1) > button"#;
+const CLICK_CANDIDATE_TWO: &str = r#"div#page > ul > li:nth-of-type(2) > button"#;
+/// `text_ambiguous` with two matches and two candidates (`docs/58`, `## Ziel` 5).
+const CLICK_AMBIGUOUS_TEXT: &str = r#"`contains_text: "In den Einkaufswagen"` matches 2 elements (div#page > ul > li:nth-of-type(1) > button, div#page > ul > li:nth-of-type(2) > button). Narrow it with `selector` — `browser_inspect` lists each candidate with its own selector, and `browser_help({"tool":"browser_inspect"})` explains the arguments."#;
+/// The same refusal after a run that stopped at the candidate cap: the count is a lower
+/// bound, so the sentence says `at least`.
+const CLICK_AMBIGUOUS_AT_CAP_TEXT: &str = r#"`contains_text: "In den Einkaufswagen"` matches at least 5 elements (div#page > ul > li:nth-of-type(1) > button, div#page > ul > li:nth-of-type(2) > button). Narrow it with `selector` — `browser_inspect` lists each candidate with its own selector, and `browser_help({"tool":"browser_inspect"})` explains the arguments."#;
+/// `no_match` after a text search: the term, not the selector (`docs/58`, `## Ziel` 6).
+const CLICK_NO_MATCH_FOR_TEXT: &str = r#"No element matches this text: gibtsnicht."#;
 const INVALID_SELECTOR_TEXT: &str = r#"The selector is invalid: a#video-title-link."#;
 const NO_MATCH_TEXT: &str = r#"No element matches: a#video-title-link."#;
 const NOT_CLICKABLE_TEXT: &str = r#"The element is not visible or is disabled: a#video-title-link."#;
@@ -1082,10 +1097,10 @@ async fn mcp_toolsList_shouldOfferExactlyTheFourteenToolsOfTheContract() {
             "type": "object",
             "properties": {
                 "selector": { "type": "string" },
+                "contains_text": { "type": "string" },
                 "frame": { "type": "string", "minLength": 1 },
                 "tab": { "type": "integer", "minimum": 1 },
             },
-            "required": ["selector"],
             "additionalProperties": false,
         })
     );
@@ -2264,17 +2279,18 @@ async fn mcp_toolsCallBrowserClick_withoutAUsableSelector_shouldAnswerInvalidPar
     // GIVEN a bridge with a connected extension:
     let mut seam = Seam::connected(config()).await;
 
-    // WHEN two calls are refused — one without a selector, one with a selector that is not
-    // a string,
-    for (id, arguments) in [(81, json!({})), (82, json!({ "selector": 7 }))] {
-        let answer = seam.call(call_request(id, "browser_click", Some(arguments.clone()))).await;
+    // WHEN the call carries a selector that is not the string the schema declares (the
+    // missing target is a tool error now, `docs/60`),
+    let arguments = json!({ "selector": 7 });
+    let answer = seam
+        .call(call_request(81, "browser_click", Some(arguments.clone())))
+        .await;
 
-        // THEN both are protocol errors: the schema declares `selector` required,
-        assert_eq!(error_code(&answer), Some(-32602), "{arguments}");
-        assert!(answer.get("result").is_none(), "{arguments}");
-    }
+    // THEN it is a protocol error: the schema states the type,
+    assert_eq!(error_code(&answer), Some(-32602), "{arguments}");
+    assert!(answer.get("result").is_none(), "{arguments}");
 
-    // ... and neither of them reached the extension,
+    // ... and it did not reach the extension,
     assert!(!seam.reached_the_extension(), "no click request may reach the extension");
 
     // ... while the allowed call afterwards is the one that does.
@@ -2315,6 +2331,224 @@ async fn mcp_toolsCallBrowserClick_withAnUnknownArgument_shouldReturnTheOnlySele
 
     // ... and the refused call never reached the extension.
     assert!(!seam.reached_the_extension(), "the refused call must not reach the extension");
+}
+
+#[tokio::test]
+async fn mcp_toolsCallBrowserClick_withContainsText_shouldSendTextOnTheWire() {
+    // GIVEN a bridge with a connected extension, and the term a caller clicks by:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the client clicks with the name the schema declares,
+    let (answer, request) = seam
+        .call_with(
+            call_request(
+                370,
+                "browser_click",
+                Some(json!({ "contains_text": CLICK_TEXT })),
+            ),
+            result_frame(click_result()),
+        )
+        .await;
+
+    // THEN the wire carries `text` — the page op's name (`docs/58`, `docs/60`) — while the
+    // MCP name stays behind in the bridge,
+    assert_eq!(request["method"], protocol::methods::CLICK);
+    assert_eq!(request["params"], json!({ "text": CLICK_TEXT }));
+    assert_eq!(keys_of(&request["params"]), ["text"]);
+    assert!(
+        request["params"].get("contains_text").is_none(),
+        "the MCP name must not reach the wire: {request}"
+    );
+
+    // ... and the call is a normal answer, not a sentence about a missing target.
+    assert!(!is_error(&answer));
+}
+
+#[tokio::test]
+async fn mcp_toolsCallBrowserClick_withSelectorAndContainsText_shouldSendBoth() {
+    // GIVEN a bridge with a connected extension:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the client names both targets — allowed since `docs/60`, the selector narrows
+    // the text search in the page,
+    let (answer, request) = seam
+        .call_with(
+            call_request(
+                371,
+                "browser_click",
+                Some(json!({ "selector": CLICK_SELECTOR, "contains_text": CLICK_TEXT })),
+            ),
+            result_frame(click_result()),
+        )
+        .await;
+
+    // THEN both keys travel, in schema order, and only the term under its wire name,
+    assert_eq!(
+        request["params"],
+        json!({ "selector": CLICK_SELECTOR, "text": CLICK_TEXT })
+    );
+    assert_eq!(keys_of(&request["params"]), ["selector", "text"]);
+    assert!(!is_error(&answer));
+}
+
+#[tokio::test]
+async fn mcp_toolsCallBrowserClick_withoutAnyTarget_shouldSayClickNeedsFilter() {
+    // GIVEN a bridge with a connected extension:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the call names no target at all (this is the `{}` half of the invalid-params case,
+    // moved here by `docs/60`: the request is well-formed, the sentence is the answer),
+    let answer = seam
+        .call(call_request(372, "browser_click", Some(json!({}))))
+        .await;
+
+    // THEN it is a tool error whose sentence names both arguments, not a protocol error,
+    assert!(is_error(&answer));
+    assert_eq!(text_of(&answer), CLICK_NEEDS_FILTER_TEXT);
+    assert_ne!(text_of(&answer), CLICK_UNEXPECTED_ARGUMENTS_TEXT);
+    assert!(answer.get("error").is_none());
+    assert!(text_of(&answer).contains("`selector`"));
+    assert!(text_of(&answer).contains("`contains_text`"));
+
+    // ... and the refused call never reached the extension: the hub counts no request.
+    assert!(!seam.reached_the_extension(), "the refused call must not reach the extension");
+}
+
+#[tokio::test]
+async fn mcp_toolsCallBrowserClick_withAnEmptyContainsText_shouldSayClickNeedsFilter() {
+    // GIVEN a bridge with a connected extension:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the term is the empty string — a click target without text is none (`docs/58`),
+    let answer = seam
+        .call(call_request(
+            373,
+            "browser_click",
+            Some(json!({ "contains_text": "" })),
+        ))
+        .await;
+
+    // THEN the sentence names the two arguments before anything is sent,
+    assert!(is_error(&answer));
+    assert_eq!(text_of(&answer), CLICK_NEEDS_FILTER_TEXT);
+    assert!(answer.get("error").is_none());
+    assert!(!seam.reached_the_extension(), "the refused call must not reach the extension");
+}
+
+#[tokio::test]
+async fn mcp_toolsCallBrowserClick_withTextAmbiguous_shouldNameCountCandidatesAndAdvice() {
+    // GIVEN an extension that found two elements carrying the term, and names both:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the client clicks by that term,
+    let (answer, request) = seam
+        .call_with(
+            call_request(
+                374,
+                "browser_click",
+                Some(json!({ "contains_text": CLICK_TEXT })),
+            ),
+            error_frame_with(
+                "text_ambiguous",
+                json!({ "matches": 2, "candidates": [CLICK_CANDIDATE_ONE, CLICK_CANDIDATE_TWO] }),
+            ),
+        )
+        .await;
+
+    // THEN the request carried the term the sentence has to quote,
+    assert_eq!(request["params"], json!({ "text": CLICK_TEXT }));
+
+    // ... and the sentence carries the evidence as prose: term, count, both candidates and
+    // the advice — a tool error is one text block, so fields would never reach the agent,
+    assert!(is_error(&answer));
+    assert_eq!(text_of(&answer), CLICK_AMBIGUOUS_TEXT);
+    assert!(text_of(&answer).contains(CLICK_TEXT));
+    assert!(text_of(&answer).contains(CLICK_CANDIDATE_ONE));
+    assert!(text_of(&answer).contains(CLICK_CANDIDATE_TWO));
+    assert!(text_of(&answer).contains("browser_inspect"));
+    assert_ne!(text_of(&answer), call_extension_failed("text_ambiguous"));
+
+    // WHEN the run stopped at the candidate cap and the frame says so,
+    let (at_cap, _) = seam
+        .call_with(
+            call_request(
+                375,
+                "browser_click",
+                Some(json!({ "contains_text": CLICK_TEXT })),
+            ),
+            error_frame_with(
+                "text_ambiguous",
+                json!({
+                    "matches": 5,
+                    "candidates": [CLICK_CANDIDATE_ONE, CLICK_CANDIDATE_TWO],
+                    "truncated": true,
+                }),
+            ),
+        )
+        .await;
+
+    // THEN the same sentence words the count as a lower bound (`docs/58`, `## Ziel` 5),
+    assert!(is_error(&at_cap));
+    assert_eq!(text_of(&at_cap), CLICK_AMBIGUOUS_AT_CAP_TEXT);
+    assert!(text_of(&at_cap).contains("at least 5"));
+}
+
+#[tokio::test]
+async fn mcp_toolsCallBrowserClick_withNoMatchForATerm_shouldNameTheTerm() {
+    // GIVEN an extension whose text search found nothing:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the client clicks by a term alone,
+    let (answer, request) = seam
+        .call_with(
+            call_request(
+                376,
+                "browser_click",
+                Some(json!({ "contains_text": CLICK_MISSING_TERM })),
+            ),
+            error_frame("no_match"),
+        )
+        .await;
+
+    // THEN the request carried only the term,
+    assert_eq!(request["params"], json!({ "text": CLICK_MISSING_TERM }));
+
+    // ... and the sentence names the term, not the selector the caller never sent — the
+    // word `undefined` is what the selector form would print (`docs/60`, criterion 5),
+    assert!(is_error(&answer));
+    assert_eq!(text_of(&answer), CLICK_NO_MATCH_FOR_TEXT);
+    assert!(text_of(&answer).contains(CLICK_MISSING_TERM));
+    assert!(!text_of(&answer).contains("undefined"));
+}
+
+#[tokio::test]
+async fn mcp_toolsList_shouldDeclareContainsTextForClick() {
+    // GIVEN a bridge with nobody connected:
+    let seam = Seam::nobody(config());
+
+    // WHEN the client asks for the tool table,
+    let answer = answer_of(seam.ask(&json!({ "jsonrpc": "2.0", "id": 377, "method": "tools/list" }))).await;
+
+    // THEN `browser_click` declares the term as a string, in schema order after `selector`,
+    let click = answer["result"]["tools"]
+        .as_array()
+        .expect("the answer carries a tool array")
+        .iter()
+        .find(|tool| tool["name"] == "browser_click")
+        .cloned()
+        .expect("the tool table carries browser_click");
+    assert_eq!(
+        keys_of(&click["inputSchema"]["properties"]),
+        ["selector", "contains_text", "frame", "tab"]
+    );
+    assert_eq!(
+        click["inputSchema"]["properties"]["contains_text"],
+        json!({ "type": "string" })
+    );
+
+    // ... and neither target is required: `{}` is the schema's business no longer, the
+    // sentence is (`docs/60`, `## Der Vertrag`).
+    assert!(click["inputSchema"].get("required").is_none());
 }
 
 #[tokio::test]

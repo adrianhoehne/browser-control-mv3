@@ -40,6 +40,10 @@ const TRANSCRIPT_NEEDS_FOCUS_CODE: &str = "transcript_needs_focus";
 const INVALID_SELECTOR_CODE: &str = "invalid_selector";
 const NO_MATCH_CODE: &str = "no_match";
 const NOT_CLICKABLE_CODE: &str = "not_clickable";
+/// The refusal of a text search that found more than one target (`docs/58`). A code of its
+/// own next to `not_clickable`: that one says the element cannot be clicked, this one says
+/// the term names several, and its evidence rides in the same error frame.
+const CLICK_AMBIGUOUS_CODE: &str = "text_ambiguous";
 /// The fourth reason a click can be refused: the target stayed outside the visible area
 /// even after the page scrolled to it (`docs/56`). A code of its own, because the code
 /// carries the reason and the sentence is built from it.
@@ -68,6 +72,11 @@ const NOT_READABLE_KINDS: [&str; 4] = ["internal", "pdf", "file", "unknown"];
 /// extension caps its own list at five too; this second cap is the display limit of
 /// the side that builds the sentence, not a second opinion about the frames.
 const FRAME_CANDIDATE_LIMIT: usize = 5;
+
+/// How many candidate selectors a `text_ambiguous` sentence prints. The same number as
+/// [`FRAME_CANDIDATE_LIMIT`] and the same reasoning: the extension sends at most five, and
+/// a display limit belongs on the side that formats.
+const CLICK_CANDIDATE_LIMIT: usize = 5;
 
 /// Maps a failed request onto the sentence the operator reads.
 ///
@@ -135,10 +144,16 @@ fn extension_failure_text(
                 return texts::invalid_selector(&selector_of(params));
             }
             if code == Some(NO_MATCH_CODE) {
-                return texts::no_match(&selector_of(params));
+                return click_no_match_text(params);
             }
             if code == Some(NOT_CLICKABLE_CODE) {
                 return texts::not_clickable(&selector_of(params));
+            }
+            // Before `page_failure_text`, and a code of its own: this refusal is a text
+            // search that named several targets, and the sentence carries the evidence the
+            // frame brought (`docs/60`).
+            if code == Some(CLICK_AMBIGUOUS_CODE) {
+                return click_ambiguous_text(params, details);
             }
             // Before `page_failure_text`: a click that scrolled and still saw nothing
             // reachable names the target, like the three reasons before it.
@@ -275,6 +290,51 @@ fn selector_of(params: Option<&Map<String, Value>>) -> String {
     }
 }
 
+/// The term a click searched for, read from the **wire** key the payload carries
+/// (`docs/58`, `docs/60`): the caller wrote `contains_text`, `click_tool` put it on the
+/// wire as `text`.
+///
+/// `undefined` mirrors [`selector_of`], so the two sentence forms read alike when the
+/// bridge is asked about a call it cannot see.
+fn match_of(params: Option<&Map<String, Value>>) -> String {
+    match params.and_then(|params| params.get("text")) {
+        None => "undefined".to_string(),
+        Some(Value::String(term)) => term.clone(),
+        Some(other) => other.to_string(),
+    }
+}
+
+/// The `no_match` sentence of a click, in the form that matches the call: a term the
+/// caller sent wins over the selector (`docs/58`, `## Ziel` 6), because that is the target
+/// the caller wanted found. A selector-only click keeps the old sentence word for word.
+fn click_no_match_text(params: Option<&Map<String, Value>>) -> String {
+    match params.and_then(|params| params.get("text")) {
+        Some(_) => texts::no_match_for_text(&match_of(params)),
+        None => texts::no_match(&selector_of(params)),
+    }
+}
+
+/// The `text_ambiguous` sentence: the term, the count and up to five candidate selectors
+/// (`docs/58`, `## Ziel` 5). `truncated` in the frame says the run stopped at the candidate
+/// cap, which is why the sentence then says `at least`.
+///
+/// Without a usable count or candidate list the generic sentence stands: the code is the
+/// fact the bridge has, and inventing a number would be a second measurement.
+fn click_ambiguous_text(params: Option<&Map<String, Value>>, details: Option<&Value>) -> String {
+    let matches = details
+        .and_then(|details| details.get("matches"))
+        .filter(|matches| tools::is_integer(matches))
+        .and_then(whole_number)
+        .filter(|matches| *matches > 0);
+    let candidates = click_candidates_of(details.and_then(|details| details.get("candidates")));
+    let (Some(matches), false) = (matches, candidates.is_empty()) else {
+        return texts::call_extension_failed(CLICK_AMBIGUOUS_CODE);
+    };
+    let truncated =
+        details.and_then(|details| details.get("truncated")) == Some(&Value::Bool(true));
+    texts::click_ambiguous(&match_of(params), matches, &candidates.join(", "), truncated)
+}
+
 /// The sentence for an unreadable page, built from the facts the extension could add:
 /// `kind`, `url` and `contentType`.
 ///
@@ -381,7 +441,7 @@ fn message_sentence(
 /// count at all.
 fn frame_not_found_text(details: Option<&Value>) -> String {
     let frames = details.and_then(|details| details.get("frames"));
-    match frames.filter(|frames| tools::is_integer(frames)).and_then(answered_frames) {
+    match frames.filter(|frames| tools::is_integer(frames)).and_then(whole_number) {
         Some(count) if count >= 0 => texts::frame_not_found_with_count(count),
         _ => texts::FRAME_NOT_FOUND.to_string(),
     }
@@ -389,7 +449,7 @@ fn frame_not_found_text(details: Option<&Value>) -> String {
 
 /// The count as the sentence prints it. `is_integer` has already proven the value a whole
 /// number, so the float arm is the `3.0` shape, and `3.0` prints as `3` in Node as well.
-fn answered_frames(value: &Value) -> Option<i64> {
+fn whole_number(value: &Value) -> Option<i64> {
     value
         .as_i64()
         .or_else(|| value.as_f64().map(|float| float as i64))
@@ -415,6 +475,20 @@ fn frame_candidates_of(value: Option<&Value>) -> Vec<String> {
         .iter()
         .filter_map(|entry| entry.as_str().filter(|text| !text.is_empty()))
         .take(FRAME_CANDIDATE_LIMIT)
+        .map(str::to_string)
+        .collect()
+}
+
+/// The same for the candidate selectors of a `text_ambiguous`, at most
+/// [`CLICK_CANDIDATE_LIMIT`] of them.
+fn click_candidates_of(value: Option<&Value>) -> Vec<String> {
+    let Some(Value::Array(entries)) = value else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|entry| entry.as_str().filter(|text| !text.is_empty()))
+        .take(CLICK_CANDIDATE_LIMIT)
         .map(str::to_string)
         .collect()
 }

@@ -109,6 +109,15 @@ pub fn no_match(selector: &str) -> String {
     format!(r#"No element matches: {selector}."#)
 }
 
+/// `TOOL_TEXTS.NO_MATCH_FOR_TEXT`
+///
+/// The same refusal when the search was carried by a term instead of a selector
+/// (`docs/58`): the term is the target the caller asked for, and the selector form would
+/// print `undefined` at it.
+pub fn no_match_for_text(term: &str) -> String {
+    format!(r#"No element matches this text: {term}."#)
+}
+
 /// `TOOL_TEXTS.NOT_CLICKABLE`
 pub fn not_clickable(selector: &str) -> String {
     format!(r#"The element is not visible or is disabled: {selector}."#)
@@ -130,6 +139,31 @@ pub const PASSWORD_NOT_ALLOWED: &str = r#"Password fields are locked. Unlock the
 
 /// `TOOL_TEXTS.INSPECT_NEEDS_FILTER`
 pub const INSPECT_NEEDS_FILTER: &str = r#"browser_inspect needs `selector` or `contains_text`."#;
+
+/// `TOOL_TEXTS.CLICK_NEEDS_FILTER`
+///
+/// The click's sibling of the sentence above (`docs/60`): a click names its target by
+/// selector, by text or by both, and a call with neither must not reach the page.
+pub const CLICK_NEEDS_FILTER: &str = r#"browser_click needs `selector` or `contains_text`."#;
+
+/// `TOOL_TEXTS.CLICK_AMBIGUOUS`
+///
+/// The refusal of a text search that found more than one target (`docs/58`): the count and
+/// up to five candidate selectors ride in the error frame, and a tool error is one text
+/// block — so the evidence has to become prose or the agent never sees it.
+///
+/// `truncated` says the candidate run ended at the cap, which makes the count a lower
+/// bound; the sentence words it as `at least`. The term is the caller's own text.
+pub fn click_ambiguous(term: &str, matches: i64, candidates: &str, truncated: bool) -> String {
+    let count = if truncated {
+        format!("at least {matches}")
+    } else {
+        matches.to_string()
+    };
+    format!(
+        r#"`contains_text: "{term}"` matches {count} elements ({candidates}). Narrow it with `selector` — `browser_inspect` lists each candidate with its own selector, and `browser_help({{"tool":"browser_inspect"}})` explains the arguments."#
+    )
+}
 
 /// `TOOL_TEXTS.INVALID_INSPECT_PARAMS`
 pub const INVALID_INSPECT_PARAMS: &str = r#"The parameter is invalid."#;
