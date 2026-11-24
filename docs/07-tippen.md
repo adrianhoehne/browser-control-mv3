@@ -25,7 +25,7 @@ Commit dieses Inkrements.
 
 ## Ziel
 
-`browser_type({selector, text, submit})` schreibt `text` in das Feld, das dem
+`browser_type({selector, typed_text, submit})` schreibt `typed_text` in das Feld, das dem
 CSS-Selektor entspricht, und antwortet mit dem Zustand der Seite danach
 (`tabId`, `url`, `title`, `typed`, `submitted`, `text`, `truncated`, `via`).
 
@@ -69,7 +69,7 @@ Checkbox **„Passwortfelder erlauben"**, gespeichert als
 
 ```json
 {"type":"request","id":5,"method":"type",
- "params":{"selector":"input[name=\"q\"]","text":"example","submit":true}}
+ "params":{"selector":"input[name=\"q\"]","typed_text":"example","submit":true}}
 ```
 
 Antwort:
@@ -82,7 +82,7 @@ Antwort:
 ```
 
 - **`selector`**: jeder String; fehlend oder kein String ⇒ `invalid_params`.
-- **`text`**: muss ein String sein (`""` ist erlaubt und leert das Feld);
+- **`typed_text`**: muss ein String sein (`""` ist erlaubt und leert das Feld);
   fehlend oder kein String ⇒ `invalid_params`.
 - **`submit`**: `true` oder `false`; fehlt es, gilt `false`. Kein anderer Typ.
 - **Ziel-Element**: `input` **mit einem typbaren `type`** (`text`, `search`,

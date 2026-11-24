@@ -29,7 +29,7 @@ passenden Elemente:
               "rect":{"x":640,"y":710,"width":220,"height":48}}]}
 ```
 
-- **Filter**: `selector` (CSS) **oder** `text` (Teilstring, Groß/Klein egal, gesucht im sichtbaren Text des Elements) — mindestens eines. Beide zusammen: beide Bedingungen, also Selektor **und** Text. Keines: `invalid_params`. Ein **leerer** String zählt als gesetzt: `selector: ""` wirft in der Seite (`invalid_selector`), `text: ""` passt auf alles und wird vom `limit` geschnitten.
+- **Filter**: `selector` (CSS) **oder** `contains_text` (Teilstring, Groß/Klein egal, gesucht im sichtbaren Text des Elements) — mindestens eines. Beide zusammen: beide Bedingungen, also Selektor **und** Text. Keines: `invalid_params`. Ein **leerer** String zählt als gesetzt: `selector: ""` wirft in der Seite (`invalid_selector`), `contains_text: ""` passt auf alles und wird vom `limit` geschnitten. Der Name `contains_text` gilt seit `docs/59`; er trennt die Suche vom Text, der in `browser_type` geschrieben wird (`typed_text`).
 - **`count`** ist die Zahl der Treffer **nach** dem Sichtbarkeitsfilter und **vor**
   dem `limit`-Schnitt. Der **Deckel von 5 000 zählt geprüfte Kandidaten — in
   beiden Pfaden gleich**. Unterhalb des Deckels ist `count` exakt; wird der
@@ -75,8 +75,9 @@ liest nur.
 Antwort: `{ok:true, result:{tabId, url, title, count, truncated, elements:[…]}}`
 wie oben.
 
-- **`invalid_params`**: weder `selector` noch `text` gesetzt; `limit` außerhalb
-  1–200; `selector`/`text` kein String; `includeHidden` kein Boolean.
+- **`invalid_params`**: weder `selector` noch `contains_text` gesetzt; `limit`
+  außerhalb 1–200; `selector`/`contains_text` kein String; `includeHidden` kein
+  Boolean.
 - **`invalid_selector`**: `querySelector` wirft.
 - **Leere Treffermenge ist kein Fehler**: `count: 0`, `elements: []`.
 - **`about:`-Adresse** oder Seite ohne Body: `count: 0` — kein Sonderfall, es wird
@@ -99,7 +100,7 @@ wie oben.
 `tools/call`:
 
 - **Erfolg**: `{"content":[{"type":"text","text":"<JSON, 2 Leerzeichen eingerückt>"}]}`.
-- **weder `selector` noch `text`**: `isError`, „browser_inspect braucht `selector` oder `text`."
+- **weder `selector` noch `contains_text`**: `isError`, "browser_inspect needs `selector` or `contains_text`."
 - **`limit`/`includeHidden` falscher Typ, fremder Schlüssel**: `-32602` bzw.
   der Tabellensatz je Werkzeug.
 - **`invalid_selector`**: `isError`, „The selector is invalid: <selektor>."
@@ -158,12 +159,12 @@ Elementinhalt ist, darf nicht auf stderr.
 | Datei / Fall | Was er beweist |
 |---|---|
 | `test/protocol.test.js` — `METHODS.INSPECT` | Steht wörtlich in beiden Kopien |
-| `test/extension.test.js` — weder `selector` noch `text` | `invalid_params`, keine Injektion |
+| `test/extension.test.js` — weder `selector` noch `contains_text` | `invalid_params`, keine Injektion |
 | dito — `limit: 0`, `limit: 201`, `includeHidden: "ja"` | `invalid_params`, keine Injektion |
 | dito — unparsbarer Selektor | `invalid_selector` |
 | dito — Selektor ohne Treffer / Text ohne Treffer | `count: 0`, `elements: []`, **kein** Fehler |
 | dito — Selektor auf Knopf | Treffer mit `tag`, `id`, `classes`, `text`, `href`, `visible`, `disabled`, `rect` |
-| dito — Textsuche (Groß/Klein egal) | findet dasselbe Element über `text` statt `selector` |
+| dito — Textsuche (Groß/Klein egal) | findet dasselbe Element über `contains_text` statt `selector` |
 | dito — `includeHidden: false` (Default) | unsichtbares Element fehlt; mit `true` erscheint es mit `visible: false` |
 | dito — `limit: 1` bei 3 Treffern | `elements.length === 1`, `count: 3`, `truncated: true` |
 | dito — **der gelieferte Selektor trifft wieder** | für jedes Element: `querySelector(element.selector)` liefert **genau** dieses Element (Rundlauf im Stub) |
@@ -172,7 +173,7 @@ Elementinhalt ist, darf nicht auf stderr.
 | dito — Element ohne `id`/`class`/`data-testid` | Pfad-Selektor (`tag:nth-of-type(n)`), der wieder trifft |
 | dito — Text über 200 Zeichen | `text` gekürzt, `\\n` zu Leerzeichen |
 | dito — kein Agenten-Tab | `no_agent_tab` |
-| dito — `selector: ""` / `text: ""` | leerer Selektor ⇒ `invalid_selector`; leerer Text ⇒ Treffer, vom `limit` geschnitten |
+| dito — `selector: ""` / `contains_text: ""` | leerer Selektor ⇒ `invalid_selector`; leerer Suchbegriff ⇒ Treffer, vom `limit` geschnitten |
 | dito — unsichtbares Element bei `includeHidden: false` | `count` zählt es **nicht** (Zählung nach dem Sichtbarkeitsfilter) |
 | dito — Ergebnisform unbrauchbar (Stub liefert etwas, das nicht zur Form passt) | `inspect_failed` |
 | dito — Schnipsel wirft | `not_readable` (so bildet `injectPageCode` es ab) |

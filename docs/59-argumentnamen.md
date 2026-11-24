@@ -1,6 +1,6 @@
 ---
 description: Die beiden mehrdeutigen Argumentnamen werden getrennt — browser_inspect und browser_click suchen mit contains_text, browser_type schreibt mit typed_text; der Draht zwischen Bridge und Extension behält text.
-status: proposed
+status: active
 ---
 
 # Ein Name pro Bedeutung
@@ -89,22 +89,6 @@ Stufe 1 an einer späteren Spec, und genau das verbietet `docs/README.md`.
 - **Keine Umbenennung anderer Argumente.** `selector`, `frame`, `tab`, `limit`,
   `includeHidden`, `submit`, `offset`, `maxChars` und `mode` bleiben.
 - **Kein Absenken der neuen Namen auf den Draht.** Siehe Ziel 6.
-
-## Amendments to previous spec docs
-
-- **`docs/09-dom-abfrage.md`**: `text` → `contains_text` in Filter, Beispielen,
-  der Sonderregel für den leeren Suchbegriff und im zitierten Satz
-  `INSPECT_NEEDS_FILTER`.
-- **`docs/07-tippen.md`**: `text` → `typed_text`.
-- **`docs/54-refusals-englisch.md`**: die zwei Argument-Sätze und der Satz
-  `INSPECT_NEEDS_FILTER`.
-- **`docs/53-browser-help.md`**: die Anleitungen von `inspect` und `type` nennen
-  die neuen Namen.
-- **`docs/57-inspect-engster-treffer.md`** und **`docs/58-klick-nach-text.md`**:
-  sie werden mit den neuen Namen gebaut. Die historischen Zitate der Aufrufe vom
-  2026-11-23 bleiben, wie sie waren — sie sind Messungen.
-
-Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Testing
 
@@ -327,3 +311,12 @@ von „Doku" nach Stufe 1 verschoben: es ist Produktivcode.
   weil der Aufruf ein abgeschafftes Argument nennt. Sie gehören zu Stufe 0 und
   stehen jetzt in der erlaubten Spalte. Der Implementer hat es gemeldet, statt es
   zu verstecken.
+
+- **2026-11-23, Stufe 2 nachgezogen, Spec `active`.** `docs/07` nennt das Argument
+  `typed_text` (Signatur, Beispiel, Regel), `docs/09` nennt `contains_text` (Filter,
+  `invalid_params`, der Satz ohne Filter, drei Testzeilen). `docs/53` brauchte keine
+  Änderung: es beschreibt das Verfahren der Anleitung, nicht die Argumentnamen — die
+  Anleitungen selbst stehen in `help.rs` und waren Teil von Stufe 1. `docs/54` trägt
+  die zwei geänderten Sätze und den Filter-Satz, mit Datum. Die Fallzahlen sind
+  abgelesen: `cargo test` 292 (122 in `mcp.rs`), `npm test` 548; sie stehen in
+  `docs/PROJECT-STATE.md` (Abschnitt „Beweise") und in `docs/54` Kriterium 4.

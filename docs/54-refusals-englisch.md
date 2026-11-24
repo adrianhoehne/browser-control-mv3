@@ -86,10 +86,14 @@ er nicht — dafür sind die gepinnten Assertions da.
    Freigabe für alle drei Fixtures steht in `docs/PROJECT-STATE.md`,
    `### Freigaben 2026-11-22`.
 4. **Alles andere grün.**
-   `cargo test --manifest-path bridge-rs/Cargo.toml -- --test-threads=1` ⇒ 287 Fälle
-   (117 davon in `mcp.rs`); `cargo clippy --manifest-path bridge-rs/Cargo.toml
+   `cargo test --manifest-path bridge-rs/Cargo.toml -- --test-threads=1` ⇒ 292 Fälle
+   (122 davon in `mcp.rs`); `cargo clippy --manifest-path bridge-rs/Cargo.toml
    --all-targets --target x86_64-unknown-linux-musl -- -D warnings` und dasselbe mit
-   `--target x86_64-pc-windows-gnu` ⇒ 0; `npm test` ⇒ 547 Fälle; `npm run check` ⇒ 0.
+   `--target x86_64-pc-windows-gnu` ⇒ 0; `npm test` ⇒ 548 Fälle; `npm run check` ⇒ 0.
+   **Nachgezogen am 2026-11-23** nach `docs/59`: dieselben zwei Sätze nennen jetzt
+   `typed_text` und `contains_text`. Dazu kommt der Satz, den `browser_inspect`
+   ohne jeden Filter antwortet; er nennt beide Namen. Der Wortlaut bleibt englisch,
+   umlautfrei und gepinnt.
 
 ## Dev plan
 
