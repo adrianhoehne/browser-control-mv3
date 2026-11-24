@@ -167,6 +167,8 @@ Lists elements of the **current agent tab** with tag, id, class, link, visible t
 ## Pitfalls
 No `url` argument. The selector it returns is the value to hand to `click`/`type` — do not build your own from the tag. Shadow DOM paths appear as `my-card >>> button`.
 
+With `contains_text` only the innermost match is answered: an element is left out when an element below it contains the text too, and `count` counts those innermost matches — so the hit you wanted is not pushed out of `limit` by the containers around it. Two cases keep the raw list instead: a `selector` without `contains_text`, where you asked for those elements and see their ancestors as well, and `includeHidden: true`, where an invisible descendant must not displace a visible ancestor.
+
 ## Related
 `browser_click`, `browser_read`"#;
 

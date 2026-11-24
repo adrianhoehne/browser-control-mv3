@@ -4493,6 +4493,40 @@ async fn help_forRead_shouldSayThatItTakesNoUrl() {
     assert!(text.contains("browser_navigate"));
 }
 
+/// Die Engste-Regel und ihre zwei Ausnahmen stehen in der Anleitung: wer `contains_text`
+/// sucht, bekommt das Ziel statt der Containerseite (`docs/57`, `## Ziel`, 4 und 5).
+#[tokio::test]
+async fn help_forInspect_shouldNameTheInnermostRule() {
+    // GIVEN a bridge with nobody connected — a manual needs no browser (`docs/53`):
+    let mut seam = Seam::nobody(config());
+
+    // WHEN the manual of `browser_inspect` is asked for,
+    let answer = seam.call(help_call(35, "browser_inspect")).await;
+    let text = answer["result"]["content"][0]["text"].as_str().unwrap_or_default();
+
+    // THEN its pitfalls name the rule — checked inside that section, because `selector`
+    // stands in the argument table of every manual and would pass there for free:
+    let pitfalls = text
+        .split("## Pitfalls")
+        .nth(1)
+        .expect("the manual has a Pitfalls section");
+    assert!(
+        pitfalls.contains("innermost"),
+        "the pitfalls have to name the innermost rule: {pitfalls}"
+    );
+
+    // ... and both exceptions: a selector without text keeps the ancestors, and
+    // `includeHidden: true` hands out the raw list.
+    assert!(
+        pitfalls.contains("`selector` without `contains_text`"),
+        "the selector exception is missing: {pitfalls}"
+    );
+    assert!(
+        pitfalls.contains("`includeHidden: true`"),
+        "the includeHidden exception is missing: {pitfalls}"
+    );
+}
+
 /// Die Anleitung nennt dieselben Namen wie das Schema — sie ist Produktivcode, kein
 /// Doku-Nachtrag (`docs/59`, Ziel 5).
 #[tokio::test]

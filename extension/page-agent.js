@@ -62,6 +62,36 @@
   }
 
   /**
+   * The hits that have no other hit below them — the innermost matches of a text search.
+   *
+   * A container carries the text of every descendant, and it stands earlier in document
+   * order, so a `limit` filled from the top of the page answers the container instead of
+   * the target (spec 57). So an ancestor of a hit is dropped, not the hit itself: the walk
+   * starts at every hit and marks the matched elements it passes on the way up. Sibling
+   * hits both survive, because neither lies on the other's way up.
+   *
+   * The way up goes through `parentNode`, not `parentElement`: at a shadow boundary
+   * `parentElement` is `null` while `parentNode` is the root, and only that root's `host`
+   * leads on — a walk over `parentElement` alone would lose every ancestor above a host.
+   * Two `Set`s keep it one pass over the hits, each of them at most
+   * `INSPECT_CANDIDATE_LIMIT` long.
+   */
+  function dropAncestorsOfMatches(hits) {
+    const matched = new Set(hits);
+    const ancestors = new Set();
+    for (const hit of hits) {
+      let node = hit.parentNode;
+      while (node !== null && node !== undefined) {
+        if (matched.has(node)) ancestors.add(node);
+        // An element continues at its own parent; a root node has no parent element and
+        // continues at its host; anything else (the document) ends the walk.
+        node = node.nodeType === 1 ? node.parentNode : node.host;
+      }
+    }
+    return hits.filter((hit) => !ancestors.has(hit));
+  }
+
+  /**
    * Whether the rectangle overlaps the visible area of this realm.
    *
    * The area is the one of the frame the op runs in: `window.innerWidth` inside an
@@ -883,8 +913,9 @@
     let truncated = candidates.length > request.candidateLimit;
     const examined = Math.min(candidates.length, request.candidateLimit);
     const needle = request.text === null ? null : request.text.toLowerCase();
-    const elements = [];
-    let count = 0;
+    // Hits first, the innermost rule second, the delivery last: the rule needs the whole
+    // list, and `count` counts its result, not the run before it.
+    const hits = [];
 
     for (let position = 0; position < examined; position += 1) {
       const candidate = candidates[position];
@@ -896,10 +927,25 @@
       // so a substring test on the tree text would silently drop hits. It would also
       // break `text: ""`, which matches everything on purpose.
       if (needle !== null && textOf(candidate).toLowerCase().indexOf(needle) === -1) continue;
-      count += 1;
+      hits.push(candidate);
+    }
+
+    // Two exceptions, both promises of `docs/09`: a set-but-empty needle matches every
+    // visible element, and `includeHidden` answers the raw list — an invisible descendant
+    // must not push a visible ancestor out of it. `selector` alone brings `needle === null`
+    // and keeps its ancestors for that same reason.
+    const matched =
+      needle !== null && needle !== "" && request.includeHidden !== true
+        ? dropAncestorsOfMatches(hits)
+        : hits;
+    const count = matched.length;
+
+    const elements = [];
+    for (const candidate of matched) {
       // The expensive part runs only for what is delivered: `count` may be 5000 while
       // `limit` asks for two.
-      if (elements.length < request.limit) elements.push(described(candidate, elements.length));
+      if (elements.length >= request.limit) break;
+      elements.push(described(candidate, elements.length));
     }
 
     return {
@@ -1187,8 +1233,10 @@
     }
 
     const needle = request.text === null ? null : request.text.toLowerCase();
-    const elements = [];
-    let count = 0;
+    // The same three steps as the plain query: hits, innermost rule, delivery. The rule
+    // is asked of the elements, so an endpoint is mapped back through its element — the
+    // walk order itself is kept, which is what `index` and the answer's order follow.
+    const hits = [];
 
     for (const endpoint of endpoints) {
       const candidate = endpoint.element;
@@ -1196,12 +1244,24 @@
       // because `count` is the number of hits after it.
       if (!request.includeHidden && !isVisible(candidate)) continue;
       if (needle !== null && textOf(candidate).toLowerCase().indexOf(needle) === -1) continue;
-      count += 1;
+      hits.push(endpoint);
+    }
+
+    // The two exceptions of the plain query, for the same reasons: the empty needle is a
+    // set filter matching everything, and `includeHidden` promises the raw list.
+    let matched = hits;
+    if (needle !== null && needle !== "" && request.includeHidden !== true) {
+      const innermost = new Set(dropAncestorsOfMatches(hits.map((endpoint) => endpoint.element)));
+      matched = hits.filter((endpoint) => innermost.has(endpoint.element));
+    }
+    const count = matched.length;
+    const elements = [];
+
+    for (const endpoint of matched) {
       // The builder runs only for what is delivered — 5000 endpoints may meet a limit
       // of two, and every one of them needs a selector only if it is delivered.
-      if (elements.length < request.limit) {
-        elements.push(described(candidate, elements.length, selectorOf(endpoint)));
-      }
+      if (elements.length >= request.limit) break;
+      elements.push(described(endpoint.element, elements.length, selectorOf(endpoint)));
     }
 
     return {

@@ -107,8 +107,9 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 | `test/extension.test.js` | `inspect_withAnEmptyText_shouldStillMatchEveryVisibleElement` | die erste Ausnahme aus Ziel 5 hält; **umbenannt** von `inspect_withAnEmptyText_shouldMatchEveryElementAndBeCutByTheLimit` (`:10943`) |
 | `test/extension.test.js` | `inspect_withIncludeHidden_shouldKeepTheRawList` | die zweite Ausnahme hält: versteckter Nachfahre verdrängt keinen Vorfahren |
 | `test/extension.test.js` | `inspect_withSelectorAndText_shouldApplyTheRuleToTheSelectorMatches` | die Regel gilt für die Kombination |
+| `test/extension.test.js` | `inspect_withAPiercingSelectorAndANeedle_shouldAnswerOnlyTheInnermost` | die Regel gilt auch in der Schatten-Quelle; kein bestehender Fall verbindet `>>>` mit einem Suchbegriff |
 | `test/extension.test.js` | `inspect_withMoreCandidatesThanTheCap_shouldStopAtTheCapAndSetTruncated` (bestehend, `:10356`) | der Deckel greift vor der Engste-Regel |
-| `bridge-rs/tests/mcp.rs` | `mcp_toolsCallBrowserHelp_forInspect_shouldNameTheInnermostRule` | die Anleitung nennt die Regel und die Ausnahmen |
+| `bridge-rs/tests/mcp.rs` | `help_forInspect_shouldNameTheInnermostRule` | die Anleitung nennt die Regel und die Ausnahmen (Dateikonvention `help_…`, wie die drei bestehenden Fälle) |
 
 ## Acceptance criteria
 
@@ -245,6 +246,19 @@ Filter) bleibt offen.
 - **Der Deckel kann einen Vorfahren behalten, dessen engster Nachfahre jenseits des
   Deckels liegt.** Der Deckel zählt geprüfte Kandidaten; wer dahinter liegt, wird
   nicht gesehen. `truncated: true` sagt das (2026-11-23).
+- **Der `node.host`-Zweig im Helfer ist heute unerreichbar.** Die Dokumentabfrage
+  betritt keine Schattenbäume, und `inspectShadowPageSource` liefert nur Endpunkte
+  des letzten Roots — ein Vorfahre oberhalb des Hosts kann also nie Treffer sein.
+  Ein Helfer mit `parentElement` allein bestünde alle sieben Fälle. Der Zweig bleibt
+  als Versicherung, bis `docs/58` ihn braucht (Code-Review 2026-11-23).
+- **Ein Container mit zwei treffenden Blättern ist nicht belegt.** Der verschachtelte
+  Fall hat ein innerstes Blatt (`count: 1`), der Geschwisterfall keinen Container;
+  die reale Messung (`count: 671`) war die Kombination. Ein Fall
+  `inspect_withTwoInnermostMatchesInOneContainer_shouldKeepBothAndDropTheContainer`
+  wäre der Nachzug (Code-Review 2026-11-23).
+- **Der dreiteilige Wächter steht zweimal** (`page-agent.js`, Dokument- und
+  Schatten-Zweig), und `docs/58` kopiert ihn ein drittes Mal. Ein lokales Prädikat
+  hielte die drei Kopien zusammen (Code-Review 2026-11-23).
 - **`contains_text` ist ein Filter, keine Beschreibung.** Zwei Aufrufe des
   9B-Laufs gaben `{"selector":"input","text":"input field"}` und bekamen
   `count: 0`, weil beide Bedingungen gelten. Dokumentiert in `docs/09`; ein
@@ -284,3 +298,9 @@ nachgezogen; der Punkt `offscreen` ist nach `docs/62` gewandert.
 - **2026-11-23, Absprache.** Der Betreiber hat Ziel und Abnahmekriterien dieser
   Spec abgestimmt (`CONTRIBUTING.md`, Schritt 2). Der Bau kann beginnen, sobald
   der Dev-Plan von einem zweiten Autor geprüft ist.
+
+- **2026-11-23, Entscheidung vor dem Bau (Orchestrator).** Der Fall
+  `inspect_withAPiercingSelectorAndANeedle_shouldAnswerOnlyTheInnermost` steht in
+  `## Testing`, obwohl ihn erst der Dev-Plan verlangte: kein bestehender Fall
+  verbindet `>>>` mit einem Suchbegriff, die Regel im Schatten-Zweig wäre sonst
+  unbelegt.

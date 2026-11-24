@@ -9689,6 +9689,42 @@ function createInspectFixture() {
 }
 
 /**
+ * One nested run of three hits — the shape of the case that started it (spec 57):
+ * `div#a-page > div.search > span.title`, all three carrying the same text.
+ *
+ * The two containers carry that text in their own `innerText` on purpose:
+ * `createInspectElement` sets `innerText: innerText ?? textContent` and does *not* fold its
+ * children, so a container without its own text would not be a hit at all — and a case
+ * about ancestors would have no ancestor to drop. The text is the same string a caller
+ * searches for, lower-cased only on the comparing side.
+ *
+ * `hiddenTitle` makes the innermost hit `display: none`, which is the descendant the
+ * `includeHidden` exception is about.
+ */
+function createNestedInspectPage({ hiddenTitle = false } = {}) {
+  const title = createInspectElement({
+    tagName: "SPAN",
+    className: "title",
+    innerText: "In den Einkaufswagen",
+    display: hiddenTitle ? "none" : undefined,
+  });
+  const search = createInspectElement({
+    tagName: "DIV",
+    className: "search",
+    innerText: "In den Einkaufswagen",
+    children: [title],
+  });
+  const aPage = createInspectElement({
+    tagName: "DIV",
+    id: "a-page",
+    innerText: "In den Einkaufswagen",
+    children: [search],
+  });
+  const page = createInspectPage({ children: [aPage] });
+  return { page, aPage, search, title };
+}
+
+/**
  * The tag name in the case the grammar compares in: HTML tag names are
  * case-insensitive, so a selector builder may lower-case them.
  */
@@ -10609,6 +10645,131 @@ test("inspect_withALimit_shouldCutTheElementsAndSetTruncated", async () => {
   assert.equal(answer.result.elements[0].index, 0);
 });
 
+/* ---------------------------------------------- inspect: the innermost rule */
+
+test("inspect_withANeedleInNestedContainers_shouldAnswerOnlyTheInnermost", async () => {
+  // GIVEN three hits, one inside the other, and all three carrying the searched text —
+  // `div#a-page > div.search > span.title`, the shape of the Amazon case of spec 57:
+  const { page } = createNestedInspectPage();
+  const tabs = createInspectTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the bridge searches for that text,
+  await sendInspect(socket, 2, { text: "in den einkaufswagen" });
+
+  // THEN the innermost hit is the answer, and `count` counts it — not the three hits:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.count, 1);
+  assert.equal(answer.result.truncated, false);
+  assert.equal(answer.result.elements.length, 1);
+  assert.equal(answer.result.elements[0].tag, "span");
+  assert.equal(answer.result.elements[0].text, "In den Einkaufswagen");
+  assert.equal(answer.result.elements[0].selector, "span.title");
+
+  // ... and no container appears anywhere in the answer, not just not at index 0: both
+  // of them carry the text, and shipping either would be the failure this case is for.
+  assert.equal(answer.result.elements.some((entry) => entry.id === "a-page"), false);
+  assert.equal(answer.result.elements.some((entry) => entry.classes.includes("search")), false);
+});
+
+test("inspect_withSiblingsThatBothMatch_shouldKeepBothInDocumentOrder", async () => {
+  // GIVEN two sibling hits under a container that does not carry the text itself —
+  // neither is an ancestor of the other, so the rule has nothing to drop:
+  const first = createInspectElement({ tagName: "SPAN", innerText: "In den Einkaufswagen" });
+  const second = createInspectElement({ tagName: "SPAN", innerText: "In den Einkaufswagen" });
+  const row = createInspectElement({ tagName: "DIV", className: "reihe", children: [first, second] });
+  const page = createInspectPage({ children: [row] });
+  const tabs = createInspectTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the bridge searches for that text,
+  await sendInspect(socket, 2, { text: "in den einkaufswagen", limit: 10 });
+
+  // THEN both stay, `index` counts them in document order, and so does the delivery:
+  const delivered = inspectElementsOf(socket, 2);
+  assert.equal(responsesById(socket).get(2).result.count, 2);
+  assert.deepStrictEqual(
+    delivered.map((entry) => entry.index),
+    [0, 1],
+  );
+  assert.deepStrictEqual(
+    delivered.map((entry) => querySelectorIn(page, entry.selector)),
+    [first, second],
+  );
+});
+
+test("inspect_withASelectorOnly_shouldKeepTheAncestors", async () => {
+  // GIVEN the nested run of three hits — the same page the innermost case uses,
+  const { page } = createNestedInspectPage();
+  const tabs = createInspectTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN a selector is named and no text search runs with it — whoever names a selector
+  // knows the markup and wants that list,
+  await sendInspect(socket, 2, { selector: "*", limit: 50 });
+
+  // THEN every match is delivered, the two ancestors included — `html`, `body`,
+  // `div#a-page`, `div.search`, `span.title`:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.count, 5);
+  assert.equal(answer.result.truncated, false);
+  assert.deepStrictEqual(
+    answer.result.elements.map((entry) => entry.tag),
+    ["html", "body", "div", "div", "span"],
+  );
+  assert.equal(answer.result.elements[2].id, "a-page");
+  assert.deepStrictEqual(answer.result.elements[3].classes, ["search"]);
+});
+
+test("inspect_withIncludeHidden_shouldKeepTheRawList", async () => {
+  // GIVEN the nested run of three hits whose innermost one is `display: none` — the
+  // hidden descendant that must not push its visible ancestors out of the list:
+  const { page } = createNestedInspectPage({ hiddenTitle: true });
+  const tabs = createInspectTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the bridge is told to list invisible elements too,
+  await sendInspect(socket, 2, { text: "in den einkaufswagen", includeHidden: true, limit: 10 });
+
+  // THEN the list is raw — all three hits, in document order, the hidden one marked:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.count, 3);
+  assert.equal(answer.result.truncated, false);
+  assert.deepStrictEqual(
+    answer.result.elements.map((entry) => entry.tag),
+    ["div", "div", "span"],
+  );
+  assert.deepStrictEqual(
+    answer.result.elements.map((entry) => entry.visible),
+    [true, true, false],
+  );
+  assert.equal(answer.result.elements[0].id, "a-page");
+});
+
+test("inspect_withSelectorAndText_shouldApplyTheRuleToTheSelectorMatches", async () => {
+  // GIVEN the nested run of three hits and a selector wide enough to match all three,
+  const { page } = createNestedInspectPage();
+  const tabs = createInspectTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN a selector and a text search are combined — the case the rule is for, because
+  // the caller still does not know the markup of the target,
+  await sendInspect(socket, 2, { selector: "*", text: "in den einkaufswagen", limit: 10 });
+
+  // THEN the rule applies to those selector matches: the innermost one, and its count,
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.count, 1);
+  assert.equal(answer.result.truncated, false);
+  assert.deepStrictEqual(
+    answer.result.elements.map((entry) => [entry.tag, entry.selector]),
+    [["span", "span.title"]],
+  );
+});
+
 test("inspect_withMoreCandidatesThanTheCap_shouldStopAtTheCapAndSetTruncated", async () => {
   // GIVEN a page with one candidate more than the cap allows to examine — five
   // thousand are examined, the rest never is:
@@ -10870,6 +11031,49 @@ test("inspect_withAPiercingSelector_shouldReachTheButtonInsideTheOpenShadowRoot"
   // ... and the returned selector names both sides of the jump, so a caller can hand it
   // straight back.
   assert.equal(answer.result.elements[0].selector, "my-card#karte >>> button:nth-of-type(1)");
+});
+
+test("inspect_withAPiercingSelectorAndANeedle_shouldAnswerOnlyTheInnermost", async () => {
+  // GIVEN a card whose tree holds a container and, inside it, a span — both with the same
+  // class and the same text, so one selector matches both and the rule has a pair:
+  const innerItem = createInspectElement({
+    tagName: "SPAN",
+    className: "item",
+    innerText: "In den Einkaufswagen",
+  });
+  const container = createInspectElement({
+    tagName: "DIV",
+    className: "item",
+    innerText: "In den Einkaufswagen",
+    children: [innerItem],
+  });
+  const card = createShadowCard({ children: [container] });
+  const page = createInspectPage({ children: [card] });
+  const tabs = createInspectTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN a jump and a text search are combined — no existing case pairs `>>>` with a
+  // needle, so without this one the rule in the shadow source is unproven,
+  await sendInspect(socket, 2, { selector: "my-card >>> .item", text: "in den einkaufswagen" });
+
+  // THEN the innermost hit of that tree is the answer, with its own tag and its own text:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.count, 1);
+  assert.equal(answer.result.truncated, false);
+  assert.deepStrictEqual(
+    answer.result.elements.map((entry) => [entry.tag, entry.text]),
+    [["span", "In den Einkaufswagen"]],
+  );
+
+  // ... the container is gone from the whole answer, not only from position 0,
+  assert.equal(answer.result.elements.some((entry) => entry.tag === "div"), false);
+
+  // ... and the delivered selector still carries the host chain in front of the local
+  // part — the rule decides what is delivered, not how it is named. Inside a root the
+  // builder prefers the position over the class form, exactly as in the other shadow
+  // cases of this file.
+  assert.equal(answer.result.elements[0].selector, "my-card#karte >>> span:nth-of-type(1)");
 });
 
 test("inspect_withoutAPiercingSelector_shouldNotSeeIt", async () => {
@@ -11196,18 +11400,18 @@ test("inspect_withAShadowHit_shouldDeliverTheSameFieldSetAsADocumentHit", async 
   assert.equal(Object.keys(fromShadow).length, 11);
 });
 
-test("inspect_withAnEmptyText_shouldMatchEveryElementAndBeCutByTheLimit", async () => {
+test("inspect_withAnEmptyText_shouldStillMatchEveryVisibleElement", async () => {
   // GIVEN the invented page with its eight body descendants:
   const { page } = createInspectFixture();
   const tabs = createInspectTabs({ page });
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
   // WHEN the text filter is the empty string — set, and therefore a filter that matches
-  // everything,
+  // everything but applies no innermost rule (spec 57, the first exception),
   await sendInspect(socket, 2, { text: "", limit: 2 });
 
-  // THEN every candidate is a hit, and the limit cuts the delivery while `count` keeps
-  // the truth:
+  // THEN every candidate is a hit, the nested one included, and the limit cuts the
+  // delivery while `count` keeps the truth:
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, true);
   assert.equal(answer.result.count, 8);
