@@ -30,8 +30,8 @@ Logzeilen `bc: …`, die Kommentare und die Dokumentation bleiben deutsch.
 - **Fixtures amendiert** (Freigabe des Betreibers): `1-initialize-and-tools-list.txt`
   trägt jetzt die englischen Beschreibungen, `2-tools.txt` und
   `3-extension-failures.txt` die englischen Sätze.
-- **Beweise:** `cargo test` 295 Fälle grün (125 in `mcp.rs`), `clippy -D warnings`
-  auf `x86_64-unknown-linux-musl` und `x86_64-pc-windows-gnu`, `npm test` 561
+- **Beweise:** `cargo test` 296 Fälle grün (126 in `mcp.rs`), `clippy -D warnings`
+  auf `x86_64-unknown-linux-musl` und `x86_64-pc-windows-gnu`, `npm test` 563
   Fälle, `npm run check` 0, `parity.sh --impl rust --check` 7/7, `--self-test` 7/7.
 - **Review Runde 1 (2026-11-22):** `🔧 Fix these and I'll sign off`; alle Befunde
   eingearbeitet. `docs/53` und `CONTRIBUTING.md` sind nachgezogen. Ein deutscher

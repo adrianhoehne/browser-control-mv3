@@ -1,6 +1,6 @@
 ---
 description: Jedes Element aus browser_inspect trägt offscreen — true, wenn sein rect den sichtbaren Bereich nicht schneidet, in beiden Quellen der Antwort; Teil b der Teilung vom 2026-11-23.
-status: proposed
+status: active
 ---
 
 # `inspect` sagt, wo der Treffer liegt — Teil b
@@ -50,14 +50,6 @@ und `visibility` — die Lage nicht. `described` liefert `rect`, aber keine Deut
 - **Keine Engste-Regel.** Das ist `docs/57`.
 - **Kein `offscreen` in `read`.** `read` liefert Text, keine Elemente.
 - **Keine Sortierung nach Lage.** Dokumentreihenfolge bleibt die Ordnung.
-
-## Amendments to previous spec docs
-
-- **`docs/09-dom-abfrage.md`**: der Feldkatalog bekommt `offscreen` samt der
-  Ausnahme für flächenlose Elemente.
-- **`docs/53-browser-help.md`**: die Anleitung von `browser_inspect` nennt das Feld.
-
-Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Testing
 
@@ -223,3 +215,10 @@ Feldset-Fall, die Harmonie mit `docs/56`). Alle Befunde sind hier eingearbeitet.
 - **2026-11-23, Absprache.** Der Betreiber hat Ziel und Abnahmekriterien dieser
   Spec abgestimmt (`CONTRIBUTING.md`, Schritt 2). Der Bau kann beginnen, sobald
   der Dev-Plan von einem zweiten Autor geprüft ist.
+
+- **2026-11-23, Stufe 3 nachgezogen, Spec `active`.** `docs/09` trägt das Feld im
+  Katalog, in der Testzeile, im Kriterium 3 und an der Stelle, die vorher sagte, der
+  Agent müsse die Lage selbst schließen. `docs/27` sagt zwölf Felder statt elf.
+  `docs/53` braucht keine Änderung: es beschreibt das Verfahren der Anleitung, die
+  Anleitung selbst war Stufe 2. Fallzahlen abgelesen: `cargo test` 296 (126 in
+  `mcp.rs`), `npm test` 563.

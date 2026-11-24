@@ -52,6 +52,10 @@ Suchbegriff und `includeHidden: true`.
 - **`rect`** aus `getBoundingClientRect()`: `Math.round` je Wert, Einheit Pixel,
   Ursprung links oben im **Viewport** (CSS-Pixel, also zoombhängig) — nicht in
   der Seite.
+- **`offscreen`** (seit `docs/62`): `true`, wenn das `rect` den sichtbaren Bereich
+  nicht schneidet; `false` sonst und immer bei einem Element **ohne Fläche** —
+  „außerhalb" behauptet eine Lage, und ein Element ohne Fläche hat keine.
+  `visible: true` und `offscreen: true` schließen sich also nicht aus.
 
 Kein Klick, keine Änderung an der Seite, kein Slot, keine Wartezeit: `inspect`
 liest nur.
@@ -170,7 +174,7 @@ Elementinhalt ist, darf nicht auf stderr.
 | dito — `limit: 0`, `limit: 201`, `includeHidden: "ja"` | `invalid_params`, keine Injektion |
 | dito — unparsbarer Selektor | `invalid_selector` |
 | dito — Selektor ohne Treffer / Text ohne Treffer | `count: 0`, `elements: []`, **kein** Fehler |
-| dito — Selektor auf Knopf | Treffer mit `tag`, `id`, `classes`, `text`, `href`, `visible`, `disabled`, `rect` |
+| dito — Selektor auf Knopf | Treffer mit `tag`, `id`, `classes`, `text`, `href`, `visible`, `offscreen`, `disabled`, `rect` |
 | dito — Textsuche (Groß/Klein egal) | findet dasselbe Element über `contains_text` statt `selector` |
 | dito — `includeHidden: false` (Default) | unsichtbares Element fehlt; mit `true` erscheint es mit `visible: false` |
 | dito — `limit: 1` bei 3 Treffern | `elements.length === 1`, `count: 3`, `truncated: true` |
@@ -203,7 +207,8 @@ Elementinhalt ist, darf nicht auf stderr.
    `text`, `limit`, `includeHidden`, `additionalProperties: false`.
 3. Mit Fake-Extension liefert `browser_inspect` JSON mit `tabId`, `url`, `title`,
    `count`, `truncated`, `elements`; jedes Element hat `index`, `selector`, `tag`,
-   `id`, `classes`, `text`, `href`, `ariaLabel`, `visible`, `disabled`, `rect`.
+   `id`, `classes`, `text`, `href`, `ariaLabel`, `visible`, `offscreen`, `disabled`,
+   `rect`.
 4. **Der Rundlauf ist der Kern**: für jedes gelieferte Element liefert
    `document.querySelector(element.selector)` genau dieses Element — auch bei
    einem Element ohne `id`, `class` und `data-testid` (Beleg: Testfall im
@@ -455,7 +460,8 @@ Index-Parameter für `click`/`type`, Bilder, ein zweiter Tab, Container, Rechte.
   bevorzugt sie nur, wenn er eindeutig ist.
 - **Sichtbarkeit ist relativ**: ein Element in einem gescrollten Bereich hat eine
   Fläche und gilt als sichtbar, auch wenn es außerhalb des Viewports liegt.
-  `rect` sagt, wo es ist — der Agent muss selbst schließen, ob es im Bild ist.
+  `rect` sagt, wo es ist; `offscreen` (seit `docs/62`) sagt, ob es **nicht** im
+  Bild ist. Der Agent muss nicht mehr selbst schließen.
 
 ## Touch boundary
 
