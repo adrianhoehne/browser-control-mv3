@@ -240,7 +240,7 @@ eigenen datierten Akt. Der Drahtname `text` bleibt dauerhaft doppeldeutig
 |---|---|
 | `bridge-rs/src/mcp/tools.rs` (Argumentlisten, Schemata, alle vier Lesestellen, `unexpected_arguments`, `help.rs`) | `bridge-rs/src/hub.rs`, `protocol.rs` — kein Protokollschritt; die Logzeile bleibt bei `text` |
 | `bridge-rs/tests/mcp.rs`, `bridge-rs/tests/texts.rs` | `extension/**`, `test/extension.test.js` — der Draht bleibt `text` |
-| `scripts/parity/expected/2-tools.txt`, `1-initialize-and-tools-list.txt` — **nur** Stufe 0, mit Freigabe | `docs/56`, `docs/58` — eigener Zuschnitt |
+| `scripts/parity/expected/2-tools.txt`, `1-initialize-and-tools-list.txt`, `scripts/parity/requests/2-call.jsonl`, `2-refusal.jsonl` — **nur** Stufe 0, mit Freigabe | `docs/56`, `docs/58` — eigener Zuschnitt |
 | `docs/07`, `docs/09`, `docs/53`, `docs/54`, `docs/README.md`, `docs/PROJECT-STATE.md` | `docs/06` — das Argument von `click` kommt mit `docs/58` |
 
 ## Bekannte Lücken
@@ -256,6 +256,23 @@ eigenen datierten Akt. Der Drahtname `text` bleibt dauerhaft doppeldeutig
 - **`browser_click` fehlt in dieser Umbenennung**, bis `docs/58` gebaut ist. Bis
   dahin hat `click` kein `text`-Argument, also auch keinen falschen Namen
   (2026-11-23).
+- **Der `type`-Pfad prüft unbekannte Schlüssel vor den Typen, `inspect` umgekehrt.**
+  Folge: `{"selector":"x","typed_text":7,"text":"y"}` bekommt den Argument-Satz,
+  `{"selector":"x","contains_text":7,"text":"y"}` dagegen `-32602`. Beides ist
+  harmlos, aber uneinheitlich; ein gemeinsamer Helfer wäre der Nachzug
+  (Code-Review 2026-11-23).
+- **Kein Test für einen falschen Typ des neuen Namens** (`{"contains_text": 5}`).
+  Die Prüfung steht (`tools.rs:933`), der Fall fehlt — sie ist damit nur am Code
+  belegt (Code-Review 2026-11-23).
+- **`inspect_wire_arguments` kopiert `declared_keys_of`** (`tools.rs:1095-1107`):
+  zwei Schleifen, die bei einem weiteren `inspect`-Argument auseinanderlaufen
+  können. Sauberer wäre eine Umbenennungs-Map am Helfer (Code-Review 2026-11-23).
+- **Zwei Kommentare im `type_tool` sind schief:** die Begründung der Prüf-Reihenfolge
+  beruft sich auf `inspect_tool`, das es umgekehrt macht, und „Four checks" zählt
+  fünf auf. Kein Verhalten, nur Text (Code-Review 2026-11-23).
+- **Das `TYPE`-Beispiel in `help.rs` schickt `enter`**, das Argument heißt `submit`
+  — bestehende Abweichung, die diese Spec nicht entscheidet, sondern an `docs/53`
+  weiterreicht (Code-Review 2026-11-23).
 
 ## Open questions
 
@@ -303,3 +320,10 @@ von „Doku" nach Stufe 1 verschoben: es ist Produktivcode.
 - **2026-11-23, Absprache.** Der Betreiber hat Ziel und Abnahmekriterien dieser
   Spec abgestimmt (`CONTRIBUTING.md`, Schritt 2). Der Bau kann beginnen, sobald
   der Dev-Plan von einem zweiten Autor geprüft ist.
+
+- **2026-11-23, Touch boundary erweitert (Befund des Code-Reviews).** Die zwei
+  Dateien `scripts/parity/requests/2-call.jsonl` und `2-refusal.jsonl` schickten
+  `"text"` an `browser_type`; ohne sie wäre `--check` nach der Umbenennung rot,
+  weil der Aufruf ein abgeschafftes Argument nennt. Sie gehören zu Stufe 0 und
+  stehen jetzt in der erlaubten Spalte. Der Implementer hat es gemeldet, statt es
+  zu verstecken.

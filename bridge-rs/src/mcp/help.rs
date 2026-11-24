@@ -108,7 +108,7 @@ Writes text into the field that matches a CSS selector in the **current agent ta
 | Name | Required | Meaning |
 |---|---|---|
 | `selector` | yes | CSS selector of the field |
-| `text` | yes | the text to write |
+| `typed_text` | yes | the text to write |
 | `enter` | no | send Enter afterwards, default false |
 | `tab` | no | an agent tab by id |
 | `frame` | no | a substring of a frame address |
@@ -117,7 +117,7 @@ Writes text into the field that matches a CSS selector in the **current agent ta
 `tabId`, `url`, `title`, `text` (cut at 20000 characters), `settled`, `waitedMs`.
 
 ## Example
-`browser_type({"selector":"input[name=q]","text":"weather","enter":true})` answers the search page text after the submit.
+`browser_type({"selector":"input[name=q]","typed_text":"weather","enter":true})` answers the search page text after the submit.
 
 ## Pitfalls
 No `url` argument. A password field is refused unless the operator turned that switch on — the refusal is named and does not write. `enter: true` submits, which can lose what you typed if the page navigates.
@@ -152,7 +152,7 @@ Lists elements of the **current agent tab** with tag, id, class, link, visible t
 | Name | Required | Meaning |
 |---|---|---|
 | `selector` | no | CSS selector to narrow the search |
-| `text` | no | a substring to search for |
+| `contains_text` | no | a substring to search for |
 | `limit` | no | how many elements, default 20 |
 | `includeHidden` | no | list invisible elements too, default false |
 | `frame` | no | a substring of a frame address |
@@ -162,7 +162,7 @@ Lists elements of the **current agent tab** with tag, id, class, link, visible t
 `count`, `truncated`, `elements` (each with `selector`, `tag`, `id`, `classes`, `text`, `href`, `visible`, `rect`).
 
 ## Example
-`browser_inspect({"text":"Login","limit":5})` answers elements whose selector you can pass to `browser_click` unchanged.
+`browser_inspect({"contains_text":"Login","limit":5})` answers elements whose selector you can pass to `browser_click` unchanged.
 
 ## Pitfalls
 No `url` argument. The selector it returns is the value to hand to `click`/`type` — do not build your own from the tag. Shadow DOM paths appear as `my-card >>> button`.

@@ -478,7 +478,7 @@ fn type_call(id: i64, selector: &str, text: &str) -> Value {
     call_request(
         id,
         "browser_type",
-        Some(json!({ "selector": selector, "text": text })),
+        Some(json!({ "selector": selector, "typed_text": text })),
     )
 }
 
@@ -720,11 +720,11 @@ const UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_status takes no arguments."#;
 const NAVIGATE_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_navigate takes only `url` and `tab`."#;
 const READ_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_read takes only `offset`, `maxChars`, `mode`, `frame` and `tab`."#;
 const CLICK_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_click takes only `selector`, `frame` and `tab`."#;
-const TYPE_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_type takes only `selector`, `text`, `submit`, `frame` and `tab`."#;
+const TYPE_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_type takes only `selector`, `typed_text`, `submit`, `frame` and `tab`."#;
 const FOCUS_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_focus takes only `tab`."#;
-// No constant for `browser_inspect` or `browser_close_tab` here: a constant no case reads
-// would be dead weight, and `scripts/parity.sh` comparison 2 pins both sentences through
-// the real process anyway.
+const INSPECT_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_inspect takes only `selector`, `contains_text`, `limit`, `includeHidden`, `frame` and `tab`."#;
+// No constant for `browser_close_tab` here: a constant no case reads would be dead weight,
+// and `scripts/parity.sh` comparison 2 pins that sentence through the real process anyway.
 const OPEN_TAB_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_open_tab takes only `url`."#;
 const EVAL_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_eval takes only `code`, `frame` and `tab`."#;
 const SCREENSHOT_UNEXPECTED_ARGUMENTS_TEXT: &str = r#"browser_screenshot takes only `tab`."#;
@@ -762,7 +762,7 @@ const NOT_TYPEABLE_TEXT: &str = r#"The element is not a writable field or is dis
 const PASSWORD_NOT_ALLOWED_TEXT: &str = r#"Password fields are locked. Unlock them in the extension options."#;
 const FOCUS_FAILED_TEXT: &str = r#"The extension could not carry out the request (code=focus_failed)."#;
 const INSPECT_SELECTOR: &str = r#"a#cart-link"#;
-const INSPECT_NEEDS_FILTER_TEXT: &str = r#"browser_inspect needs `selector` or `text`."#;
+const INSPECT_NEEDS_FILTER_TEXT: &str = r#"browser_inspect needs `selector` or `contains_text`."#;
 const INSPECT_INVALID_SELECTOR_TEXT: &str = r#"The selector is invalid: a#cart-link."#;
 const INSPECT_INVALID_PARAMS_TEXT: &str = r#"The parameter is invalid."#;
 const EVAL_CODE: &str = r#"return document.title"#;
@@ -1094,12 +1094,12 @@ async fn mcp_toolsList_shouldOfferExactlyTheFourteenToolsOfTheContract() {
             "type": "object",
             "properties": {
                 "selector": { "type": "string" },
-                "text": { "type": "string" },
+                "typed_text": { "type": "string" },
                 "submit": { "type": "boolean" },
                 "frame": { "type": "string", "minLength": 1 },
                 "tab": { "type": "integer", "minimum": 1 },
             },
-            "required": ["selector", "text"],
+            "required": ["selector", "typed_text"],
             "additionalProperties": false,
         })
     );
@@ -1127,7 +1127,7 @@ async fn mcp_toolsList_shouldOfferExactlyTheFourteenToolsOfTheContract() {
             "type": "object",
             "properties": {
                 "selector": { "type": "string" },
-                "text": { "type": "string" },
+                "contains_text": { "type": "string" },
                 "limit": { "type": "integer", "minimum": 1, "maximum": 200 },
                 "includeHidden": { "type": "boolean" },
                 "frame": { "type": "string", "minLength": 1 },
@@ -1267,6 +1267,51 @@ async fn mcp_toolsList_shouldOfferExactlyTheFourteenToolsOfTheContract() {
             tool["inputSchema"]["properties"]["tab"],
             json!({ "type": "integer", "minimum": 1 }),
             "{index}: {} has a different `tab`",
+            tool["name"]
+        );
+    }
+}
+
+#[tokio::test]
+async fn mcp_toolsList_shouldDeclareContainsTextAndTypedText() {
+    // GIVEN a bridge with nobody connected:
+    let seam = Seam::nobody(config());
+
+    // WHEN the client asks for the tool table,
+    let answer = answer_of(seam.ask(&json!({ "jsonrpc": "2.0", "id": 21, "method": "tools/list" }))).await;
+
+    // THEN the schema of `browser_type` declares `typed_text` where it used to say `text`,
+    let tools = answer["result"]["tools"].as_array().expect("a tool array");
+    let schema_of = |name: &str| {
+        tools
+            .iter()
+            .find(|tool| tool["name"] == name)
+            .unwrap_or_else(|| panic!("{name} is missing from the tool list"))
+            .get("inputSchema")
+            .cloned()
+            .expect("every tool has a schema")
+    };
+
+    let type_schema = schema_of("browser_type");
+    assert_eq!(
+        keys_of(&type_schema["properties"]),
+        ["selector", "typed_text", "submit", "frame", "tab"]
+    );
+    assert_eq!(type_schema["required"], json!(["selector", "typed_text"]));
+
+    // ... and the schema of `browser_inspect` declares `contains_text` in its place,
+    let inspect_schema = schema_of("browser_inspect");
+    assert_eq!(
+        keys_of(&inspect_schema["properties"]),
+        ["selector", "contains_text", "limit", "includeHidden", "frame", "tab"]
+    );
+
+    // ... while no schema in the table still offers `text` as an argument: the old name is
+    // gone, not a second spelling beside the new one.
+    for tool in tools {
+        assert!(
+            tool["inputSchema"]["properties"].get("text").is_none(),
+            "{} still declares `text`",
             tool["name"]
         );
     }
@@ -2344,6 +2389,35 @@ const TYPE_REFUSAL_CASES: [(&str, &str); 3] = [
 ];
 
 #[tokio::test]
+async fn mcp_toolsCallBrowserType_withTypedText_shouldSendTextOnTheWire() {
+    // GIVEN a bridge with a connected extension:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the client writes with the name from the contract,
+    let (answer, request) = seam
+        .call_with(
+            type_call(347, TYPE_SELECTOR, TYPE_TEXT),
+            result_frame(type_result()),
+        )
+        .await;
+
+    // THEN the wire carries `text` — the name the extension reads — in the schema order,
+    assert_eq!(request["method"], protocol::methods::TYPE);
+    assert_eq!(
+        request["params"],
+        json!({ "selector": TYPE_SELECTOR, "text": TYPE_TEXT, "submit": false })
+    );
+    assert_eq!(keys_of(&request["params"]), ["selector", "text", "submit"]);
+    assert!(
+        request["params"].get("typed_text").is_none(),
+        "the new name must not reach the wire: {request}"
+    );
+
+    // ... and the writing call is a normal answer, not a refusal about an argument.
+    assert!(!is_error(&answer));
+}
+
+#[tokio::test]
 async fn mcp_toolsCallBrowserType_withAConnectedExtension_shouldReturnAllEightFieldsAsIndentedJsonText() {
     // GIVEN a bridge with a connected extension:
     let mut seam = Seam::connected(config()).await;
@@ -2388,7 +2462,7 @@ async fn mcp_toolsCallBrowserType_withoutAUsableText_shouldAnswerInvalidParamsAn
     // WHEN two calls are refused — one without a text, one with a text that is not a string,
     for (id, arguments) in [
         (91, json!({ "selector": TYPE_SELECTOR })),
-        (92, json!({ "selector": TYPE_SELECTOR, "text": 7 })),
+        (92, json!({ "selector": TYPE_SELECTOR, "typed_text": 7 })),
     ] {
         let answer = seam.call(call_request(id, "browser_type", Some(arguments.clone()))).await;
 
@@ -2423,7 +2497,7 @@ async fn mcp_toolsCallBrowserType_withASubmitThatIsNotABoolean_shouldAnswerInval
         .call(call_request(
             94,
             "browser_type",
-            Some(json!({ "selector": TYPE_SELECTOR, "text": TYPE_TEXT, "submit": "true" })),
+            Some(json!({ "selector": TYPE_SELECTOR, "typed_text": TYPE_TEXT, "submit": "true" })),
         ))
         .await;
 
@@ -2443,7 +2517,7 @@ async fn mcp_toolsCallBrowserType_withASubmitThatIsNotABoolean_shouldAnswerInval
             call_request(
                 95,
                 "browser_type",
-                Some(json!({ "selector": TYPE_SELECTOR, "text": TYPE_TEXT, "submit": true })),
+                Some(json!({ "selector": TYPE_SELECTOR, "typed_text": TYPE_TEXT, "submit": true })),
             ),
             result_frame(type_result()),
         )
@@ -2456,26 +2530,37 @@ async fn mcp_toolsCallBrowserType_withASubmitThatIsNotABoolean_shouldAnswerInval
 }
 
 #[tokio::test]
-async fn mcp_toolsCallBrowserType_withAnUnknownArgument_shouldReturnTheOnlyFourKeysSentence() {
+async fn mcp_toolsCallBrowserType_withAnUnknownArgument_shouldNameTypedText() {
     // GIVEN a bridge with a connected extension:
     let mut seam = Seam::connected(config()).await;
 
-    // WHEN the call carries an argument the schema forbids — `enter` spells the intent of
-    // `submit`, which is exactly the kind of near-miss the sentence is for,
-    let answer = seam
-        .call(call_request(
+    // WHEN the call carries an argument the schema forbids — `text` is the name this tool
+    // took before `docs/59` (alone, as the sloppy client of the spec writes it, and beside
+    // the new name), and `enter` spells the intent of `submit`:
+    for (id, arguments) in [
+        (117, json!({ "selector": TYPE_SELECTOR, "text": TYPE_TEXT })),
+        (
             96,
-            "browser_type",
-            Some(json!({ "selector": TYPE_SELECTOR, "text": TYPE_TEXT, "enter": true })),
-        ))
-        .await;
+            json!({ "selector": TYPE_SELECTOR, "typed_text": TYPE_TEXT, "text": TYPE_TEXT }),
+        ),
+        (
+            116,
+            json!({ "selector": TYPE_SELECTOR, "typed_text": TYPE_TEXT, "enter": true }),
+        ),
+    ] {
+        let answer = seam
+            .call(call_request(id, "browser_type", Some(arguments.clone())))
+            .await;
 
-    // THEN it is a tool error with the sentence from the contract,
-    assert!(is_error(&answer));
-    assert_eq!(text_of(&answer), TYPE_UNEXPECTED_ARGUMENTS_TEXT);
-    assert!(answer.get("error").is_none());
+        // THEN it is a tool error with the sentence from the contract, and that sentence
+        // names the argument that writes — `typed_text`, not the old name:
+        assert!(is_error(&answer), "{arguments}");
+        assert_eq!(text_of(&answer), TYPE_UNEXPECTED_ARGUMENTS_TEXT, "{arguments}");
+        assert!(text_of(&answer).contains("`typed_text`"), "{arguments}");
+        assert!(answer.get("error").is_none(), "{arguments}");
+    }
 
-    // ... and the refused call never reached the extension.
+    // ... and none of the refused calls reached the extension.
     assert!(!seam.reached_the_extension(), "the refused call must not reach the extension");
 }
 
@@ -2671,7 +2756,7 @@ async fn mcp_toolsCallBrowserInspect_withAConnectedExtension_shouldReturnAllSixR
 }
 
 #[tokio::test]
-async fn mcp_toolsCallBrowserInspect_withoutASelectorAndWithoutText_shouldReturnTheNeedsFilterSentenceAndNeverReachTheExtension() {
+async fn mcp_toolsCallBrowserInspect_withoutAnyFilter_shouldSayContainsText() {
     // GIVEN a bridge with a connected extension:
     let mut seam = Seam::connected(config()).await;
 
@@ -2682,9 +2767,11 @@ async fn mcp_toolsCallBrowserInspect_withoutASelectorAndWithoutText_shouldReturn
             .call(call_request(id, "browser_inspect", arguments.clone()))
             .await;
 
-        // THEN it is a tool error naming the two arguments the tool needs,
+        // THEN it is a tool error naming the two arguments the tool needs, with the search
+        // filter under the name from the contract:
         assert!(is_error(&answer), "{arguments:?}");
         assert_eq!(text_of(&answer), INSPECT_NEEDS_FILTER_TEXT, "{arguments:?}");
+        assert!(text_of(&answer).contains("`contains_text`"), "{arguments:?}");
         assert!(answer.get("error").is_none(), "{arguments:?}");
     }
 
@@ -2825,6 +2912,90 @@ async fn mcp_toolsCallBrowserInspect_withAFrame_shouldPassTheSubstringInSchemaOr
     // ... and a call without a frame puts no key on the wire at all.
     assert_eq!(bare["params"], json!({ "selector": INSPECT_SELECTOR }));
     assert_eq!(keys_of(&bare["params"]), ["selector"]);
+}
+
+#[tokio::test]
+async fn mcp_toolsCallBrowserInspect_withContainsText_shouldSendTextOnTheWire() {
+    // GIVEN a bridge with a connected extension, and the substring a caller searches for:
+    let mut seam = Seam::connected(config()).await;
+    let needle = "Login";
+
+    // WHEN the client searches with the name from the contract,
+    let (answer, request) = seam
+        .call_with(
+            inspect_call(344, json!({ "contains_text": needle })),
+            result_frame(inspect_result()),
+        )
+        .await;
+
+    // THEN the wire carries `text` — the name the extension reads, and the one the log
+    // line prints (`docs/59`, goal 6) — while the new name stays behind in the bridge,
+    assert_eq!(request["method"], protocol::methods::INSPECT);
+    assert_eq!(request["params"], json!({ "text": needle }));
+    assert_eq!(keys_of(&request["params"]), ["text"]);
+    assert!(
+        request["params"].get("contains_text").is_none(),
+        "the new name must not reach the wire: {request}"
+    );
+
+    // ... and the call is a normal answer, not a sentence about a missing filter.
+    assert!(!is_error(&answer));
+
+    // WHEN the caller sends the search term beside the other filters,
+    let (_, ordered) = seam
+        .call_with(
+            inspect_call(
+                345,
+                json!({
+                    "selector": INSPECT_SELECTOR,
+                    "contains_text": needle,
+                    "limit": 5,
+                    "frame": FRAME_SUBSTRING,
+                }),
+            ),
+            result_frame(inspect_result()),
+        )
+        .await;
+
+    // THEN `text` stands exactly where `contains_text` stands in the schema: after
+    // `selector` and before `limit`,
+    assert_eq!(
+        ordered["params"],
+        json!({
+            "selector": INSPECT_SELECTOR,
+            "text": needle,
+            "limit": 5,
+            "frame": FRAME_SUBSTRING,
+        })
+    );
+    assert_eq!(keys_of(&ordered["params"]), ["selector", "text", "limit", "frame"]);
+}
+
+#[tokio::test]
+async fn mcp_toolsCallBrowserInspect_withAnUnknownArgument_shouldNameContainsText() {
+    // GIVEN a bridge with a connected extension:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the call still uses the old name — the mistake `docs/59` is about, written alone
+    // as the spec's example does and beside the name the schema declares,
+    for (id, arguments) in [
+        (346, json!({ "selector": INSPECT_SELECTOR, "text": "Login" })),
+        (
+            347,
+            json!({ "selector": INSPECT_SELECTOR, "contains_text": "Login", "text": "Login" }),
+        ),
+    ] {
+        let answer = seam.call(inspect_call(id, arguments.clone())).await;
+
+        // THEN it is a tool error whose sentence names the argument that searches,
+        assert!(is_error(&answer), "{arguments}");
+        assert_eq!(text_of(&answer), INSPECT_UNEXPECTED_ARGUMENTS_TEXT, "{arguments}");
+        assert!(text_of(&answer).contains("`contains_text`"), "{arguments}");
+        assert!(answer.get("error").is_none(), "{arguments}");
+    }
+
+    // ... and none of the refused calls reached the extension.
+    assert!(!seam.reached_the_extension(), "the refused call must not reach the extension");
 }
 
 #[tokio::test]
@@ -3330,7 +3501,7 @@ async fn mcp_toolsCallBrowserClickAndType_whenTheFilterRefuses_shouldReturnThatC
                 "browser_type",
                 Some(json!({
                     "selector": TYPE_SELECTOR,
-                    "text": TYPE_TEXT,
+                    "typed_text": TYPE_TEXT,
                     "frame": FRAME_SUBSTRING,
                 })),
             ),
@@ -3376,8 +3547,12 @@ fn framed_acting_tools() -> [FramedTool; 2] {
         FramedTool {
             name: "browser_type",
             method: protocol::methods::TYPE,
-            framed: json!({ "selector": TYPE_SELECTOR, "text": TYPE_TEXT, "frame": FRAME_SUBSTRING }),
-            plain: json!({ "selector": TYPE_SELECTOR, "text": TYPE_TEXT }),
+            framed: json!({
+                "selector": TYPE_SELECTOR,
+                "typed_text": TYPE_TEXT,
+                "frame": FRAME_SUBSTRING,
+            }),
+            plain: json!({ "selector": TYPE_SELECTOR, "typed_text": TYPE_TEXT }),
             params_framed: json!({
                 "selector": TYPE_SELECTOR,
                 "text": TYPE_TEXT,
@@ -4248,4 +4423,33 @@ async fn help_forRead_shouldSayThatItTakesNoUrl() {
     let text = answer["result"]["content"][0]["text"].as_str().unwrap_or_default();
     assert!(text.contains("no URL"), "the manual has to say it: {text}");
     assert!(text.contains("browser_navigate"));
+}
+
+/// Die Anleitung nennt dieselben Namen wie das Schema — sie ist Produktivcode, kein
+/// Doku-Nachtrag (`docs/59`, Ziel 5).
+#[tokio::test]
+async fn help_forInspectAndType_shouldNameTheNewArguments() {
+    // GIVEN a bridge with nobody connected — a manual needs no browser (`docs/53`):
+    for (tool, argument) in [
+        ("browser_inspect", "contains_text"),
+        ("browser_type", "typed_text"),
+    ] {
+        let mut seam = Seam::nobody(config());
+
+        // WHEN the manual is asked for,
+        let answer = seam.call(help_call(34, tool)).await;
+        let text = answer["result"]["content"][0]["text"].as_str().unwrap_or_default();
+
+        // THEN the argument table names it,
+        assert!(
+            text.contains(&format!("| `{argument}` |")),
+            "{tool} does not list {argument}: {text}"
+        );
+
+        // ... and so does the example, in the JSON form a caller copies.
+        assert!(
+            text.contains(&format!("\"{argument}\":")),
+            "{tool} does not show {argument} in its example: {text}"
+        );
+    }
 }

@@ -60,11 +60,11 @@
 # case=4
 {"jsonrpc":"2.0","id":4,"result":{"content":[{"type":"text","text":"browser_click takes only `selector`, `frame` and `tab`."}],"isError":true}}
 # case=5
-{"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"browser_type takes only `selector`, `text`, `submit`, `frame` and `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":5,"result":{"content":[{"type":"text","text":"browser_type takes only `selector`, `typed_text`, `submit`, `frame` and `tab`."}],"isError":true}}
 # case=6
 {"jsonrpc":"2.0","id":6,"result":{"content":[{"type":"text","text":"browser_focus takes only `tab`."}],"isError":true}}
 # case=7
-{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"browser_inspect takes only `selector`, `text`, `limit`, `includeHidden`, `frame` and `tab`."}],"isError":true}}
+{"jsonrpc":"2.0","id":7,"result":{"content":[{"type":"text","text":"browser_inspect takes only `selector`, `contains_text`, `limit`, `includeHidden`, `frame` and `tab`."}],"isError":true}}
 # case=8
 {"jsonrpc":"2.0","id":8,"result":{"content":[{"type":"text","text":"browser_open_tab takes only `url`."}],"isError":true}}
 # case=9

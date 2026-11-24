@@ -112,7 +112,7 @@ pub fn not_typeable(selector: &str) -> String {
 pub const PASSWORD_NOT_ALLOWED: &str = r#"Password fields are locked. Unlock them in the extension options."#;
 
 /// `TOOL_TEXTS.INSPECT_NEEDS_FILTER`
-pub const INSPECT_NEEDS_FILTER: &str = r#"browser_inspect needs `selector` or `text`."#;
+pub const INSPECT_NEEDS_FILTER: &str = r#"browser_inspect needs `selector` or `contains_text`."#;
 
 /// `TOOL_TEXTS.INVALID_INSPECT_PARAMS`
 pub const INVALID_INSPECT_PARAMS: &str = r#"The parameter is invalid."#;

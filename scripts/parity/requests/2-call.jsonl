@@ -6,7 +6,7 @@
 {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"browser_navigate","arguments":{"url":"https://example.org/"}}}
 {"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"browser_read"}}
 {"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"browser_click","arguments":{"selector":"a#video-title-link"}}}
-{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"browser_type","arguments":{"selector":"input#q","text":"Zeile eins","submit":true}}}
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"browser_type","arguments":{"selector":"input#q","typed_text":"Zeile eins","submit":true}}}
 {"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"browser_focus"}}
 {"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"browser_inspect","arguments":{"selector":"a#cart-link"}}}
 {"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"browser_open_tab","arguments":{"url":"https://example.org/"}}}

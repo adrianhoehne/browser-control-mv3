@@ -60,12 +60,27 @@ const CLICK_ARGUMENTS: [&str; 3] = ["selector", "frame", TAB_ARGUMENT];
 /// the order the set ones are copied onto the wire, so the payload reads like the tool
 /// description instead of like the caller's key order.
 const READ_ARGUMENTS: [&str; 5] = ["offset", "maxChars", "mode", "frame", TAB_ARGUMENT];
+/// The key `browser_type` takes for the text it writes, spelled for the caller
+/// (`docs/59`).
+const TYPE_TEXT_ARGUMENT: &str = "typed_text";
+/// The key `browser_inspect` takes for the substring it searches for, spelled for the
+/// caller (`docs/59`).
+const INSPECT_TEXT_ARGUMENT: &str = "contains_text";
+/// The key the extension still reads for text — on the wire, not for the caller
+/// (`docs/59`, goal 6).
+const WIRE_TEXT_ARGUMENT: &str = "text";
 /// The five keys `browser_type` accepts.
-const TYPE_ARGUMENTS: [&str; 5] = ["selector", "text", "submit", "frame", TAB_ARGUMENT];
+const TYPE_ARGUMENTS: [&str; 5] = [
+    "selector",
+    TYPE_TEXT_ARGUMENT,
+    "submit",
+    "frame",
+    TAB_ARGUMENT,
+];
 /// The six keys `browser_inspect` accepts, in schema order.
 const INSPECT_ARGUMENTS: [&str; 6] = [
     "selector",
-    "text",
+    INSPECT_TEXT_ARGUMENT,
     "limit",
     "includeHidden",
     "frame",
@@ -183,7 +198,7 @@ pub fn tool_list() -> Value {
                     "selector": {
                         "type": "string",
                     },
-                    "text": {
+                    TYPE_TEXT_ARGUMENT: {
                         "type": "string",
                     },
                     "submit": {
@@ -200,7 +215,7 @@ pub fn tool_list() -> Value {
                 },
                 "required": [
                     "selector",
-                    "text",
+                    TYPE_TEXT_ARGUMENT,
                 ],
                 "additionalProperties": false,
             },
@@ -228,7 +243,7 @@ pub fn tool_list() -> Value {
                     "selector": {
                         "type": "string",
                     },
-                    "text": {
+                    INSPECT_TEXT_ARGUMENT: {
                         "type": "string",
                     },
                     "limit": {
@@ -721,19 +736,29 @@ async fn click_tool(id: &Value, params: Option<&Value>, context: &ToolContext) -
 
 /// `tools/call` for `browser_type`.
 ///
-/// Four checks before the request leaves, in this order: `selector` and `text` must be
-/// strings (`-32602`; `""` is a string, so emptying a field stays allowed), `submit` may
-/// be absent but must be a boolean if present, `frame` may be absent but must be a string
-/// if present, and every other key is an argument the schema forbids.
+/// Four checks before the request leaves, in this order: every key must be one the schema
+/// declares (the tool's own sentence), `selector` and `typed_text` must be strings
+/// (`-32602`; `""` is a string, so emptying a field stays allowed), `submit` may be absent
+/// but must be a boolean if present, `frame` may be absent but must be a string if present.
+///
+/// The key check comes first for the same reason `browser_inspect` runs it first: a call
+/// that still spells the search argument `text` is the mistake `docs/59` is about, and it
+/// must read the sentence that names `typed_text` — a `-32602` would hide it. A call that
+/// names only declared keys falls through to the type checks unchanged, including the call
+/// that forgets `typed_text` altogether (`declares_only_object(None)` is `true` for absent
+/// arguments, and a missing required key is a `-32602`).
 ///
 /// The `submit` check is the interesting one: without it a `"true"` would travel to the
 /// extension, come back as a refusal, and the operator would read "the extension could
 /// not run this request" — blaming the wrong side of the wire for a client mistake.
 async fn type_tool(id: &Value, params: Option<&Value>, context: &ToolContext) -> Value {
     let args = arguments_or_empty(params);
+    if !declares_only_object(args.as_object(), &TYPE_ARGUMENTS) {
+        return tool_error(id, unexpected_arguments(BROWSER_TYPE));
+    }
     let (Some(selector), Some(text)) = (
         args.get("selector").and_then(Value::as_str),
-        args.get("text").and_then(Value::as_str),
+        args.get(TYPE_TEXT_ARGUMENT).and_then(Value::as_str),
     ) else {
         return error_message(id, RpcError::INVALID_PARAMS);
     };
@@ -746,16 +771,14 @@ async fn type_tool(id: &Value, params: Option<&Value>, context: &ToolContext) ->
     if !has_declared_tab_argument(Some(&args)) {
         return error_message(id, RpcError::INVALID_PARAMS);
     }
-    if !declares_only_object(args.as_object(), &TYPE_ARGUMENTS) {
-        return tool_error(id, unexpected_arguments(BROWSER_TYPE));
-    }
 
     // The missing `submit` means "no Enter", and it is filled in here rather than in the
     // extension: the wire format documents `false` as the default, and a request that
     // names all three keys is easier to read in a log.
     let mut payload = Map::new();
     payload.insert("selector".to_string(), Value::String(selector.to_string()));
-    payload.insert("text".to_string(), Value::String(text.to_string()));
+    // `text` is the wire key; the caller wrote `typed_text` (`docs/59`, goal 6).
+    payload.insert(WIRE_TEXT_ARGUMENT.to_string(), Value::String(text.to_string()));
     payload.insert(
         "submit".to_string(),
         Value::Bool(matches!(args.get("submit"), Some(Value::Bool(true)))),
@@ -781,7 +804,8 @@ async fn type_tool(id: &Value, params: Option<&Value>, context: &ToolContext) ->
 ///
 /// Three checks before the request leaves: the declared type of every key (`-32602`,
 /// because the schema states it), the keys the schema forbids (the tool's own sentence),
-/// and the one rule the schema cannot state — at least one of `selector`/`text`.
+/// and the one rule the schema cannot state — at least one of
+/// `selector`/`contains_text`.
 async fn inspect_tool(id: &Value, params: Option<&Value>, context: &ToolContext) -> Value {
     let args = arguments_or_empty(params);
     if !has_declared_inspect_argument_types(&args) {
@@ -792,11 +816,11 @@ async fn inspect_tool(id: &Value, params: Option<&Value>, context: &ToolContext)
     }
     // Refused here rather than by the extension: the sentence can name the two
     // arguments, and a call with nothing to search for must not reach the page.
-    if args.get("selector").is_none() && args.get("text").is_none() {
+    if args.get("selector").is_none() && args.get(INSPECT_TEXT_ARGUMENT).is_none() {
         return tool_error(id, texts::INSPECT_NEEDS_FILTER);
     }
 
-    let request_params = declared_keys_of(&args, &INSPECT_ARGUMENTS);
+    let request_params = inspect_wire_arguments(&args);
     match context
         .hub
         .request(protocol::methods::INSPECT, Value::Object(request_params.clone()))
@@ -913,7 +937,7 @@ fn has_declared_inspect_argument_types(args: &Value) -> bool {
     if !is_absent_or(args, "selector", Value::is_string) {
         return false;
     }
-    if !is_absent_or(args, "text", Value::is_string) {
+    if !is_absent_or(args, INSPECT_TEXT_ARGUMENT, Value::is_string) {
         return false;
     }
     if !is_absent_or(args, "limit", is_integer) {
@@ -1056,6 +1080,28 @@ fn declared_keys_of(args: &Value, declared_arguments: &[&str]) -> Map<String, Va
     for key in declared_arguments {
         if let Some(value) = args.get(*key) {
             params.insert((*key).to_string(), value.clone());
+        }
+    }
+    params
+}
+
+/// The keys `browser_inspect` puts on the wire, in the order the schema declares them.
+///
+/// One name is translated: `contains_text` travels as `text`. The extension reads
+/// `request.text` (`extension/page-agent.js:831`), and a missing `text` means "no search
+/// term" there — every visible element would match, and the log line
+/// `inspect selector=… text=… found=…` (`hub.rs`) would print `text=-`. The translation
+/// sits at the one place the payload is built and nowhere else (`docs/59`, goal 6).
+fn inspect_wire_arguments(args: &Value) -> Map<String, Value> {
+    let mut params = Map::new();
+    for key in INSPECT_ARGUMENTS {
+        if let Some(value) = args.get(key) {
+            let wire_key = if key == INSPECT_TEXT_ARGUMENT {
+                WIRE_TEXT_ARGUMENT
+            } else {
+                key
+            };
+            params.insert(wire_key.to_string(), value.clone());
         }
     }
     params
@@ -1233,10 +1279,12 @@ fn unexpected_arguments(tool: &str) -> &'static str {
         BROWSER_NAVIGATE => "browser_navigate takes only `url` and `tab`.",
         BROWSER_READ => "browser_read takes only `offset`, `maxChars`, `mode`, `frame` and `tab`.",
         BROWSER_CLICK => "browser_click takes only `selector`, `frame` and `tab`.",
-        BROWSER_TYPE => "browser_type takes only `selector`, `text`, `submit`, `frame` and `tab`.",
+        BROWSER_TYPE => {
+            "browser_type takes only `selector`, `typed_text`, `submit`, `frame` and `tab`."
+        }
         BROWSER_FOCUS => "browser_focus takes only `tab`.",
         BROWSER_INSPECT => {
-            "browser_inspect takes only `selector`, `text`, `limit`, `includeHidden`, `frame` and `tab`."
+            "browser_inspect takes only `selector`, `contains_text`, `limit`, `includeHidden`, `frame` and `tab`."
         }
         BROWSER_OPEN_TAB => "browser_open_tab takes only `url`.",
         BROWSER_CLOSE_TAB => "browser_close_tab takes only `tab`.",
