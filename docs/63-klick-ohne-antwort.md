@@ -327,6 +327,14 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 - **Ein stummer Klick in einem adressierten `frame`** bekommt den neuen Code nicht: Der
   Rundruf (`allFrames: true`) schaltet den Stille-Zweig ab, der Agent liest
   `frame_not_found` (`docs/26`) (2026-11-23).
+- **Für einen abgelehnten `sendMessage` beim Klick gibt es keinen eigenen Fall.** Der Weg
+  ist derselbe (`markSilent` → null Antworten → `NoAnswerError`), aber gepinnt ist nur die
+  Frist (Code-Review 2026-11-23).
+- **Die eigene Klick-Anfrage holt weiter `head: true`** (`pageRefusalFor(tabId, { head })`)
+  und verwirft `kind`/`contentType` danach; `head: false` wäre billiger. Vorbestehend, aber
+  jetzt erstmals beweisbar sinnlos (Code-Review 2026-11-23).
+- **Der Doc-Kommentar von `clickAgentTab` nennt die Box noch `clicked`**, der Parameter
+  heißt seit diesem Inkrement `attempt` (Code-Review 2026-11-23).
 
 ## Open questions
 

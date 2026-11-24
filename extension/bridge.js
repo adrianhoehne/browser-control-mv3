@@ -117,6 +117,10 @@
   // keeps `not_readable` — only the click path renames the refusal, because only there
   // it says something new: the click went through.
   const NOT_READABLE_AFTER_CLICK_CODE = "not_readable_after_click";
+  // The code a *click* mints when its own request got no answer at all (`docs/63`): nobody
+  // knows whether the click went through. Not in `CLICK_OUTCOMES` either — the snippet
+  // reported nothing here, so this code is what the extension says about the silence.
+  const CLICK_OUTCOME_UNKNOWN_CODE = "click_outcome_unknown";
   // Not a statement about the page but about the moment: the tab was still loading
   // when the injection was refused, so the caller may try again rather than give up.
   const PAGE_BUSY_CODE = "page_busy";
@@ -315,6 +319,11 @@
   // reasons, and the code carries the new one (`docs/56`, `## Warum ein eigener Code`).
   const OFFSCREEN_AFTER_SCROLL_MESSAGE = "The element stays outside the viewport after scrolling.";
   const CLICK_FAILED_MESSAGE = "The result of the click injection was unusable.";
+  // The sentence of `click_outcome_unknown` (`docs/63`), one line: the page may have been
+  // clicked, so the caller checks before it clicks again. It carries no address — the
+  // `url` field is for the extension's frame, and this sentence has no reader for it.
+  const CLICK_OUTCOME_UNKNOWN_MESSAGE =
+    "The page gave no answer to the click request: it may have gone through. Check the page before you click again.";
   const MISSING_TEXT_MESSAGE = "type needs a text as a string.";
   const INVALID_SUBMIT_MESSAGE = "submit must be true or false.";
   const NOT_TYPEABLE_MESSAGE = "The element is not a writable field or is disabled.";
@@ -1895,6 +1904,23 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
   }
 
   /**
+   * The one `ReadError` that says more than "the page could not be reached": *no frame
+   * answered at all* (`docs/63`).
+   *
+   * It carries the frame a `ReadError` would have carried, unchanged — the silence says
+   * nothing about the page, and every existing `…ErrorFor` keeps answering the same code.
+   * Only the click path reads the class, because only there the silence means "it may
+   * have gone through" rather than "nothing happened". `readErrorFrame` never sees it as
+   * a distinct shape; the class is the whole difference.
+   */
+  class NoAnswerError extends ReadError {
+    constructor(error) {
+      super(error.code, error.message, error.details);
+      this.name = "NoAnswerError";
+    }
+  }
+
+  /**
    * The error frame of a `ReadError`: code and message, plus whatever `details` its
    * producer attached.
    *
@@ -2524,23 +2550,34 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    *
    * Which of the three codes the caller sees is the *tab's* decision, and the tab is
    * looked up exactly once — here, because the enrichment further down needs the same
-   * tab. Two later paths use this: a refused injection, and a call that no frame
-   * answered at all. Neither can be decided from a rejection text.
+   * tab. Both later paths that refuse a page use it: a refused injection and a refusal
+   * the page itself sent. Neither can be decided from a rejection text.
    */
   async function unavailablePageError(tabId, { head = true } = {}) {
-    // The `await` is load-bearing: without it a promise would be thrown, the
+    throw await pageRefusalFor(tabId, { head });
+  }
+
+  /**
+   * The `ReadError` behind `unavailablePageError`, built without throwing it.
+   *
+   * Split out for the one caller that has to hand the same frame to a subclass
+   * (`NoAnswerError`, `docs/63`): the verdict about the tab is written once, and the
+   * class decides what the click path may say on top of it.
+   */
+  async function pageRefusalFor(tabId, { head = true } = {}) {
+    // The `await` is load-bearing in the caller: without it a promise would be thrown, the
     // `instanceof ReadError` check in every `…ErrorFor` would miss, and the code would
     // silently become `read_failed`.
     const tab = await readTabOrNull(tabId);
     if (tab === null) {
       // Gone for real: no page to read, and no address to enrich it with.
-      throw new ReadError(NO_AGENT_TAB_CODE, NO_AGENT_TAB_MESSAGE);
+      return new ReadError(NO_AGENT_TAB_CODE, NO_AGENT_TAB_MESSAGE);
     }
     if (tab.status === TAB_STATUS_LOADING) {
       // Refused because the page was not there *yet*, not because it has nothing
       // to give — calling that `not_readable` would make the caller give up. No
       // details on purpose: this speaks about the moment, not about the page.
-      throw new ReadError(PAGE_BUSY_CODE, PAGE_BUSY_MESSAGE);
+      return new ReadError(PAGE_BUSY_CODE, PAGE_BUSY_MESSAGE);
     }
     return notReadableErrorForTab(tab, { head });
   }
@@ -2596,7 +2633,12 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
       // refused the injection. A collection is different: it hands back what came in,
       // because "no frame said anything" is the *tool's* verdict (`not_readable` for a
       // read, `frames_failed` for the inventory) and not this function's.
-      if (answers.length === 0 && allFrames !== true) throw await unavailablePageError(tabId, { head });
+      //
+      // The only place `NoAnswerError` is born (`docs/63`): the frame is the same one a
+      // refusal gets, plus the class that tells the click path nobody knows the outcome.
+      if (answers.length === 0 && allFrames !== true) {
+        throw new NoAnswerError(await pageRefusalFor(tabId, { head }));
+      }
       return { callId, answers };
     } finally {
       // Whatever ended the wait, this call is over: from here on an answer with its id
@@ -2795,13 +2837,18 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     // either before the first injection or after the third, and only the second kind
     // may be renamed (`docs/61`). A box and not a return value, because the answer is
     // thrown away on the failure path — exactly the path that needs it.
-    const clicked = { done: false };
+    //
+    // `url` rides along for the one case that has no frame of its own: when the click
+    // request itself stays silent, `pageRefusalFor` answers `no_agent_tab`/`page_busy`
+    // without any `details`, and the address under which the click was attempted is the
+    // tab's address from before the click (`docs/63`).
+    const attempt = { done: false, url: "" };
     try {
-      sendResponse(target, request.id, { ok: true, result: await clickAgentTab(request.params, clicked) });
+      sendResponse(target, request.id, { ok: true, result: await clickAgentTab(request.params, attempt) });
     } catch (error) {
       sendResponse(target, request.id, {
         ok: false,
-        error: clickErrorFor(error, { clicked: clicked.done }),
+        error: clickErrorFor(error, { clicked: attempt.done, url: attempt.url }),
       });
     }
   }
@@ -2828,8 +2875,12 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * `clickOutcomeOf` read a `clicked` off the page. Without it a tab that was already
    * unreadable *before* the click would be reported as a page the click opened: the
    * first injection fails there, and nothing went through (`docs/61`).
+   *
+   * `url` is the address the click was attempted under, from the tab state before the
+   * click. It is only read by the frame of the silent click request, which has no page to
+   * take an address from (`docs/63`).
    */
-  function clickErrorFor(error, { clicked = false } = {}) {
+  function clickErrorFor(error, { clicked = false, url = "" } = {}) {
     // The spread carries `matches`/`candidates`/`truncated` of a `text_ambiguous` and
     // adds nothing for every other `ClickError`, whose `details` is the empty object.
     if (error instanceof ClickError) {
@@ -2839,6 +2890,17 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     // `frame_not_found` of the settle wait would arrive as `click_failed` — and the wait is
     // exactly where a click loses its frame (spec 26).
     if (error instanceof FrameError) return frameErrorFrame(error);
+    // The click's own request got no answer at all (`docs/63`): the page may have been
+    // clicked, so the `not_readable` sentence — "nothing happened" — would be the wrong
+    // advice. The `!clicked` is load-bearing: the read *after* a click comes through this
+    // same entry, and there the click is proven, so its silence keeps its own code below.
+    if (error instanceof NoAnswerError && !clicked) {
+      return {
+        code: CLICK_OUTCOME_UNKNOWN_CODE,
+        message: CLICK_OUTCOME_UNKNOWN_MESSAGE,
+        url: cappedAddress(url),
+      };
+    }
     if (error instanceof ReadError) {
       // Two-stage on purpose: only the page refusal is renamed, and only here. Every
       // other `ReadError` (`read_failed`, `page_busy`, `no_agent_tab`) keeps the frame
@@ -2927,9 +2989,11 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    *
    * `clicked` is the caller's box, flipped the moment the page reports a click. It is the
    * only thing that tells the two `not_readable`s apart: one before the first injection
-   * (nothing was clicked) and one after the read (the click opened this page).
+   * (nothing was clicked) and one after the read (the click opened this page). The same
+   * box carries the address from before the click, for the frame of a click whose request
+   * stays silent (`docs/63`).
    */
-  async function clickAgentTab(params, clicked = { done: false }) {
+  async function clickAgentTab(params, attempt = { done: false, url: "" }) {
     const target = clickRequestSelector(params);
     // After the selector check, like the window of a `read`: a caller with a wrong `frame`
     // hears about its own mistake whether or not an agent tab exists, and nothing is
@@ -2937,6 +3001,9 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     const want = frameWantedOf(params, ClickError);
     const tab = await addressedAgentTab(params, ClickError);
     const before = pageStateBeforeClick(tab);
+    // The address under which this click is attempted, kept before the first injection:
+    // a click request that never answers leaves no page behind to ask (`docs/63`).
+    attempt.url = before.url;
     // Read *before* the click, for the reason in the comment above.
     const tabWasLoading = tab.status === TAB_STATUS_LOADING;
 
@@ -2954,7 +3021,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
       // From here on the page has been clicked. Everything below can still throw a
       // `ReadError` — the read after the wait above all — and that one is the page the
       // click *opened*, which is the whole difference `clickErrorFor` is asked about.
-      clicked.done = true;
+      attempt.done = true;
       // Ownership after the click, before the wait: a successor may have taken the
       // slot over while the page was still being clicked. This request is answered
       // by then, so it must neither wait nor read.

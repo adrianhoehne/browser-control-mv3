@@ -7828,6 +7828,84 @@ test("click_whenTheClickedPageHasNoAddress_shouldAnswerTheShortSentence", async 
   assert.equal("clicked" in error, false);
 });
 
+test("click_whenTheClickRequestNeverAnswers_shouldAnswerClickOutcomeUnknown", async () => {
+  // GIVEN a page whose click op takes the message and never answers — a lost answer, a
+  // disturbed channel, a restarted extension, as far as the background can tell:
+  const page = createClickPage();
+  const tabs = createClickTabs({
+    page,
+    answer: (message) => (message.op === "click" ? { silent: true } : undefined),
+  });
+  const { socket, clock } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN we click and the call's own budget for the answer runs out,
+  await sendClick(socket, 2, { selector: DEFAULT_CLICK_SELECTOR });
+  assert.equal(tabs.scriptCalls.length, 1, "nothing but the click was injected");
+  assert.deepStrictEqual(clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS]);
+  clock.runByDelay(INJECTION_REPLY_TIMEOUT_MS);
+  await settleAsyncWork();
+
+  // THEN the answer says exactly what the extension knows — it may have gone through —
+  // instead of the `not_readable` that would send the caller back to the same selector,
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "click_outcome_unknown");
+
+  // ... in the pinned sentence, single line, with the advice not to click again blindly,
+  assert.equal(
+    answer.error.message,
+    "The page gave no answer to the click request: it may have gone through. Check the page before you click again.",
+  );
+
+  // ... with the address the click was attempted under — the tab's before the click,
+  // because the page that could have answered is exactly the one that stayed silent,
+  assert.equal(answer.error.url, "https://before.example/");
+
+  // ... and without `clicked`: the description of the element was in the answer that got
+  // lost, so there is nothing to report about it,
+  assert.equal("clicked" in answer.error, false);
+
+  // ... and nothing was repeated: one injection, one op, no read behind it — the decision
+  // to click again belongs to the caller (`docs/63`).
+  assert.equal(tabs.scriptCalls.length, 1);
+  assert.deepStrictEqual(tabs.channel.ops(), ["click"]);
+});
+
+test("click_whenTheReadAfterTheClickNeverAnswers_shouldAnswerNotReadableAfterClick", async () => {
+  // GIVEN a page that takes the click, and whose read after the wait stays silent — the
+  // click is proven, the page behind it is not:
+  const page = createClickPage();
+  const tabs = createClickTabs({
+    page,
+    answer: (message) =>
+      message.op === "settle"
+        ? { value: { ...NO_SETTLE_RESULT } }
+        : message.op === "read"
+          ? { silent: true }
+          : undefined,
+  });
+  const { socket, clock } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN we click, the fallback window passes and the read's deadline runs out,
+  await sendClick(socket, 2, { selector: DEFAULT_CLICK_SELECTOR });
+  clock.runNext();
+  await settleAsyncWork();
+  assert.deepStrictEqual(clock.pendingDelays(), [INJECTION_REPLY_TIMEOUT_MS]);
+  clock.runByDelay(INJECTION_REPLY_TIMEOUT_MS);
+  await settleAsyncWork();
+
+  // THEN the outcome is not unknown: the click happened, so `docs/61`'s code stands — the
+  // silence of the *read* is a page that cannot be read, not a click that may or may not
+  // have run,
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "not_readable_after_click");
+
+  // ... with the address the frame carries, and still no `clicked`.
+  assert.equal(answer.error.url, "https://before.example/");
+  assert.equal("clicked" in answer.error, false);
+});
+
 test("click_withTwoOverlappingRequests_shouldAnswerTheFirstWithSupersededAndInjectNoRead", async () => {
   // GIVEN a click that has already clicked and settled and is waiting out its
   // fallback 300 ms:

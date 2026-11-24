@@ -742,6 +742,8 @@ const NOT_READABLE_CONTENT_TYPE: &str = r#"application/pdf"#;
 const NOT_READABLE_PDF_WITH_TYPE_TEXT: &str = r#"The extension cannot read this page (kind: pdf, content-type: application/pdf). Address: https://example.org/preisliste.pdf"#;
 const NOT_READABLE_WITH_TYPE_TEXT: &str = r#"The extension cannot read this page (content-type: application/pdf). Address: https://example.org/preisliste.pdf"#;
 const NOT_READABLE_AFTER_CLICK_TEXT: &str = r#"The click went through, but the page it opened cannot be read: https://example.org/preisliste.pdf. Go back with browser_navigate."#;
+/// The sentence of a click whose request got no answer (`docs/63`) — one line, no address.
+const CLICK_OUTCOME_UNKNOWN_TEXT: &str = r#"The page gave no answer to the click request: it may have gone through. Check the page before you click again."#;
 const OFFSET_OUT_OF_RANGE_MESSAGE: &str = r#"The text has 87314 characters; offset 999999 is past its end."#;
 const OFFSET_OUT_OF_RANGE_TEXT: &str = r#"`offset` is past the end of the text: The text has 87314 characters; offset 999999 is past its end."#;
 const INVALID_READ_PARAMS_MESSAGE: &str = r#"maxChars must be an integer from 1 to 100000."#;
@@ -2630,6 +2632,36 @@ async fn click_withNotReadableAfterClick_shouldNameTheReturnPath() {
     assert!(is_error(&answer));
     assert_eq!(text_of(&answer), NOT_READABLE_AFTER_CLICK_TEXT);
     assert_ne!(text_of(&answer), NOT_READABLE_PDF_TEXT);
+
+    // ... as a tool error with a sentence, not a protocol error with an error object.
+    assert!(answer.get("error").is_none());
+}
+
+// No `mcp_toolsCallBrowser…` prefix on purpose: criterion 3 of `docs/63` filters this case
+// with `--exact`, so the name is a contract as it stands.
+#[tokio::test]
+async fn click_withClickOutcomeUnknown_shouldNameTheUncertainty() {
+    // GIVEN a click whose own request got no answer — the page may have been clicked, and
+    // the extension cannot tell whether it was (`docs/63`):
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the client clicks and the extension answers with that code, the address it
+    // attempted and no `clicked` at all,
+    let (answer, request) = seam
+        .call_with(
+            click_call(120, CLICK_SELECTOR),
+            error_frame_with("click_outcome_unknown", json!({ "url": "https://example.org/" })),
+        )
+        .await;
+
+    // THEN the request was the plain click the sentence must not talk about,
+    assert_eq!(request["params"], json!({ "selector": CLICK_SELECTOR }));
+
+    // ... and the sentence names the uncertainty and the check before the next click,
+    // instead of the generic "could not carry out" that would invite a blind repeat,
+    assert!(is_error(&answer));
+    assert_eq!(text_of(&answer), CLICK_OUTCOME_UNKNOWN_TEXT);
+    assert_ne!(text_of(&answer), call_extension_failed("click_outcome_unknown"));
 
     // ... as a tool error with a sentence, not a protocol error with an error object.
     assert!(answer.get("error").is_none());

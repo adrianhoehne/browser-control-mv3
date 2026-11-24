@@ -67,6 +67,13 @@ pub fn not_readable_after_click_with_url(url: &str) -> String {
     format!(r#"The click went through, but the page it opened cannot be read: {url}. Go back with browser_navigate."#)
 }
 
+/// `TOOL_TEXTS.CLICK_OUTCOME_UNKNOWN`
+///
+/// The click path's other sentence (`docs/63`): the page gave no answer to the click
+/// request, so nobody knows whether it went through. Deliberately without an address —
+/// the sentence's job is the advice, and the `url` field has no reader here.
+pub const CLICK_OUTCOME_UNKNOWN: &str = r#"The page gave no answer to the click request: it may have gone through. Check the page before you click again."#;
+
 /// `TOOL_TEXTS.OFFSET_OUT_OF_RANGE`
 pub const OFFSET_OUT_OF_RANGE: &str = r#"`offset` is past the end of the text."#;
 

@@ -30,6 +30,10 @@ const NOT_READABLE_CODE: &str = "not_readable";
 /// extension's decision, taken after the click — the bridge only needs it to pick the
 /// sentence, and the sentence is the reason the code exists: the click went through.
 const NOT_READABLE_AFTER_CLICK_CODE: &str = "not_readable_after_click";
+/// The code a click mints when its own request got no answer at all (`docs/63`). The
+/// bridge only needs it for the sentence: the extension's frame says the page may have
+/// been clicked, and that is what the caller has to read.
+const CLICK_OUTCOME_UNKNOWN_CODE: &str = "click_outcome_unknown";
 const PAGE_BUSY_CODE: &str = "page_busy";
 const OFFSET_OUT_OF_RANGE_CODE: &str = "offset_out_of_range";
 const FRAME_NOT_FOUND_CODE: &str = "frame_not_found";
@@ -166,6 +170,13 @@ fn extension_failure_text(
             // went through and names the way back (`docs/61`).
             if code == Some(NOT_READABLE_AFTER_CLICK_CODE) {
                 return not_readable_after_click_text(details);
+            }
+            // ... and before `page_failure_text` too, for the other silence of the click
+            // path (`docs/63`): the request got no answer, so the outcome is unknown. The
+            // sentence has no address builder — it says what to do, not where the caller
+            // stands, and the `url` in the frame has no reader here.
+            if code == Some(CLICK_OUTCOME_UNKNOWN_CODE) {
+                return texts::CLICK_OUTCOME_UNKNOWN.to_string();
             }
             page_failure_text(code, details, code_text)
         }
