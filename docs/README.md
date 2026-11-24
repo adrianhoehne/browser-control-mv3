@@ -152,6 +152,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `59-argumentnamen.md` | Zwei Namen für zwei Bedeutungen: `browser_inspect` und `browser_click` suchen mit `contains_text`, `browser_type` schreibt mit `typed_text` — ohne Alias. **`active`:** Stufen 0 und 1 gebaut (`be7846c`), Doku nachgezogen | `active` |
 | `60-klick-nach-text-mcp.md` | **Teil b** des Textklicks: `contains_text` im Schema, die Leitung bleibt `text`, `CLICK_NEEDS_FILTER` vor dem Draht, `text_ambiguous` und `no_match` als englische Sätze, zwei eingefrorene Fixtures. **`active`:** Stufen 0–2 gebaut (`e798e4d`), Doku nachgezogen | `active` |
 | `61-klick-seite-danach.md` | **Teil b** von `docs/56`: ein Klick, der auf einer nicht lesbaren Seite landet, antwortet `not_readable_after_click` statt `not_readable` — Satz mit Rückweg `browser_navigate`, `read` bleibt unberührt. **`active`:** Stufen 1–2 gebaut (`a78e2fc`), Doku nachgezogen | `active` |
+| `63-klick-ohne-antwort.md` | Ein Klick, dessen Anfrage keine Antwort bekommt, antwortet `click_outcome_unknown` statt `not_readable` — der Satz sagt, dass er durchgegangen sein kann, und der Agent prüft die Seite vor dem nächsten Klick | `proposed` |
 | `62-inspect-offscreen.md` | **Teil b** von `docs/57`: jedes Element aus `browser_inspect` trägt `offscreen`, in beiden Quellen; flächenlose Elemente bleiben `false`. **`active`:** Stufen 1–2 gebaut (`6b24115`), Doku nachgezogen | `active` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
