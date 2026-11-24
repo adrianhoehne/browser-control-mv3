@@ -102,6 +102,8 @@ er nicht — dafür sind die gepinnten Assertions da.
    through, but the page it opened cannot be read: <url>. Go back with
    browser_navigate." Er steht zweimal, in `extension/bridge.js` und in `texts.rs`,
    und ist an beiden Stellen gepinnt.
+   **Nachgezogen nach `docs/57`:** kein neuer Satz — die Anleitung von
+   `browser_inspect` in `help.rs` nennt die Engste-Regel und ihre drei Ausnahmen.
 
 ## Dev plan
 

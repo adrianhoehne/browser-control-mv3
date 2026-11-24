@@ -1,6 +1,6 @@
 ---
 description: browser_inspect liefert bei einer Textsuche den engsten Treffer statt der Containerseite und zählt ihn in count; selector allein und includeHidden bleiben roh — Teil a der Teilung vom 2026-11-23.
-status: proposed
+status: active
 ---
 
 # `inspect` findet den engsten Treffer, Teil a — die Regel
@@ -85,17 +85,6 @@ nach oben. Kein zweiter `querySelectorAll`, keine Layout-Messung mehr als heute.
   Kandidaten bleiben der Deckel.
 - **Keine Änderung an `click`.** Der Textklick steht in `docs/58`.
 - **Kein `offscreen`.** Das Feld gehört `docs/62`.
-
-## Amendments to previous spec docs
-
-- **`docs/09-dom-abfrage.md`**: `count` zählt die engsten Treffer **bei einer
-  Textsuche**; `selector` allein und `includeHidden: true` bleiben unverändert; die
-  Sonderregel für einen leeren Suchbegriff wird ausdrücklich genannt. Das Argument
-  heißt `contains_text` (die Umbenennung steht in `docs/59`).
-- **`docs/53-browser-help.md`**: die Anleitung von `browser_inspect` nennt die
-  Engste-Regel und die zwei Ausnahmen.
-
-Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Testing
 
@@ -304,3 +293,10 @@ nachgezogen; der Punkt `offscreen` ist nach `docs/62` gewandert.
   `## Testing`, obwohl ihn erst der Dev-Plan verlangte: kein bestehender Fall
   verbindet `>>>` mit einem Suchbegriff, die Regel im Schatten-Zweig wäre sonst
   unbelegt.
+
+- **2026-11-23, Stufe 3 nachgezogen, Spec `active`.** `docs/09` trägt die
+  Engste-Regel, ihre drei Ausnahmen und die neue Bedeutung von `count`;
+  `docs/54` hält fest, dass kein neuer Satz entstanden ist, sondern nur die
+  Anleitung in `help.rs` (`## Pitfalls`). `docs/53` braucht keine Änderung: es
+  beschreibt das Verfahren der Anleitung, nicht ihren Inhalt. Fallzahlen
+  abgelesen: `cargo test` 295 (125 in `mcp.rs`), `npm test` 561.

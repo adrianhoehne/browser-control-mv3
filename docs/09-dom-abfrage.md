@@ -29,8 +29,15 @@ passenden Elemente:
               "rect":{"x":640,"y":710,"width":220,"height":48}}]}
 ```
 
-- **Filter**: `selector` (CSS) **oder** `contains_text` (Teilstring, Groß/Klein egal, gesucht im sichtbaren Text des Elements) — mindestens eines. Beide zusammen: beide Bedingungen, also Selektor **und** Text. Keines: `invalid_params`. Ein **leerer** String zählt als gesetzt: `selector: ""` wirft in der Seite (`invalid_selector`), `contains_text: ""` passt auf alles und wird vom `limit` geschnitten. Der Name `contains_text` gilt seit `docs/59`; er trennt die Suche vom Text, der in `browser_type` geschrieben wird (`typed_text`).
-- **`count`** ist die Zahl der Treffer **nach** dem Sichtbarkeitsfilter und **vor**
+- **Filter**: `selector` (CSS) **oder** `contains_text` (Teilstring, Groß/Klein egal, gesucht im sichtbaren Text des Elements) — mindestens eines. Beide zusammen: beide Bedingungen, also Selektor **und** Text. Keines: `invalid_params`. Ein **leerer** String zählt als gesetzt: `selector: ""` wirft in der Seite (`invalid_selector`), `contains_text: ""` passt auf alles und wird vom `limit` geschnitten. Der Name `contains_text` gilt seit `docs/59`; er trennt die Suche vom Text, der in
+`browser_type` geschrieben wird (`typed_text`).
+
+**Seit `docs/57` liefert eine Textsuche den engsten Treffer.** Ein Treffer entfällt,
+wenn einer seiner Nachfahren ebenfalls trifft; `count` zählt diese engsten Treffer.
+Drei Ausnahmen bleiben roh: `selector` **ohne** `contains_text`, ein leerer
+Suchbegriff und `includeHidden: true`.
+- **`count`** ist bei einer Textsuche die Zahl der **engsten** Treffer, sonst die Zahl
+  aller Treffer — jeweils **nach** dem Sichtbarkeitsfilter und **vor**
   dem `limit`-Schnitt. Der **Deckel von 5 000 zählt geprüfte Kandidaten — in
   beiden Pfaden gleich**. Unterhalb des Deckels ist `count` exakt; wird der
   Deckel erreicht, ist `count` eine Untergrenze und `truncated: true` (ein
