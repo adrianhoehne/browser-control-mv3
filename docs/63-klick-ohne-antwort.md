@@ -50,7 +50,7 @@ Klick auf denselben Knopf ist die andere Hälfte desselben Risikos.
 |---|---|
 | Code | `click_outcome_unknown`, `isError: true` |
 | Satz | der Wortlaut aus Ziel 2, englisch, gepinnte Konstante |
-| Belegfelder | `url`; **kein** `clicked` |
+| Belegfelder | `url` im Rahmen der Extension; **kein** `clicked`. Die Bridge druckt den Satz ohne Adresse, das Feld hat dort keinen Leser |
 | Abgrenzung | `not_readable` = nicht geklickt (Vorher-Fall), `not_readable_after_click` = geklickt, Seite danach unlesbar (`docs/61`), `read_failed` = Antwort unbrauchbar |
 | `frame` | **nicht abgedeckt:** mit `frame` läuft die Injektion als Rundruf, der Stille-Zweig greift nicht, und der Agent liest weiter `frame_not_found` (`docs/26`). Siehe `## Bekannte Lücken` |
 | `page_busy` / `no_agent_tab` | im Stille-Zweig gewinnt der neue Code: „versuch es erneut" ist beim Klick der falsche Rat (`docs/13`). Das ist eine Änderung an einer `active`-Zusage und steht darum hier |
@@ -156,7 +156,7 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
      `NOT_READABLE_AFTER_CLICK_CODE` (`:119`) — **ihr Doc-Kommentar nennt den Code nicht**,
      sonst zählt Kriterium 4 drei Literale statt zwei. Der Satz als gepinnte Konstante
      `CLICK_OUTCOME_UNKNOWN_MESSAGE` neben `CLICK_FAILED_MESSAGE` (`:317`), **eine Zeile**:
-     `The click was sent, but the page gave no answer: it may have gone through. Check the`
+     `The page gave no answer to the click request: it may have gone through. Check the`
      `page before you click again.` Der Doc-Kommentar darüber nennt den Code — das ist die
      zweite Zeile, die Kriterium 4 zählt (Vorbild `:2789`). **Kein** Bauer: der Satz trägt
      keine Adresse, anders als `notReadableAfterClickMessage` (`:2819`).
@@ -177,7 +177,7 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
    **Testinfrastruktur: kein neuer Stub nötig.** `createTabsStub` kann eine einzelne Op
    stumm stellen (`{ silent: true }`, `test/extension.test.js:594`); für `click` und `read`
    nutzt das noch kein Fall. Der neue Fall, eingefügt vor
-   `click_withTwoOverlappingRequests_…` (`:7827`):
+   `click_withTwoOverlappingRequests_…` (`:7831`):
    - `click_whenTheClickRequestNeverAnswers_shouldAnswerClickOutcomeUnknown`:
      `createClickTabs({ page, answer: (m) => (m.op === "click" ? { silent: true } : undefined) })`,
      `sendClick`, dann `clock.runByDelay(INJECTION_REPLY_TIMEOUT_MS)` (`:85`, 5000). Erwartet:
@@ -240,24 +240,24 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
      click again." Der Umlaut-Wächter deckt `help.rs`; kein Fall pinnt die Anleitung
      byteweise (`help_forEveryTool_shouldAnswerWithTheSixSections`, `tests/mcp.rs:4678`,
      prüft nur die sechs Abschnitte).
-   - `docs/06-klicken.md`: eine Aufzählungszeile in der Code-Liste (`:114-124`), hinter
-     `not_readable_after_click`; die `Zeitüberschreitung`-Zeile (`:121`) meint die Frist des
+   - `docs/06-klicken.md`: eine Aufzählungszeile in der Code-Liste (`:115-124`), hinter
+     `not_readable_after_click`; die `Zeitüberschreitung`-Zeile (`:122`) meint die Frist des
      ganzen Aufrufs und bleibt.
    - `docs/54-refusals-englisch.md`: ein Absatz „Nachgezogen nach `docs/63`" hinter dem
-     `docs/61`-Absatz (`:101-104`), die Fallzahl und die Zeile `51 Texte` (`docs/54:16`) auf
-     die gemessene Zahl — `grep -cE '^pub (const|fn)' bridge-rs/src/mcp/texts.rs` zählt
-     heute 57, nach dem neuen `pub const` 58.
+     `docs/61`-Absatz (`:101-104`), die Fallzahl. **Die Zeile `51 Texte` (`docs/54:16`) bleibt stehen:** sie ist eine
+     datierte Messung vom 2026-11-22 mit eigenem Befehl; die neue Zahl kommt in den
+     `docs/63`-Absatz, mit Datum und Befehl (`grep -cE '^pub (const|fn)'
+     bridge-rs/src/mcp/texts.rs` ⇒ heute 57, nach dem neuen `pub const` 58).
    - `docs/61-klick-seite-danach.md`, Vertragstabelle (`:51-57`): eine Zeile „keine Antwort
      ⇒ `click_outcome_unknown` (`docs/63`)" neben „vor dem Klick unlesbar".
    - `docs/README.md` (die Zeile `63-klick-ohne-antwort.md`), `docs/PROJECT-STATE.md`; der
      Abschnitt `## Amendments to previous spec docs` entfällt.
-   - **`status: active` erst, wenn `## Open questions` leer ist** — `docs/README.md` lässt
-     kein `active` mit offener Frage zu, und dort stehen zwei. Bis der Betreiber sie
-     beantwortet, endet die Stufe mit `proposed`.
+   - **`status: active`** am Ende von Stufe 3 — die zwei offenen Fragen sind am
+     2026-11-23 beantwortet, `## Open questions` ist leer.
 
    Proof: `npm run check; echo $?` ⇒ 0; `grep -n '63-klick-ohne-antwort' docs/README.md`
-   zeigt die Zeile mit `active` (bzw. `proposed`, siehe oben); `bash scripts/parity.sh
-   --impl rust --check; echo $?` ⇒ 0 mit 7/7.
+   zeigt die Zeile mit `active`; `bash scripts/parity.sh --impl rust --check; echo $?` ⇒ 0
+   mit 7/7.
 
 ### Was schiefgehen kann
 
@@ -277,8 +277,8 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
   einem Leerzeichen zwischen den Sätzen — ein Zeilenumbruch bräche den gepinnten Vergleich
   in `tests/mcp.rs`.
 - **Kriterium 4 zählt Literale.** Eine dritte Zeile (etwa `code: "click_outcome_unknown"`
-  direkt) macht aus der erwarteten 2 eine 3; die zweite Zeile ist der Doc-Kommentar über
-  der Satz-Konstante.
+  direkt, oder der Code im Doc-Kommentar der Code-Konstante) macht aus der erwarteten 2
+  eine 3.
 
 ### Reihenfolge und Abhängigkeiten
 
@@ -286,7 +286,7 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
   ohne Stufe 1 käme der Code nie über den Draht: 1 vor 2.
 - Stufe 3 zuletzt — sie beschreibt gebauten Zustand („keine Spec beschreibt Verhalten, das
   es noch nicht gibt", `docs/README.md`).
-- Innerhalb Stufe 1 ist die Reihenfolge frei; ein Zwischenstand mit fehlender
+- Innerhalb von Stufe 1 ist die Reihenfolge frei; ein Zwischenstand mit fehlender
   Testerwartung ist kein Stufenende. Keine Stufe hängt an einer späteren.
 
 ### Was der nächste Inkrement erbt
@@ -296,11 +296,13 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
   `NoAnswerError` wird nur im Klick gelesen.
 - **Die stille Lese-Injektion nach dem Klick** bleibt `not_readable_after_click`: Der Klick
   ist belegt, also ist der Ausgang nicht unbekannt (Entscheidung 2026-11-23, siehe `## Log`).
-- **Kein Seiten-Marker** (Non-goal): aus „kann durchgegangen sein" wird kein „ist
-  durchgegangen"; `## Bekannte Lücken` und `## Open questions` 1 bleiben.
+  Ein eigener Fall hält das fest.
+- **Kein Seiten-Marker** (entschieden 2026-11-23): aus „kann durchgegangen sein" wird kein
+  „ist durchgegangen".
 - **Drei Codes, drei Stellen** — Injektion abgelehnt, Antwort abgelehnt, Antwort
   ausgeblieben. Eine spätere Spec, die `click` in Frames oder die Stille von `type` anfasst,
   muss diese Grenze mitziehen.
+
 ## Touch boundary
 
 | erlaubt | nicht |
@@ -319,7 +321,7 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
   `browser_read` ist der übliche Weg, aber nicht der einzige (2026-11-23).
 - **Ein Kanalabbruch mitten in der Antwort** ist von einer Zeitüberschreitung nicht
   zu unterscheiden. Beide bekommen denselben Code (2026-11-23). Dasselbe gilt für einen
-  abgelehnten `sendMessage` („Receiving end does not exist", `bridge.js:2585`) und für eine
+  abgelehnten `sendMessage` („Receiving end does not exist", `bridge.js:2579` (der `markSilent`-Catch steht auf `:2585`)) und für eine
   Injektion, die keinen Frame erreicht (`createReplyCollection`, `:2457`): Der Klick kann
   ausgeliefert worden sein oder nicht — der Satz sagt darum „may have gone through".
 - **Ein stummer Klick in einem adressierten `frame`** bekommt den neuen Code nicht: Der
@@ -328,16 +330,23 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 
 ## Open questions
 
-1. **Soll der Seiten-Marker doch kommen?** Ein Zähler in `globalThis`, den der
-   Schnipsel vor `element.click()` setzt, würde aus „kann" ein „ist" machen. Preis:
-   ein zweiter Weg in die Seite und eine neue Op. Der Betreiber entscheidet.
-2. **Soll der Satz `browser_read` ausdrücklich nennen** statt „check the page"? Der
-   Rat wäre konkreter, aber er setzt voraus, dass die Seite lesbar ist — und das
-   weiß die Extension gerade nicht.
+**Keine.** Der Betreiber hat am 2026-11-23 beide entschieden:
+
+1. **Kein Seiten-Marker.** Es bleibt bei „may have gone through". Ein Zähler in
+   `globalThis` wäre ein zweiter Weg in die Seite, und die Zeitüberschreitung als
+   eigentliche Ursache bliebe.
+2. **Der Satz nennt kein Werkzeug.** Gerade in dem Fall, in dem der Satz gebraucht
+   wird, kann `browser_read` scheitern (PDF, `about:`). „Check the page" lässt dem
+   Agenten beide Wege offen.
 
 ## Review
 
-### Runde 1 — steht aus
+### Runde 1 — `🔧 Fix these` (2026-11-23)
+
+Neun Befunde, alle eingearbeitet; sie stehen im `## Log`. Der wichtigste war das
+fehlende `!clicked` am neuen Arm.
+
+### Runde 2 — steht aus
 
 Nach `CONTRIBUTING.md`, Schritt 4, öffnet erst ein `✅ Ship it` die Umsetzung.
 
@@ -370,3 +379,15 @@ Nach `CONTRIBUTING.md`, Schritt 4, öffnet erst ein `✅ Ship it` die Umsetzung.
   bei einem abgelehnten `sendMessage` war „was sent" nicht wahr. Dazu vier
   Zeilenangaben, die `docs/54`-Textzahl (58 statt 51) und zwei Begründungen.
   **Runde 2 steht aus.**
+
+- **2026-11-23, beide offenen Fragen entschieden (Betreiber).** Kein Seiten-Marker;
+  der Satz nennt kein Werkzeug. Damit kann die Spec nach der Umsetzung `active`
+  werden.
+
+- **2026-11-23, Gate-Runde 2 eingearbeitet.** Fünf Punkte: Stufe 1 pinnte noch den
+  verworfenen Satz (jetzt der aus Ziel 2), die Einfügestelle für den neuen Fall ist
+  `:7831`, die Zeilen des abgelehnten `sendMessage` sind `:2579` (Satz) und `:2585`
+  (`markSilent`), `docs/06` trägt `:115-124` und `:122`, und die `51 Texte` in `docs/54`
+  bleibt stehen — sie ist eine datierte Messung; die neue Zahl kommt mit Datum und Befehl
+  in diesen Absatz. Der Vertrag sagt jetzt, dass `url` nur im Rahmen der Extension einen
+  Leser hat.
