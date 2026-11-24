@@ -39,7 +39,11 @@ und meldet `clicked`.
 ## Ziel
 
 1. `click` scrollt ein Ziel, das den sichtbaren Bereich nicht schneidet, mit
-   `scrollIntoView({block:"center", inline:"center"})` heran.
+   `scrollIntoView({block:"center", inline:"center", behavior:"instant"})` heran.
+   `behavior: "instant"` ist Pflicht, nicht Geschmack: ohne die Angabe gilt die
+   berechnete `scroll-behavior` der Seite, und bei `html{scroll-behavior:smooth}`
+   liefe der Scroll animiert — die Messung in Schritt 2 läse dann die alte Lage und
+   lehnte ein Ziel unter dem Falz ab (Code-Review 2026-11-23).
 2. Danach misst `click` das Rechteck neu. Schneidet es den sichtbaren Bereich
    immer noch nicht, antwortet `click` mit dem neuen Code
    **`offscreen_after_scroll`** und führt **keinen** `click()` aus.
@@ -130,8 +134,8 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 | `test/extension.test.js` | `click_onAnElementOutsideTheViewport_shouldAnswerOffscreenAndNotClick` | Ziel bei `x = -9966`, das auch nach dem Scrollen draußen bleibt: `offscreen_after_scroll`, **kein** `click()` |
 | `test/extension.test.js` | `click_onAnElementInTheViewport_shouldNotScroll` | `scrolled: false` **und** `clicked` gesetzt, kein `scrollIntoView` |
 | `test/extension.test.js` | `click_shouldDeliverScrolledRightAfterClicked` | die Feldreihenfolge `clicked`, `scrolled`, … bleibt Vertrag |
-| `test/extension.test.js` | `click_onAnElementWithoutArea_shouldAnswerNotClickableAndNotClick` (bestehend, `:6989`) | die Lageprüfung läuft **nach** der Sichtbarkeit: ein Element ohne Fläche wird nicht gescrollt |
-| `test/extension.test.js` | `click_onAnElementWithDisplayNone_shouldAnswerNotClickableAndNotClick` (bestehend, `:7007`) | dito für `display:none` |
+| `test/extension.test.js` | `click_onAnElementWithoutArea_shouldAnswerNotClickableAndNotClick` (bestehend, `:7014`) | die Sichtbarkeit greift **vor** der Lageprüfung: das Ergebnis ist `not_clickable` |
+| `test/extension.test.js` | `click_onAnElementWithDisplayNone_shouldAnswerNotClickableAndNotClick` (bestehend, `:7031`) | dito für `display:none` |
 | `bridge-rs/tests/mcp.rs` | `click_withOffscreenAfterScroll_shouldNameTheTarget` | die Bridge bildet den neuen Code auf den englischen Satz ab |
 | `bridge-rs/tests/texts.rs` | `texts_shouldContainNoGermanUmlauts` | der Wächter aus `docs/54` deckt den neuen Satz |
 
@@ -145,11 +149,16 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
    `offscreen_after_scroll`, und der Stub zählt **null** `click()`.
 3. **Feldreihenfolge.** Der Fall `click_shouldDeliverScrolledRightAfterClicked`
    prüft `keys.indexOf("scrolled") === keys.indexOf("clicked") + 1`. Die Antwort
-   hat heute neun Felder; `scrolled` steht auf Index 4. Die zwei bestehenden
-   `deepStrictEqual`-Fälle (`:7076-7086`, `:7346-7356`) **und** ihre zwei
-   `Object.keys`-Pins (`:7087-7097`, `:7357-7367`) wandern mit.
-4. **Die alten drei Gründe bleiben.** Die zwei Fälle `:6989` und `:7007` bleiben
-   grün, ohne Anpassung.
+   hat heute neun Felder; `scrolled` steht auf Index 4. **Drei** bestehende
+   `deepStrictEqual`-Fälle (`:7076-7086`, `:7346-7356`, `:7956` im Frame-Fall)
+   **und** ihre zwei `Object.keys`-Pins (`:7087-7097`, `:7357-7367`) wandern mit;
+   der dritte Ganzantwort-Pin war in der ersten Fassung dieser Spec nicht gezählt
+   (Code-Review 2026-11-23).
+4. **Die alten drei Gründe bleiben, und die Lage kommt danach.** Die zwei Fälle
+   `:7014` und `:7031` (Element ohne Fläche, `display:none`) bleiben grün, ohne
+   Anpassung; ihr Ergebnis `not_clickable` beweist, dass die Sichtbarkeit **vor**
+   der Lageprüfung greift. Dass dabei kein `scrollIntoView` läuft, prüft **kein**
+   Fall — siehe `## Bekannte Lücken`.
 5. **Die Bridge kennt den Code.**
    `cargo test --manifest-path bridge-rs/Cargo.toml --test mcp
    click_withOffscreenAfterScroll_shouldNameTheTarget -- --exact` ⇒ die Zeile
@@ -188,7 +197,8 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
   `scrollIntoViewIfNeeded(element)`. `:2105` ist nur der Eintrag der Op-Tabelle.
 - `clickPageSource` (`:455-485`) prüft in dieser Reihenfolge: `isVisible`/`disabled`
   (`not_clickable`, unverändert) → Lage → `scrollIntoView({block: "center", inline:
-  "center"})` → neu messen → `offscreen_after_scroll` **ohne** `click()`. Der
+  "center", behavior: "instant"})` → neu messen → `offscreen_after_scroll` **ohne**
+  `click()`. Der
   Erfolgsfall antwortet `{ outcome: "clicked", clicked, scrolled, ...frameFieldsOf() }`.
 
 `extension/bridge.js`:
@@ -216,15 +226,15 @@ in der isolierten Welt (`realmOf`, `:408`). Wer den Auftrag doch teilt, nimmt
 `page-agent.js` und liefert die Antwort des Ops ohne Bridge.
 
 Beweis: `click_onAnElementBelowTheFold_shouldScrollAndClickOnce` ⇒ `^ok`, genau ein
-`click()`, ein `scrollIntoView` mit `{block:"center", inline:"center"}`, `scrolled:
-true`; `click_onAnElementOutsideTheViewport_shouldAnswerOffscreenAndNotClick` ⇒
+`click()`, ein `scrollIntoView` mit `{block:"center", inline:"center",
+behavior:"instant"}`, `scrolled: true`; `click_onAnElementOutsideTheViewport_shouldAnswerOffscreenAndNotClick` ⇒
 `offscreen_after_scroll`, `clicks === 0`; `click_onAnElementInTheViewport_shouldNotScroll`
 ⇒ `scrolled: false`, kein `scrollIntoView`; `click_shouldDeliverScrolledRightAfterClicked`
 ⇒ Index 4. Je Name `grep -cE '^ok [0-9]+ - <name>'` ⇒ 1; `npm test; echo $?` ⇒ 0 mit
-`^# fail 0` und `^# cancelled 0`. Mitwandern: die zwei `deepStrictEqual`-Pins
-(`:7076-7086`, `:7346-7356`) und ihre zwei `Object.keys`-Pins (`:7087-7097`,
-`:7357-7367`) bekommen `scrolled: false` an Position 4. `:6989` und `:7007` bleiben
-unangetastet.
+`^# fail 0` und `^# cancelled 0`. Mitwandern: die **drei** `deepStrictEqual`-Pins (`:7076-7086`, `:7346-7356`,
+`:7951-7962`) und ihre zwei `Object.keys`-Pins (`:7087-7097`, `:7357-7367`)
+bekommen `scrolled` an Position 4. Die zwei Fälle ohne Fläche (`:7014`, `:7031`)
+bleiben unangetastet.
 
 **Stufe 2 — Bridge und Texte, unabhängig von Stufe 1**
 
@@ -303,6 +313,17 @@ contract promises“ ist ab jetzt überholt und wird hier nicht repariert.
   nicht mitgebaut (2026-11-23).
 - **Der Frame-Fall unterscheidet nur, ob die Seite `window.top` liest.** Das
   Harness gibt allen Realms dieselben Fensterzahlen (2026-11-23).
+- **Kein Fall zählt `scrolls === 0`** bei einem Element ohne Fläche. Die
+  Reihenfolge ist über das Ergebnis (`not_clickable`) belegt, nicht über den
+  Zähler (Code-Review 2026-11-23).
+- **`scrollIntoView` ist der erste werfbare Aufruf im Klickpfad**, und er ist
+  nicht gefangen. Fehlt die Methode oder wirft sie, antwortet der Op mit einem
+  Fehler statt zu klicken. Kein Browser ist bekannt, in dem das heute passiert;
+  ein `try/catch` mit Rückfall auf „klicken wie vorher" wäre der Nachzug
+  (Code-Review 2026-11-23).
+- **`intersectsViewport` liefert für ein `rect` ohne Fläche „schneidet nicht".**
+  `docs/62` braucht dort `offscreen: false` und damit einen eigenen Zweig; der
+  Doc-Kommentar des Helfers sagt das (Code-Review 2026-11-23).
 
 ## Open questions
 

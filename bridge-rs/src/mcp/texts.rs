@@ -103,6 +103,12 @@ pub fn not_clickable(selector: &str) -> String {
     format!(r#"The element is not visible or is disabled: {selector}."#)
 }
 
+/// The sentence for `offscreen_after_scroll` (spec 56): the target stayed outside the
+/// visible area even after the page scrolled to it.
+pub fn offscreen_after_scroll(selector: &str) -> String {
+    format!(r#"The element stays outside the viewport after scrolling: {selector}."#)
+}
+
 /// `TOOL_TEXTS.NOT_TYPEABLE`
 pub fn not_typeable(selector: &str) -> String {
     format!(r#"The element is not a writable field or is disabled: {selector}."#)

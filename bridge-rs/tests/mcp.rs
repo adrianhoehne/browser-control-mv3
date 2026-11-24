@@ -755,6 +755,8 @@ const CLICK_SELECTOR: &str = r#"a#video-title-link"#;
 const INVALID_SELECTOR_TEXT: &str = r#"The selector is invalid: a#video-title-link."#;
 const NO_MATCH_TEXT: &str = r#"No element matches: a#video-title-link."#;
 const NOT_CLICKABLE_TEXT: &str = r#"The element is not visible or is disabled: a#video-title-link."#;
+const OFFSCREEN_AFTER_SCROLL_TEXT: &str =
+    r#"The element stays outside the viewport after scrolling: a#video-title-link."#;
 const TYPE_SELECTOR: &str = r#"input#q"#;
 const TYPE_TEXT: &str = r#"suchbegriff"#;
 const TYPE_NO_MATCH_TEXT: &str = r#"No element matches: input#q."#;
@@ -2220,11 +2222,12 @@ fn call_extension_failed(code: &str) -> String {
     format!("The extension could not carry out the request (code={code}).")
 }
 
-/// The three codes a refused click answers with, each naming the selector the caller sent.
-const CLICK_REFUSAL_CASES: [(&str, &str); 3] = [
+/// The four codes a refused click answers with, each naming the selector the caller sent.
+const CLICK_REFUSAL_CASES: [(&str, &str); 4] = [
     ("invalid_selector", INVALID_SELECTOR_TEXT),
     ("no_match", NO_MATCH_TEXT),
     ("not_clickable", NOT_CLICKABLE_TEXT),
+    ("offscreen_after_scroll", OFFSCREEN_AFTER_SCROLL_TEXT),
 ];
 
 #[tokio::test]
@@ -2331,6 +2334,35 @@ async fn mcp_toolsCallBrowserClick_whenTheExtensionAnswersARefusal_shouldReturnT
         assert_eq!(text_of(&answer), sentence, "{code}");
         assert!(answer.get("error").is_none(), "{code}");
     }
+}
+
+// No `mcp_toolsCallBrowser…` prefix on purpose: criterion 5 of `docs/56` filters this
+// case with `--exact`, so the name is a contract as it stands.
+#[tokio::test]
+async fn click_withOffscreenAfterScroll_shouldNameTheTarget() {
+    // GIVEN an extension whose click scrolled the page and still did not reach the target —
+    // the Amazon case of `docs/56`, where the element sits at `x = -9966` and stays there:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the client clicks,
+    let (answer, request) = seam
+        .call_with(
+            click_call(118, CLICK_SELECTOR),
+            error_frame("offscreen_after_scroll"),
+        )
+        .await;
+
+    // THEN the request carried the selector the sentence has to name,
+    assert_eq!(request["params"], json!({ "selector": CLICK_SELECTOR }));
+
+    // ... and the sentence names the target instead of falling back to the generic one that
+    // only repeats the code — the fourth refusal reason has a sentence of its own,
+    assert!(is_error(&answer));
+    assert_eq!(text_of(&answer), OFFSCREEN_AFTER_SCROLL_TEXT);
+    assert_ne!(text_of(&answer), call_extension_failed("offscreen_after_scroll"));
+
+    // ... and it is a tool error with a sentence, not a protocol error with an error object.
+    assert!(answer.get("error").is_none());
 }
 
 #[tokio::test]

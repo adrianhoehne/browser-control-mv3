@@ -283,6 +283,9 @@
   const INVALID_SELECTOR_MESSAGE = "The selector is invalid.";
   const NO_MATCH_MESSAGE = "No element matches this selector.";
   const NOT_CLICKABLE_MESSAGE = "The element is not visible or is disabled.";
+  // The fourth refusal reason, and a code of its own: `not_clickable` keeps its three
+  // reasons, and the code carries the new one (`docs/56`, `## Warum ein eigener Code`).
+  const OFFSCREEN_AFTER_SCROLL_MESSAGE = "The element stays outside the viewport after scrolling.";
   const CLICK_FAILED_MESSAGE = "The result of the click injection was unusable.";
   const MISSING_TEXT_MESSAGE = "type needs a text as a string.";
   const INVALID_SUBMIT_MESSAGE = "submit must be true or false.";
@@ -502,11 +505,18 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
   // The outcomes the injected click snippet may report. Anything else is our own
   // bug, the same way an unknown `via` is for a read. Every outcome but `clicked`
   // is a refusal, and its message is what the operator reads next to the code.
-  const CLICK_OUTCOMES = ["clicked", "invalid_selector", "no_match", "not_clickable"];
+  const CLICK_OUTCOMES = [
+    "clicked",
+    "invalid_selector",
+    "no_match",
+    "not_clickable",
+    "offscreen_after_scroll",
+  ];
   const CLICK_REFUSAL_MESSAGES = Object.freeze({
     invalid_selector: INVALID_SELECTOR_MESSAGE,
     no_match: NO_MATCH_MESSAGE,
     not_clickable: NOT_CLICKABLE_MESSAGE,
+    offscreen_after_scroll: OFFSCREEN_AFTER_SCROLL_MESSAGE,
   });
 
   // The same shape for `type`. `type_failed` sits in the refusal list because the
@@ -2814,7 +2824,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
       const { answers } = await askPageAgent(tab.id, clickPageRequest(selector, want), {
         allFrames: want !== null,
       });
-      const clicked = clickOutcomeOf(frameTargetOf(valuesOf(answers), want));
+      const reported = clickOutcomeOf(frameTargetOf(valuesOf(answers), want));
       // Ownership after the click, before the wait: a successor may have taken the
       // slot over while the page was still being clicked. This request is answered
       // by then, so it must neither wait nor read.
@@ -2840,7 +2850,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
       // taken the slot over meanwhile, and reading *its* page here would answer a
       // request that was already replaced.
       requirePageSlotOwnership(tab.id, click);
-      return await clickResult(tab.id, clicked, before, settle, want);
+      return await clickResult(tab.id, reported, before, settle, want);
     } finally {
       // Idempotent for an armed window that ran its course; it also ends the wait
       // of a click that refuses before the timer, so neither leaves a timer behind.
@@ -2955,6 +2965,11 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    *
    * An unknown outcome is our own bug, like an unknown `via` in a read result: the
    * caller could not act on it.
+   *
+   * The answer of a successful click is a pair, not the description: the caller needs
+   * `scrolled` as well, and `entry.scrolled === true` is the whole rule — an extension
+   * that does not send the field at all (an older one) answers `false`, which is what
+   * "in every other success case" means (`docs/56`, `## Der Vertrag`).
    */
   function clickOutcomeOf(entry) {
     const outcome = entry?.outcome;
@@ -2965,7 +2980,10 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     if (outcome !== "clicked") {
       throw new ClickError(outcome, CLICK_REFUSAL_MESSAGES[outcome]);
     }
-    return typeof entry.clicked === "string" ? entry.clicked : "";
+    return {
+      clicked: typeof entry.clicked === "string" ? entry.clicked : "",
+      scrolled: entry.scrolled === true,
+    };
   }
 
   /**
@@ -2985,6 +3003,10 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * The answer: the page read like `browser_read`, plus what was clicked and how the
    * wait ended.
    *
+   * `reported` is what `clickOutcomeOf` read off the page: the description of the target
+   * and whether the click had to scroll first. The refusal case never reaches here — it
+   * is thrown before the read — so `scrolled` exists exactly when something was clicked.
+   *
    * A click answer carries no `complete`, so the `about:` rule of `navigate` lands
    * on `url` and `title`: the state from before the click stands in, with an empty
    * text. Reporting `about:blank` as a page would be a lie.
@@ -2995,7 +3017,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * nobody measured — so the mismatch is documented instead of guessed away (spec 26,
    * `## Ziel`).
    */
-  async function clickResult(tabId, clicked, before, settle, want = null) {
+  async function clickResult(tabId, reported, before, settle, want = null) {
     const { answers } = await askPageAgent(tabId, pageStateRequest(want), { allFrames: want !== null });
     const page = pageResultOf(tabId, frameTargetOf(valuesOf(answers), want));
     // One field order for both branches, `clicked` after `title` — the same answer
@@ -3007,7 +3029,11 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
       tabId,
       url: state.url,
       title: state.title,
-      clicked,
+      clicked: reported.clicked,
+      // Directly behind `clicked` on purpose: the key order of this answer is part of
+      // the wire contract, and `scrolled` was placed at index 4 rather than appended
+      // (`docs/56`, criterion 3).
+      scrolled: reported.scrolled,
       text: state.text,
       truncated: state.truncated,
       via: state.via,

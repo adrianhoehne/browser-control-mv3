@@ -36,6 +36,10 @@ const TRANSCRIPT_NEEDS_FOCUS_CODE: &str = "transcript_needs_focus";
 const INVALID_SELECTOR_CODE: &str = "invalid_selector";
 const NO_MATCH_CODE: &str = "no_match";
 const NOT_CLICKABLE_CODE: &str = "not_clickable";
+/// The fourth reason a click can be refused: the target stayed outside the visible area
+/// even after the page scrolled to it (`docs/56`). A code of its own, because the code
+/// carries the reason and the sentence is built from it.
+const OFFSCREEN_AFTER_SCROLL_CODE: &str = "offscreen_after_scroll";
 const NOT_TYPEABLE_CODE: &str = "not_typeable";
 const PASSWORD_NOT_ALLOWED_CODE: &str = "password_not_allowed";
 const INVALID_PARAMS_CODE: &str = "invalid_params";
@@ -131,6 +135,11 @@ fn extension_failure_text(
             }
             if code == Some(NOT_CLICKABLE_CODE) {
                 return texts::not_clickable(&selector_of(params));
+            }
+            // Before `page_failure_text`: a click that scrolled and still saw nothing
+            // reachable names the target, like the three reasons before it.
+            if code == Some(OFFSCREEN_AFTER_SCROLL_CODE) {
+                return texts::offscreen_after_scroll(&selector_of(params));
             }
             page_failure_text(code, details, code_text)
         }

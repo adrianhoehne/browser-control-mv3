@@ -62,6 +62,45 @@
   }
 
   /**
+   * Whether the rectangle overlaps the visible area of this realm.
+   *
+   * The area is the one of the frame the op runs in: `window.innerWidth` inside an
+   * iframe is the iframe's own box, not the main frame's (spec 56, `## Ziel`, 5).
+   * `isVisible` says whether an element is rendered at all; this says whether it is
+   * anywhere a reader could see — the Amazon keyboard-shortcut menu at `x = -9966`
+   * passes the first check and fails this one.
+   *
+   * Only `click` uses it. `type` has the same blind spot on purpose: typing into a
+   * field nobody can see is its own increment (spec 56, `## Non-goals`).
+   */
+  function intersectsViewport(rect) {
+    return (
+      rect.x + rect.width > 0 &&
+      rect.y + rect.height > 0 &&
+      rect.x < window.innerWidth &&
+      rect.y < window.innerHeight
+    );
+  }
+
+  /**
+   * Brings an element into the visible area — if it is not there already.
+   *
+   * Answers whether it scrolled, which is the same as "it was outside before": the
+   * caller reports that as `scrolled`, and measures again afterwards. A target under
+   * the fold is an ordinary case, so it is scrolled to and clicked; one that stays
+   * outside is refused with its own code instead of being clicked blind.
+   */
+  function scrollIntoViewIfNeeded(element) {
+    if (intersectsViewport(element.getBoundingClientRect())) return false;
+    // `behavior: "instant"` is mandatory, not taste: without it the computed
+    // `scroll-behavior` of the page applies, and on `html{scroll-behavior:smooth}` the
+    // scroll animates past the measurement — the second measurement would read the old
+    // position and refuse a target under the fold (spec 56, `## Ziel`, 1).
+    element.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
+    return true;
+  }
+
+  /**
    * Whether this realm is the frame the caller addressed by a substring of its address.
    *
    * `want === null` is "the main frame" and always true. The comparison is the one
@@ -451,6 +490,11 @@
    * Synchronous on purpose: the 300 ms wait belongs to the background, and this op is
    * answered the moment the click was dispatched. `args` is the only thing that crossed
    * the channel — `selector` plus the frame filter, nothing else.
+   *
+   * The order is the contract: `isVisible` and `disabled` first (the three old reasons,
+   * `not_clickable`), then the position. A target outside the visible area is scrolled
+   * to the centre and measured again; one that stays outside is refused with its own
+   * code, and the answer of a click that did happen says whether it had to scroll.
    */
   function clickPageSource(selector, want) {
     // The frame filter of spec 26, and the first statement on purpose: a frame that is not
@@ -480,11 +524,21 @@
       return { outcome: "not_clickable", ...frameFieldsOf() };
     }
 
+    // The position, and only *after* the two refusals above: an element without area
+    // is `not_clickable`, it is not something to scroll to (spec 56, criterion 4).
+    const scrolled = scrollIntoViewIfNeeded(element);
+    // Measured again, because the scroll may or may not have helped: a target that
+    // stays outside after it would be clicked blind, and "clicked" would be the lie
+    // this refusal exists to avoid.
+    if (!intersectsViewport(element.getBoundingClientRect())) {
+      return { outcome: "offscreen_after_scroll", ...frameFieldsOf() };
+    }
+
     // Described *before* the click: a re-render may drop `id` and `class` the
     // moment the click runs, and the answer would describe nothing.
     const clicked = describeElement(element);
     element.click();
-    return { outcome: "clicked", clicked, ...frameFieldsOf() };
+    return { outcome: "clicked", clicked, scrolled, ...frameFieldsOf() };
   }
 
   /* ------------------------------------------------------------------ type */

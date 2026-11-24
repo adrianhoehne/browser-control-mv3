@@ -938,9 +938,15 @@ function pageContextOf(page, { clock = null, mutationObserver = null } = {}) {
   // `window.top === window` is only decidable with an object graph: the outermost
   // frame's `top` *is* the window, a child's is another object. `page.inFrame` says
   // which one the snippet is looking at, and a page realm without it is the main frame
-  // — that is what keeps every realm of the cases above unchanged. Nothing else of a
-  // real `window` exists here, because no snippet asks for more.
+  // — that is what keeps every realm of the cases above unchanged. The visible area is
+  // the one more thing a snippet reads now: `click` measures its target against it. One
+  // size for every realm, so a frame measures its own box with the same numbers — the
+  // harness cannot tell a small iframe from the main frame (spec 56, `## Bekannte
+  // Lücken`). Nothing else of a real `window` exists here, because no snippet asks for
+  // more.
   const window = {};
+  window.innerWidth = 1024;
+  window.innerHeight = 768;
   window.top = page.inFrame === true ? {} : window;
   // `wrappedJSObject` is the operator's own object graph behind the Xray wrapper of a
   // content script — the only place a player response lives for a snippet
@@ -1296,16 +1302,23 @@ function computedStyleOf(element) {
  * `getAttribute` answers, `onClick` runs inside `click()` so a fixture can simulate
  * what the click does to the page, and `clicks` is the counter that proves a refused
  * element was never clicked.
+ *
+ * `scrollIntoView` is the second behaviour a click needs since spec 56: it counts the
+ * call, keeps the options, and moves the rectangle into the visible area — that is what
+ * scrolling a target under the fold does. `scrollBringsIntoView: false` is the page
+ * where it does not help, the shape of the Amazon keyboard-shortcut menu at `x = -9966`.
+ * `scrolls`/`scrollOptions` are read by cases, so a case never asserts on intent.
  */
 function createClickElement({
   tagName = "A",
   id = "",
   className = "",
   attributes = {},
-  rect = { width: 120, height: 24 },
+  rect = { x: 0, y: 0, width: 120, height: 24 },
   display,
   visibility,
   disabled = false,
+  scrollBringsIntoView = true,
   onClick = () => {},
 } = {}) {
   const element = {
@@ -1316,8 +1329,19 @@ function createClickElement({
     display,
     visibility,
     clicks: 0,
+    scrolls: 0,
+    scrollOptions: [],
     getBoundingClientRect: () => ({ ...rect }),
     getAttribute: (name) => attributes[name] ?? null,
+    scrollIntoView(options) {
+      element.scrolls += 1;
+      element.scrollOptions.push(options);
+      if (scrollBringsIntoView === false) return;
+      // The one thing scrolling does here: the target ends up where the visible area
+      // starts. The next `getBoundingClientRect()` is what the second measurement sees.
+      rect.x = 0;
+      rect.y = 0;
+    },
     click() {
       element.clicks += 1;
       onClick();
@@ -7048,6 +7072,83 @@ test("click_onADisabledElement_shouldAnswerNotClickableAndNotClick", async () =>
   assert.equal(element.clicks, 0);
 });
 
+test("click_onAnElementBelowTheFold_shouldScrollAndClickOnce", async () => {
+  // GIVEN a link that is laid out and visible but 132 px below the visible area — the
+  // ordinary "there is more page below" case, not a defect:
+  const element = createClickElement({
+    id: "video-title-link",
+    rect: { x: 0, y: 900, width: 120, height: 24 },
+  });
+
+  // WHEN the bridge asks to click it,
+  const answer = await answerForClickedElement(element);
+
+  // THEN the page scrolled to it, exactly once, to the centre — not to the next edge:
+  assert.equal(element.scrolls, 1, "a target outside the visible area must be scrolled to");
+  assert.deepStrictEqual(inThisRealm(element.scrollOptions), [
+    { block: "center", inline: "center", behavior: "instant" },
+  ]);
+
+  // ... and it was clicked exactly once after that, because the second measurement found
+  // it in the visible area,
+  assert.equal(element.clicks, 1, "the element must be clicked exactly once");
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.clicked, "a#video-title-link");
+
+  // ... and the answer says that the click had to scroll first, instead of hiding it:
+  assert.equal(answer.result.scrolled, true);
+});
+
+test("click_onAnElementOutsideTheViewport_shouldAnswerOffscreenAndNotClick", async () => {
+  // GIVEN the element from the incident: Amazon's keyboard-shortcut menu at `x = -9966`,
+  // still outside after the page scrolled — the rectangle does not move here:
+  const element = createClickElement({
+    id: "video-title-link",
+    rect: { x: -9966, y: 385, width: 351, height: 41 },
+    scrollBringsIntoView: false,
+  });
+  const tabs = createClickTabs({ page: createClickPage({ element }) });
+  const { socket, clock } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the bridge asks to click it,
+  await sendClick(socket, 2, { selector: DEFAULT_CLICK_SELECTOR });
+
+  // THEN the second measurement is the one that decides: the page did try to scroll,
+  assert.equal(element.scrolls, 1, "the snippet must try the scroll before it refuses");
+
+  // ... the target is still outside, so the answer is the fourth refusal reason,
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "offscreen_after_scroll");
+  assert.equal("result" in answer, false, "a refusal carries no result");
+
+  // ... nothing was clicked, no wait was opened, and the read behind it never ran: the
+  // refusal answers before the second injection,
+  assert.equal(element.clicks, 0, "an unreachable target must not be clicked");
+  assert.deepStrictEqual(clock.pendingDelays(), []);
+  assert.equal(tabs.scriptCalls.length, 1);
+  assert.deepStrictEqual(tabs.channel.ops(), ["click"]);
+});
+
+test("click_onAnElementInTheViewport_shouldNotScroll", async () => {
+  // GIVEN a link that is already where a reader can see it — the fixture default,
+  // `x: 0, y: 0` in a 1024 × 768 window:
+  const element = createClickElement({ id: "video-title-link" });
+
+  // WHEN the bridge asks to click it,
+  const answer = await answerForClickedElement(element);
+
+  // THEN no scroll happened at all,
+  assert.equal(element.scrolls, 0, "a visible target must not be scrolled to");
+  assert.deepStrictEqual(inThisRealm(element.scrollOptions), []);
+
+  // ... and the click did happen — `scrolled: false` is not a refusal,
+  assert.equal(element.clicks, 1);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.clicked, "a#video-title-link");
+  assert.equal(answer.result.scrolled, false);
+});
+
 test("click_onAVisibleElement_shouldClickOnceSettleAndRead", async () => {
   // GIVEN a visible link, and a page whose settle snippet runs for real on the page's
   // own clock — quiet one window after the click:
@@ -7070,7 +7171,8 @@ test("click_onAVisibleElement_shouldClickOnceSettleAndRead", async () => {
   assert.deepStrictEqual(clock.pendingDelays(), []);
 
   // ... and the answer is the read result plus the click and what the wait saw, the
-  // two new fields behind `via` in the documented order:
+  // two new fields behind `via` in the documented order — `scrolled` behind `clicked`,
+  // because that is where the wire contract puts it:
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, true);
   assert.deepStrictEqual(answer.result, {
@@ -7078,6 +7180,7 @@ test("click_onAVisibleElement_shouldClickOnceSettleAndRead", async () => {
     url: DEFAULT_CLICK_PAGE.url,
     title: DEFAULT_CLICK_PAGE.title,
     clicked: "a#video-title-link",
+    scrolled: false,
     text: "Erste Zeile\n\nZweite Zeile",
     truncated: false,
     via: "innerText",
@@ -7089,12 +7192,31 @@ test("click_onAVisibleElement_shouldClickOnceSettleAndRead", async () => {
     "url",
     "title",
     "clicked",
+    "scrolled",
     "text",
     "truncated",
     "via",
     "settled",
     "waitedMs",
   ]);
+});
+
+test("click_shouldDeliverScrolledRightAfterClicked", async () => {
+  // GIVEN a click that goes through — the shape of the answer is what this case is about:
+  const element = createClickElement({ id: "video-title-link" });
+
+  // WHEN the bridge clicks it,
+  const answer = await answerForClickedElement(element);
+
+  // THEN `scrolled` stands directly behind `clicked`: the key order of this answer is part
+  // of the wire contract, and `scrolled` takes index 4, not the end of the list (`docs/56`,
+  // criterion 3),
+  const keys = Object.keys(answer.result);
+  assert.equal(keys.indexOf("scrolled"), keys.indexOf("clicked") + 1);
+  assert.equal(keys[4], "scrolled", `index 4 must be \`scrolled\`, got: ${keys[4]}`);
+
+  // ... and it is a boolean the caller can act on, not a missing field read as `false`:
+  assert.equal(typeof answer.result.scrolled, "boolean");
 });
 
 test("click_whenTheSettleSnippetReturnsNothing_shouldFallBackToTheFixedWait", async () => {
@@ -7351,6 +7473,7 @@ test("click_whenThePageLandsOnAnAboutAddress_shouldAnswerTheStateFromBeforeWithE
     truncated: false,
     via: "innerText",
     clicked: "a#video-title-link",
+    scrolled: false,
     settled: false,
     waitedMs: 0,
   });
@@ -7359,6 +7482,7 @@ test("click_whenThePageLandsOnAnAboutAddress_shouldAnswerTheStateFromBeforeWithE
     "url",
     "title",
     "clicked",
+    "scrolled",
     "text",
     "truncated",
     "via",
@@ -7829,6 +7953,7 @@ test("click_withFrame_shouldWaitAndReadTheAddressedFrameAndArmNoFallback", async
     url: WIDGET_FRAME_URL,
     title: "Kalender",
     clicked: "a#termin-waehlen",
+    scrolled: false,
     text: "Text des Widget-Rahmens",
     truncated: false,
     via: "innerText",
@@ -7839,6 +7964,46 @@ test("click_withFrame_shouldWaitAndReadTheAddressedFrameAndArmNoFallback", async
   // ... and the 300 ms fallback was never armed: the wait answered, so nothing of the old
   // fixed window may sit there — and no frame kept a deadline either.
   assertNoTimerLeft(clock, tabs.channel.pageClocks());
+});
+
+test("click_onAnElementOutsideTheFrameViewport_shouldAnswerOffscreenAndNotClick", async () => {
+  // GIVEN a widget iframe whose link sits outside the visible area and stays there after
+  // the scroll. What this case proves is that the rule runs in the addressed frame: the
+  // frame's own snippet scrolls and refuses, and the main frame is never touched (spec
+  // 56, `## Ziel`, 5). It cannot show that the rule measures against the frame's window
+  // rather than the main frame's — the harness gives every realm 1024 × 768, so both
+  // windows are the same number (spec 56, `## Bekannte Lücken`):
+  const widgetLink = createClickElement({
+    id: "termin-waehlen",
+    rect: { x: -9966, y: 385, width: 351, height: 41 },
+    scrollBringsIntoView: false,
+  });
+  const widgetPage = {
+    ...createClickPage({ element: widgetLink }),
+    url: WIDGET_FRAME_URL,
+    title: "Kalender",
+    innerText: "Text des Widget-Rahmens",
+    inFrame: true,
+  };
+  const mainLink = createClickElement({ id: "video-title-link" });
+  const mainPage = createClickPage({ element: mainLink });
+  const tabs = createFramedPageAgentTabs([mainPage, widgetPage]);
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the bridge clicks through the widget's address,
+  await sendClick(socket, 2, { selector: DEFAULT_CLICK_SELECTOR, frame: "widget" });
+
+  // THEN the addressed frame answers the fourth refusal reason, after its own scroll,
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "offscreen_after_scroll");
+  assert.equal(widgetLink.scrolls, 1, "the addressed frame must scroll before it refuses");
+
+  // ... and neither frame was clicked: the refusal answers before the second injection,
+  // so the main frame's lookalike was never reached either.
+  assert.equal(widgetLink.clicks, 0, "an unreachable target must not be clicked");
+  assert.equal(mainLink.clicks, 0, "the unaddressed frame must not be clicked");
+  assert.equal(tabs.scriptCalls.length, 1);
 });
 
 test("click_whenTheAddressedFrameIsGoneBeforeTheWait_shouldAnswerFrameNotFoundInsteadOfNoSettle", async () => {
