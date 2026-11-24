@@ -146,6 +146,13 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `53-browser-help.md` | Ein vierzehntes Werkzeug `browser_help` liefert die ausführliche Anleitung eines Werkzeugs samt Beispiel — hinter einem Aufruf, damit `tools/list` kurz bleibt | `active` |
 | `54-refusals-englisch.md` | Alle Meldungen, die der Agent liest, sind englisch: 51 Texte in `texts.rs`, 13 Argument-Refusals und 14 Werkzeugbeschreibungen in `tools.rs`, die Meldungen in `bridge.js`, drei Fixtures — mit einem Umlaut-Wächter als maschinellem Beweis; gebaut; Review-Runde 3 teilte den Zitat-Rest nach `docs/55` | `active` |
 | `55-alte-zitate-in-specs.md` | Die aktiven Specs zitierten die alten deutschen Werkzeugsätze: 73 Inventarzeilen in 27 Dateien, 38 Vertragsstellen nachgezogen, 21 Belege mit Datum markiert, 14 Ausschlüsse | `active` |
+| `56-klick-sagt-die-wahrheit.md` | `browser_click` sagt, was geschah: ein Ziel außerhalb des Sichtfelds wird herangescrollt und neu gemessen (`scrolled` direkt hinter `clicked`), sonst `offscreen_after_scroll` — **Teil a**: die Lage | `proposed` |
+| `57-inspect-engster-treffer.md` | `browser_inspect` liefert bei einer **Textsuche** den engsten Treffer statt der Containerseite (`div#a-page`) und zählt ihn in `count`; `selector` allein und `includeHidden` bleiben roh — **Teil a**: die Regel | `proposed` |
+| `58-klick-nach-text.md` | `browser_click` nimmt `contains_text` allein oder zusammen mit `selector` (einschränkend), bevorzugt einen exakten Treffer und lehnt bei Mehrdeutigkeit mit `text_ambiguous`, Kandidaten und einem Rat ab — **Teil a**: Erweiterung und Harness | `proposed` |
+| `59-argumentnamen.md` | Zwei Namen für zwei Bedeutungen: `browser_inspect` und `browser_click` suchen mit `contains_text`, `browser_type` schreibt mit `typed_text` — ohne Alias | `proposed` |
+| `60-klick-nach-text-mcp.md` | **Teil b** des Textklicks: `contains_text` im Schema, die Leitung bleibt `text`, `CLICK_NEEDS_FILTER` vor dem Draht, `text_ambiguous` und `no_match` als englische Sätze, zwei eingefrorene Fixtures | `proposed` |
+| `61-klick-seite-danach.md` | **Teil b** von `docs/56`: ein Klick, der auf einer nicht lesbaren Seite landet, antwortet `not_readable_after_click` statt `not_readable` — Satz mit Rückweg `browser_navigate`, `read` bleibt unberührt | `proposed` |
+| `62-inspect-offscreen.md` | **Teil b** von `docs/57`: jedes Element aus `browser_inspect` trägt `offscreen`, in beiden Quellen; flächenlose Elemente bleiben `false` | `proposed` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.

@@ -75,10 +75,17 @@ Handarbeit statt Code — Anleitung in `INSTALL.md`, `### Token wechseln`) und
 
 ## Funktionalität
 
-**Diese Tabelle ist leer.** Die drei Zeilen 15 (Frames), 16 (Shadow DOM) und
-17 (YouTube) sind gebaut und abgenommen — die Specs stehen unter „Gemacht",
-die Begründungen in `docs/24`–`27` und `docs/31`–`34`. Offen bleiben nur
-Sicherheit und Betrieb (unten) und die Nachträge (oben).
+| # | Vorhaben | Warum jetzt | Größe |
+|---|---|---|---|
+| 34 | **Mehrere Verbindungen** — die Bridge hält mehrere Erweiterungen gleichzeitig, und der Agent **fragt vorher**, welche er nutzt | Der Betreiber hat sie am 2026-11-23 als **nächste Zeile** genannt. Heute gewinnt die zweite Verbindung: eine zweite authentifizierte Sitzung schließt die erste mit Code `4409` (`REPLACED`, `bridge-rs/src/hub.rs:452`), `Hub.request` adressiert nur `state.current`, und `browser_status` beschreibt genau einen Client (`extension` mit `version` und `connectedAt`). Offen und nicht entschieden: **womit sich eine Verbindung zu erkennen gibt** (Name im `hello`, Peer-Adresse oder ein Etikett des Betreibers) und ob das Protokoll dafür auf `VERSION 2` geht — das berührt Zeile 33, weil der eigenständige Chromium-Client dasselbe Protokoll spricht. Die Frage-Regel ist Text in den Werkzeugen, kein stiller Standard: bei mehreren Verbindungen fragt der Agent vor dem ersten Aufruf, welche Verbindung gilt. **Zu groß für eine Spec: beim Zuschnitt teilen** in Hub und Protokoll (mehrere Sitzungen, Kennung, kein `REPLACED`), Werkzeugfläche (`connection`-Parameter, Liste in `browser_status`), Frage-Regel in Beschreibung, `browser_help` und Ablehnung, dazu Tests und Messung mit zwei echten Browsern | mittel |
+| 33 | **Chromium-Erweiterung, eigenständig** — ein eigenes Plugin für Edge und Chrome | Der Betreiber will in Chromium-Browsern steuern. **Betreiberentscheid 2026-11-23: komplett eigenständig** — eigener Code, eigenes Manifest, eigene Tests; gemeinsam bleiben nur die Bridge und das Protokoll (`bridge-rs/src/protocol.rs`, `VERSION 1`, `hello`/`welcome`/`request`/`response`/`goodbye`, 13 Methoden). **Der Server wird dafür nicht geändert.** Heute gilt nur Firefox: `README.md` und `INSTALL.md` beschreiben Firefox, der Code ruft durchgehend `browser.*`, `manifest.json` trägt `background.scripts` und `browser_specific_settings.gecko` — daraus ist nichts zu übernehmen. Chromium kennt `browser.*` nicht und verlangt in MV3 `background.service_worker`; offen ist, wie die Verbindung die Lebensdauer eines Service Workers übersteht (Zeile 26, Socket im Tab, oder ein Keepalive). **Zu groß für eine Spec: beim Zuschnitt teilen** in Protokoll und Gerüst, die Werkzeugfamilien, Laden und Verteilung, Messung in echtem Chrome und Edge | mittel |
+
+Die drei Zeilen 15 (Frames), 16 (Shadow DOM) und 17 (YouTube) sind gebaut und
+abgenommen — die Specs stehen unter „Gemacht", die Begründungen in
+`docs/24`–`27` und `docs/31`–`34`. Zeile 34 steht vor Zeile 33: der Betreiber
+hat sie als nächste genannt. Beide stehen nach der Reihenfolge-Regel vor
+Sicherheit und Betrieb (unten); danach folgen die Nachträge (oben). Der
+Firefox-Zweig bleibt bestehen: Zeile 33 baut nichts an ihm um.
 
 ## Sicherheit und Betrieb (zuletzt)
 
