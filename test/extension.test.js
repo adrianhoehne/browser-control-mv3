@@ -7613,7 +7613,7 @@ test("click_onATabThatReportedLoading_shouldNotSettleAndNotFallBack", async () =
   );
 });
 
-test("click_whenThePageCannotBeReadAfterTheClick_shouldPassNotReadableThrough", async () => {
+test("click_whenThePageCannotBeReadAfterTheClick_shouldAnswerNotReadableAfterClick", async () => {
   // GIVEN a page that takes the click and refuses injection afterwards — the tab was
   // navigated into a PDF viewer, say:
   const page = createClickPage();
@@ -7638,18 +7638,30 @@ test("click_whenThePageCannotBeReadAfterTheClick_shouldPassNotReadableThrough", 
   clock.runNext();
   await settleAsyncWork();
 
-  // THEN `not_readable` comes through unchanged — it says more than the catch-all
-  // `click_failed` would, and the page's refusal is not our bug:
+  // THEN the click is not reported as a failure of `read`: the code says what happened —
+  // the click went through — and the sentence names the way back, so the caller does not
+  // repeat the click it already made:
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
-  assert.equal(answer.error.code, "not_readable");
+  assert.equal(answer.error.code, "not_readable_after_click");
+
+  // ... in the pinned sentence, with both halves and the address the frame carries,
+  assert.equal(
+    answer.error.message,
+    "The click went through, but the page it opened cannot be read: https://before.example/. Go back with browser_navigate.",
+  );
+
+  // ... and the address is a field of its own, the way `read` shapes a `not_readable` —
+  // `clicked` is not: the element is gone with the page it opened.
+  assert.equal(answer.error.url, "https://before.example/");
+  assert.equal("clicked" in answer.error, false);
   assert.ok(
     !consoleLines.some((line) => line.includes("click result without a known outcome")),
     "a refusal of the page is not a warning of ours",
   );
 });
 
-test("click_whenThePageCannotBeReadAfterTheClick_shouldCarryTheAddressAndKindOfTheTab", async () => {
+test("click_whenThePageAfterTheClickIsUnreadable_shouldCarryTheAddressAndKind", async () => {
   // GIVEN a page that takes the click and refuses injection afterwards, in a tab whose
   // address names a PDF — the case the second injection cannot see:
   const page = createClickPage();
@@ -7672,11 +7684,90 @@ test("click_whenThePageCannotBeReadAfterTheClick_shouldCarryTheAddressAndKindOfT
   await settleAsyncWork();
 
   // THEN the error frame names the page the same way `read` does: there is one place
-  // that enriches a `not_readable`, so both calls answer with the same two fields:
+  // that enriches a `not_readable` family refusal, so both calls answer with the same
+  // two fields — only the code and the sentence are the click's own:
   const error = responsesById(socket).get(2).error;
-  assert.equal(error.code, "not_readable");
+  assert.equal(error.code, "not_readable_after_click");
   assert.equal(error.url, "https://example.org/preisliste.pdf");
   assert.equal(error.kind, "pdf");
+});
+
+test("click_onATabThatIsUnreadableBeforeTheClick_shouldAnswerNotReadable", async () => {
+  // GIVEN a tab that already stands on a page this extension cannot inject into —
+  // `about:config`, a PDF viewer, `view-source:` — so the *first* injection is refused
+  // and no click ever happens:
+  const page = createClickPage();
+  const tabs = createClickTabs({
+    page,
+    tabs: [createAgentTabFixture({ status: "complete" })],
+    pageAgent: { frames: [{ href: page.url, page }], refuseInjection: true },
+  });
+  const { socket, consoleLines } = await connectedBackground({
+    tabs,
+    settings: STORED_TAB_SETTINGS,
+  });
+
+  // WHEN we click,
+  await sendClick(socket, 2, { selector: DEFAULT_CLICK_SELECTOR });
+  await settleAsyncWork();
+
+  // THEN the answer is the plain `not_readable` the page gives any call — the tab was
+  // unreadable before the click, and nothing was opened by it:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "not_readable");
+  assert.equal(answer.error.message, "The page gives no readable content.");
+
+  // ... and no half of the click sentence is borrowed: neither the claim that the click
+  // went through, nor the way back for a page that was never opened,
+  assert.equal(answer.error.message.includes("The click went through"), false);
+  assert.equal(answer.error.message.includes("browser_navigate"), false);
+
+  // ... and nothing ran past the refused snippet: no settle, no read — the tab's own
+  // address is still the answer's only evidence, and it is the one it had before.
+  assert.equal(tabs.scriptCalls.length, 1);
+  assert.deepStrictEqual(tabs.channel.ops(), []);
+  assert.equal(answer.error.url, "https://before.example/");
+  assert.ok(
+    !consoleLines.some((line) => line.includes("click result without a known outcome")),
+    "a refusal of the page is not a warning of ours",
+  );
+});
+
+test("click_whenTheClickedPageHasNoAddress_shouldAnswerTheShortSentence", async () => {
+  // GIVEN a tab the browser reports without an address and a page that takes the click
+  // and refuses the read behind it — the frame then carries `url: null`, which is the
+  // case the shorter sentence exists for:
+  const page = createClickPage();
+  const tabs = createClickTabs({
+    page,
+    tabs: [createAgentTabFixture({ url: "", status: "complete" })],
+    pageAgent: {
+      frames: [{ href: page.url, page }],
+      refuseInjectionAfter: 2,
+      answer: (message) => (message.op === "settle" ? { value: { ...NO_SETTLE_RESULT } } : undefined),
+    },
+  });
+  const { socket, clock } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN we click and the window is over,
+  await sendClick(socket, 2, { selector: DEFAULT_CLICK_SELECTOR });
+  clock.runNext();
+  await settleAsyncWork();
+
+  // THEN the click is still reported as having gone through, but in the form without an
+  // address — no dangling colon, and the way back is still named:
+  const error = responsesById(socket).get(2).error;
+  assert.equal(error.code, "not_readable_after_click");
+  assert.equal(
+    error.message,
+    "The click went through, but the page it opened cannot be read. Go back with browser_navigate.",
+  );
+
+  // ... and the frame says "no address" the way `read` does: `url` is `null`, not empty.
+  assert.equal(error.url, null);
+  assert.equal(error.kind, "unknown");
+  assert.equal("clicked" in error, false);
 });
 
 test("click_withTwoOverlappingRequests_shouldAnswerTheFirstWithSupersededAndInjectNoRead", async () => {

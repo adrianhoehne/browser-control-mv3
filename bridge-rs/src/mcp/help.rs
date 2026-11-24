@@ -96,7 +96,7 @@ Clicks the first element that matches a CSS selector in the **current agent tab*
 `browser_click({"selector":"a.more-info"})` answers `{"tabId":12,"url":"https://www.iana.org/help/example-domains","settled":true,"text":"…"}`.
 
 ## Pitfalls
-No `url` argument. A selector that matches nothing is an error, not an empty answer. A target outside the visible area is scrolled to and clicked; one that stays outside after scrolling is refused as `offscreen_after_scroll` instead of being clicked blind. The click is a real click on the page — it can navigate, submit a form or start a download.
+No `url` argument. A selector that matches nothing is an error, not an empty answer. A target outside the visible area is scrolled to and clicked; one that stays outside after scrolling is refused as `offscreen_after_scroll` instead of being clicked blind. The click is a real click on the page — it can navigate, submit a form or start a download. A click that lands on a page this extension cannot read answers `not_readable_after_click`: the click went through, so do not repeat it — go back with `browser_navigate`.
 
 ## Related
 `browser_inspect`, `browser_type`"#;

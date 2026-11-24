@@ -56,6 +56,17 @@ pub fn not_readable_with_url(url: &str) -> String {
     format!(r#"The extension cannot read this page. Address: {url}"#)
 }
 
+/// `TOOL_TEXTS.NOT_READABLE_AFTER_CLICK`
+///
+/// The click path's own sentence (`docs/61`): the page cannot be read, but the click did
+/// happen, so the caller must not repeat it. Without an address this short form stands.
+pub const NOT_READABLE_AFTER_CLICK: &str = r#"The click went through, but the page it opened cannot be read. Go back with browser_navigate."#;
+
+/// `TOOL_TEXTS.NOT_READABLE_AFTER_CLICK_WITH_URL`
+pub fn not_readable_after_click_with_url(url: &str) -> String {
+    format!(r#"The click went through, but the page it opened cannot be read: {url}. Go back with browser_navigate."#)
+}
+
 /// `TOOL_TEXTS.OFFSET_OUT_OF_RANGE`
 pub const OFFSET_OUT_OF_RANGE: &str = r#"`offset` is past the end of the text."#;
 

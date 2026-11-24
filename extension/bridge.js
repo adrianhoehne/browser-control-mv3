@@ -111,6 +111,12 @@
   // `BC_PROTOCOL`, and the bridge only forwards what it reads.
   const TOO_MANY_TABS_CODE = "too_many_tabs";
   const NOT_READABLE_CODE = "not_readable";
+  // The code a *click* mints when the page it opened cannot be read (`docs/61`). It is
+  // deliberately not in `CLICK_OUTCOMES`: those are the outcomes the click snippet
+  // reports, and this one is decided after the click, by the read behind it. `read`
+  // keeps `not_readable` — only the click path renames the refusal, because only there
+  // it says something new: the click went through.
+  const NOT_READABLE_AFTER_CLICK_CODE = "not_readable_after_click";
   // Not a statement about the page but about the moment: the tab was still loading
   // when the injection was refused, so the caller may try again rather than give up.
   const PAGE_BUSY_CODE = "page_busy";
@@ -2747,25 +2753,75 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * Answers one `click` request: a selector in, the page after the click out.
    *
    * A `ReadError` from the second injection passes through untouched: after the
-   * click the page may be unreadable (`not_readable`) or our snippet may have handed
+   * click the page may be unreadable (`not_readable`, renamed to
+   * `not_readable_after_click` by `clickErrorFor`) or our snippet may have handed
    * back nothing usable (`read_failed`). Both say more to the caller than a
    * catch-all `click_failed` would.
    */
   async function answerClick(target, request) {
+    // Whether the page was really clicked, carried *beside* the call: a click fails
+    // either before the first injection or after the third, and only the second kind
+    // may be renamed (`docs/61`). A box and not a return value, because the answer is
+    // thrown away on the failure path — exactly the path that needs it.
+    const clicked = { done: false };
     try {
-      sendResponse(target, request.id, { ok: true, result: await clickAgentTab(request.params) });
+      sendResponse(target, request.id, { ok: true, result: await clickAgentTab(request.params, clicked) });
     } catch (error) {
-      sendResponse(target, request.id, { ok: false, error: clickErrorFor(error) });
+      sendResponse(target, request.id, {
+        ok: false,
+        error: clickErrorFor(error, { clicked: clicked.done }),
+      });
     }
   }
 
-  function clickErrorFor(error) {
+  /**
+   * The sentence for a click that went through onto a page the extension cannot read.
+   *
+   * It has two halves the plain `not_readable` sentence does not have: the click was
+   * carried out — the caller must not repeat it — and the way back is
+   * `browser_navigate`. The address is the one the frame already carries; without one
+   * the shorter sentence stands, so nothing ever ends in a dangling colon. Both are
+   * pinned, and the bridge keeps its own copy of them in
+   * `bridge-rs/src/mcp/texts.rs` (`docs/61`, `## Dev plan`).
+   */
+  function notReadableAfterClickMessage(url) {
+    const address = typeof url === "string" ? url : "";
+    return address === ""
+      ? "The click went through, but the page it opened cannot be read. Go back with browser_navigate."
+      : `The click went through, but the page it opened cannot be read: ${address}. Go back with browser_navigate.`;
+  }
+
+  /**
+   * `clicked` is the caller's answer to "did the click happen at all" — set after
+   * `clickOutcomeOf` read a `clicked` off the page. Without it a tab that was already
+   * unreadable *before* the click would be reported as a page the click opened: the
+   * first injection fails there, and nothing went through (`docs/61`).
+   */
+  function clickErrorFor(error, { clicked = false } = {}) {
     if (error instanceof ClickError) return { code: error.code, message: error.message };
     // The filter's verdict, with its `frames`/`candidates` details. Without this line the
     // `frame_not_found` of the settle wait would arrive as `click_failed` — and the wait is
     // exactly where a click loses its frame (spec 26).
     if (error instanceof FrameError) return frameErrorFrame(error);
-    if (error instanceof ReadError) return readErrorFrame(error);
+    if (error instanceof ReadError) {
+      // Two-stage on purpose: only the page refusal is renamed, and only here. Every
+      // other `ReadError` (`read_failed`, `page_busy`, `no_agent_tab`) keeps the frame
+      // `readErrorFrame` builds — and so does every `read` and `type` call, which is
+      // why that function is not touched.
+      if (error.code !== NOT_READABLE_CODE) return readErrorFrame(error);
+      // ... and only a page that was *reached* may be renamed: a tab that already
+      // refused the first injection never clicked, so its `not_readable` stands.
+      if (!clicked) return readErrorFrame(error);
+      // `readErrorFrame` owns the shape — `code`, `message`, then `url`, `kind`,
+      // `contentType` — and the two overridden keys keep their places, because an
+      // existing key is not moved by the spread. Written out by hand this would be a
+      // third copy of one frame.
+      return {
+        ...readErrorFrame(error),
+        code: NOT_READABLE_AFTER_CLICK_CODE,
+        message: notReadableAfterClickMessage(error.details?.url),
+      };
+    }
     return { code: CLICK_FAILED_CODE, message: describeError(error) };
   }
 
@@ -2802,8 +2858,12 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * and the state read (spec 26). The tab is still the tab — only the frame changes —
    * and the slot stays the tab's, because two calls in one tab keep racing for one page
    * even when they aim at different frames.
+   *
+   * `clicked` is the caller's box, flipped the moment the page reports a click. It is the
+   * only thing that tells the two `not_readable`s apart: one before the first injection
+   * (nothing was clicked) and one after the read (the click opened this page).
    */
-  async function clickAgentTab(params) {
+  async function clickAgentTab(params, clicked = { done: false }) {
     const selector = clickRequestSelector(params);
     // After the selector check, like the window of a `read`: a caller with a wrong `frame`
     // hears about its own mistake whether or not an agent tab exists, and nothing is
@@ -2825,6 +2885,10 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
         allFrames: want !== null,
       });
       const reported = clickOutcomeOf(frameTargetOf(valuesOf(answers), want));
+      // From here on the page has been clicked. Everything below can still throw a
+      // `ReadError` — the read after the wait above all — and that one is the page the
+      // click *opened*, which is the whole difference `clickErrorFor` is asked about.
+      clicked.done = true;
       // Ownership after the click, before the wait: a successor may have taken the
       // slot over while the page was still being clicked. This request is answered
       // by then, so it must neither wait nor read.

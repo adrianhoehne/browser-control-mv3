@@ -741,6 +741,7 @@ const NOT_READABLE_WITHOUT_KIND_TEXT: &str = r#"The extension cannot read this p
 const NOT_READABLE_CONTENT_TYPE: &str = r#"application/pdf"#;
 const NOT_READABLE_PDF_WITH_TYPE_TEXT: &str = r#"The extension cannot read this page (kind: pdf, content-type: application/pdf). Address: https://example.org/preisliste.pdf"#;
 const NOT_READABLE_WITH_TYPE_TEXT: &str = r#"The extension cannot read this page (content-type: application/pdf). Address: https://example.org/preisliste.pdf"#;
+const NOT_READABLE_AFTER_CLICK_TEXT: &str = r#"The click went through, but the page it opened cannot be read: https://example.org/preisliste.pdf. Go back with browser_navigate."#;
 const OFFSET_OUT_OF_RANGE_MESSAGE: &str = r#"The text has 87314 characters; offset 999999 is past its end."#;
 const OFFSET_OUT_OF_RANGE_TEXT: &str = r#"`offset` is past the end of the text: The text has 87314 characters; offset 999999 is past its end."#;
 const INVALID_READ_PARAMS_MESSAGE: &str = r#"maxChars must be an integer from 1 to 100000."#;
@@ -2362,6 +2363,41 @@ async fn click_withOffscreenAfterScroll_shouldNameTheTarget() {
     assert_ne!(text_of(&answer), call_extension_failed("offscreen_after_scroll"));
 
     // ... and it is a tool error with a sentence, not a protocol error with an error object.
+    assert!(answer.get("error").is_none());
+}
+
+#[tokio::test]
+async fn click_withNotReadableAfterClick_shouldNameTheReturnPath() {
+    // GIVEN a click that went through onto a page the extension cannot inject into — the
+    // ad server of `docs/61`, whose viewer is unreadable while the click itself worked:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the client clicks and the extension answers with the code it minted after the
+    // click, the address it landed on and the kind that address names,
+    let (answer, request) = seam
+        .call_with(
+            click_call(119, CLICK_SELECTOR),
+            error_frame_with(
+                "not_readable_after_click",
+                json!({ "url": NOT_READABLE_URL, "kind": "pdf" }),
+            ),
+        )
+        .await;
+
+    // THEN the request was the plain click the sentence must not talk about,
+    assert_eq!(request["params"], json!({ "selector": CLICK_SELECTOR }));
+
+    // ... and the sentence says the click went through and names the way back, instead of
+    // the plain `not_readable` sentence `read` keeps — those two would send the agent
+    // back to the same selector. The comparison is against the sentence `not_readable`
+    // would give for *these* details (`url` and `kind`), not against the bare one: with
+    // the frame carrying both fields, the fallback `NOT_READABLE_TEXT` cannot appear and
+    // a `assert_ne!` on it would hold whatever the text said.
+    assert!(is_error(&answer));
+    assert_eq!(text_of(&answer), NOT_READABLE_AFTER_CLICK_TEXT);
+    assert_ne!(text_of(&answer), NOT_READABLE_PDF_TEXT);
+
+    // ... as a tool error with a sentence, not a protocol error with an error object.
     assert!(answer.get("error").is_none());
 }
 

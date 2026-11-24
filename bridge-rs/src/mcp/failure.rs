@@ -26,6 +26,10 @@ const UNKNOWN_CODE: &str = "unknown";
 const INVALID_URL_CODE: &str = "invalid_url";
 const NO_AGENT_TAB_CODE: &str = "no_agent_tab";
 const NOT_READABLE_CODE: &str = "not_readable";
+/// The code a click mints when the page it opened cannot be read (`docs/61`). It is the
+/// extension's decision, taken after the click — the bridge only needs it to pick the
+/// sentence, and the sentence is the reason the code exists: the click went through.
+const NOT_READABLE_AFTER_CLICK_CODE: &str = "not_readable_after_click";
 const PAGE_BUSY_CODE: &str = "page_busy";
 const OFFSET_OUT_OF_RANGE_CODE: &str = "offset_out_of_range";
 const FRAME_NOT_FOUND_CODE: &str = "frame_not_found";
@@ -140,6 +144,13 @@ fn extension_failure_text(
             // reachable names the target, like the three reasons before it.
             if code == Some(OFFSCREEN_AFTER_SCROLL_CODE) {
                 return texts::offscreen_after_scroll(&selector_of(params));
+            }
+            // Before `page_failure_text` too: the page refusal of a click is not the one
+            // `read` gives. The plain `not_readable` sentence would tell the agent the
+            // call failed, and it would click again — the sentence here says the click
+            // went through and names the way back (`docs/61`).
+            if code == Some(NOT_READABLE_AFTER_CLICK_CODE) {
+                return not_readable_after_click_text(details);
             }
             page_failure_text(code, details, code_text)
         }
@@ -288,6 +299,19 @@ fn not_readable_text(details: Option<&Value>) -> String {
         (Some(kind), None) => texts::not_readable_with_kind(kind, url),
         (None, None) => texts::not_readable_with_url(url),
     }
+}
+
+/// The sentence for a click that went through onto a page the extension cannot read.
+///
+/// Same shape as `not_readable_text`, and deliberately nothing more: only the address is
+/// used, because the sentence's whole job is to say the click happened and name the way
+/// back (`docs/61`). `kind` and `contentType` stay in the frame — repeating them here
+/// would make the two sentences drift apart for a fact the caller does not act on.
+fn not_readable_after_click_text(details: Option<&Value>) -> String {
+    let Some(url) = non_empty_string(details.and_then(|details| details.get("url"))) else {
+        return texts::NOT_READABLE_AFTER_CLICK.to_string();
+    };
+    texts::not_readable_after_click_with_url(url)
 }
 
 /// The sentence for an `offset` behind the text's end, with the length the extension

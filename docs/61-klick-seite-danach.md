@@ -28,6 +28,10 @@ Antwort als Fehlschlag und wiederholte denselben Klick.
 
 1. Landet der Klick auf einer Seite, die sich nicht injizieren lässt, antwortet
    `click` mit dem neuen Code **`not_readable_after_click`**.
+   **Die Umbenennung hängt daran, dass geklickt wurde.** Ist der Agenten-Tab schon
+   vor dem Klick unlesbar (`about:config`, PDF-Viewer, `view-source:`), scheitert
+   die erste Injektion; dann bleibt es bei `not_readable`, denn nichts ging durch
+   und keine Seite wurde geöffnet (Code-Review 2026-11-23).
 2. Der englische Satz lautet, gepinnt in `extension/bridge.js` und in
    `bridge-rs/src/mcp/texts.rs`:
 
@@ -50,6 +54,7 @@ Antwort als Fehlschlag und wiederholte denselben Klick.
 | Satz | der Wortlaut aus Ziel 2, englisch, gepinnte Konstante |
 | Belegfelder | `url`; `kind` und `contentType` wie `not_readable` (`bridge.js:1997-2003`) |
 | `clicked` | **nicht** im Fehlerrahmen |
+| vor dem Klick unlesbar | `not_readable`, kein neuer Code — der Klick wurde nie ausgeführt |
 
 `not_readable_after_click` entsteht in `clickErrorFor` **nach** dem Klick und ist
 deshalb **kein** Eintrag in `CLICK_OUTCOMES` (`extension/bridge.js:505`) — das ist
@@ -78,9 +83,10 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 | Datei | Fall | Was er beweist |
 |---|---|---|
-| `test/extension.test.js` | `click_whenThePageAfterTheClickIsUnreadable_shouldAnswerNotReadableAfterClick` | der neue Code samt Satz, `url` und `kind` |
-| `test/extension.test.js` | `click_whenThePageCannotBeReadAfterTheClick_shouldAnswerNotReadableAfterClick` (bestehend, `:7492`, umbenannt) | der alte Code `not_readable` ist im Klick-Pfad weg |
+| `test/extension.test.js` | `click_whenThePageCannotBeReadAfterTheClick_shouldAnswerNotReadableAfterClick` (bestehend `:7492`, umbenannt und erweitert) | der neue Code, der Satz mit beiden Teilen, `url`; der alte Code `not_readable` ist im Klick-Pfad weg |
 | `test/extension.test.js` | `click_whenThePageAfterTheClickIsUnreadable_shouldCarryTheAddressAndKind` (bestehend, `:7528`, umbenannt) | die Belegfelder bleiben |
+| `test/extension.test.js` | `click_onATabThatIsUnreadableBeforeTheClick_shouldAnswerNotReadable` (neu) | die Umbenennung hängt am Klick: ohne Klick bleibt `not_readable`, der Satz behauptet nichts über einen Klick |
+| `test/extension.test.js` | `click_whenTheClickedPageHasNoAddress_shouldAnswerTheShortSentence` (neu) | die kurze Satzform ohne Adresse ist gepinnt, nicht nur die lange |
 | `test/extension.test.js` | `read_whenTheTabIsCompleteAndTheInjectionIsRefused_shouldAnswerNotReadable` (bestehend, `:4525`) | `read` ist unberührt |
 | `bridge-rs/tests/mcp.rs` | `click_withNotReadableAfterClick_shouldNameTheReturnPath` | die Bridge bildet den Code auf den englischen Satz ab |
 | `bridge-rs/tests/texts.rs` | `texts_shouldContainNoGermanUmlauts` | der Wächter aus `docs/54` deckt den neuen Satz |
@@ -127,13 +133,22 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 
 Tests: die zwei bestehenden Fälle werden umbenannt und ziehen ihre Erwartung nach —
 `:7492` → `click_whenThePageCannotBeReadAfterTheClick_shouldAnswerNotReadableAfterClick`
-(erwartet `not_readable_after_click`), `:7528` →
+(erwartet den neuen Code, den Satz mit beiden Teilen und `url`), `:7528` →
 `click_whenThePageAfterTheClickIsUnreadable_shouldCarryTheAddressAndKind` (neuer Code,
-`url`/`kind` bleiben). Neu:
-`click_whenThePageAfterTheClickIsUnreadable_shouldAnswerNotReadableAfterClick` prüft
-den Satz (`The click went through`, `browser_navigate`). Der `read`-Fall `:4525` und
-der `type`-Fall `:8803` bleiben **ohne** Änderung — sie sind der Beweis, dass der
+`url`/`kind` bleiben). Ein dritter Klick-Fall entsteht **nicht**; die Satzprüfung
+sitzt im ersten (Entscheidung vom 2026-11-23, siehe `## Log`).
+
+Neu ist dagegen der Vorher-Fall:
+`click_onATabThatIsUnreadableBeforeTheClick_shouldAnswerNotReadable`. Er zeigt die
+Grenze der Umbenennung — ohne Klick bleibt es bei `not_readable`. Dafür trägt
+`clickErrorFor` die Auskunft, ob geklickt wurde (z. B. ein zweites Argument
+`{ clicked }`), und fällt sonst auf `readErrorFrame` zurück. Der `read`-Fall `:4525`
+und der `type`-Fall `:8803` bleiben **ohne** Änderung — sie sind der Beweis, dass der
 Code auf den Klick-Pfad beschränkt ist.
+
+Der Fehlerrahmen wird **nicht** ein drittes Mal von Hand gebaut: `readErrorFrame`
+trägt die Form (`code, message, url, kind, contentType`), und der neue Code setzt
+`code` und `message` darauf (Code-Review 2026-11-23).
 
 Beweis: je Name `grep -cE '^ok [0-9]+ - <name>'` ⇒ 1;
 `grep -c 'click_.*shouldPassNotReadableThrough' test/extension.test.js` ⇒ 0;
@@ -199,7 +214,7 @@ bekommen soll. `page_busy` und `no_agent_tab` bleiben im Klick-Pfad, wie sie sin
 | erlaubt | nicht |
 |---|---|
 | `extension/bridge.js` (`clickErrorFor`, Konstanten) | `extension/page-agent.js` — die Lage ist `docs/56` |
-| `test/extension.test.js` (die zwei umbenannten Fälle und der bestehende `read`-Fall) | `extension/bridge.js` außerhalb des Klick-Pfads |
+| `test/extension.test.js` (die zwei umbenannten Fälle, die zwei neuen Fälle und der bestehende `read`-Fall) | `extension/bridge.js` außerhalb des Klick-Pfads |
 | `bridge-rs/src/mcp/failure.rs`, `texts.rs`, `help.rs`, `bridge-rs/tests/mcp.rs`, `texts.rs` | `bridge-rs/src/hub.rs`, `protocol.rs` |
 | `docs/06`, `docs/15`, `docs/53`, `docs/54`, `docs/README.md`, `docs/PROJECT-STATE.md` | `docs/09`, `docs/56`, `docs/57`, `docs/58` |
 
@@ -213,6 +228,15 @@ bekommen soll. `page_busy` und `no_agent_tab` bleiben im Klick-Pfad, wie sie sin
 - **Ein Klick, der eine Datei herunterlädt, landet hier.** Der Rückweg ist
   `browser_navigate`; ob ein Download eigene Behandlung braucht, ist offen
   (2026-11-23).
+- **Lief der Klick, ging aber seine Antwort verloren**, bleibt es bei `not_readable`
+  — die Extension weiß dann nicht, ob geklickt wurde, und behauptet es auch nicht.
+  Das ist die eine verbleibende Stelle, an der ein Agent den Klick wiederholt
+  (Code-Review 2026-11-23).
+- **Zwei Kommentare in `extension/bridge.js` sind noch nicht nachgezogen:** der Satz
+  „passes through untouched" über `answerClick` widerruft sich zwei Zeilen später
+  selbst, und `clicked = { done: false }` als Default-Parameter würde bei einem
+  zweiten Aufrufer lautlos `not_readable` liefern. Ein Pflichtparameter wäre besser
+  (Code-Review 2026-11-23).
 
 ## Open questions
 
@@ -236,3 +260,12 @@ eingearbeitet.
 - **2026-11-23, Absprache.** Der Betreiber hat Ziel und Abnahmekriterien dieser
   Spec abgestimmt (`CONTRIBUTING.md`, Schritt 2). Der Bau kann beginnen, sobald
   der Dev-Plan von einem zweiten Autor geprüft ist.
+
+- **2026-11-23, Entscheidungen vor dem Bau und während des Baus (Orchestrator).**
+  Die Satzprüfung sitzt im umbenannten `:7492`-Fall; ein zusätzlicher Fall für
+  denselben Code wäre doppeltes Gewicht. Neu sind zwei andere Fälle: der Vorher-Fall
+  `click_onATabThatIsUnreadableBeforeTheClick_shouldAnswerNotReadable` (der Code-Review
+  zeigte, dass die Umbenennung sonst auch einen Klick umbenennt, der nie stattfand)
+  und `click_whenTheClickedPageHasNoAddress_shouldAnswerTheShortSentence` (die kurze
+  Satzform war nirgends gepinnt). Beide verschieben die Fallzahl; `docs/PROJECT-STATE.md`
+  wird in Stufe 3 nachgezogen.
