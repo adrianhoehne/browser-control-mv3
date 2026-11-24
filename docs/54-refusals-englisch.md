@@ -109,6 +109,12 @@ er nicht — dafür sind die gepinnten Assertions da.
    von `no_match` samt Deckel-Zeile. Sie stehen in `extension/bridge.js`; der
    Umlaut-Wächter deckt sie nicht (er prüft `texts.rs`, `tools.rs`, `help.rs`), die
    Node-Fälle pinnen sie.
+   **Nachgezogen nach `docs/63`:** ein Satz im Klick-Pfad, „The page gave no answer to the
+   click request: it may have gone through. Check the page before you click again." Er
+   steht zweimal, in `extension/bridge.js` und in `texts.rs`, einzeilig und wortgleich.
+   Der Umlaut-Wächter deckt die Rust-Seite; die Node-Fälle pinnen die Extension-Seite.
+   Textzahl in `texts.rs` nach diesem Inkrement: 58
+   (`grep -cE '^pub (const|fn)' bridge-rs/src/mcp/texts.rs`, Stand 2026-11-23).
    **Nachgezogen nach `docs/60`:** dieselben drei Fälle noch einmal auf der
    MCP-Seite — `CLICK_NEEDS_FILTER`, `click_ambiguous(term, matches, candidates,
    truncated)` mit „at least" am Deckel, und die Begriff-Form von `no_match`. Sie

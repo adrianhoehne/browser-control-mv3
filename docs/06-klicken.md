@@ -115,6 +115,10 @@ Antwort:
 - **`not_readable_after_click`** (neu in `docs/61`): `isError`, „The click went
   through, but the page it opened cannot be read: <url>. Go back with
   browser_navigate." — der Klick lief, die Seite danach lässt sich nicht lesen.
+- **`click_outcome_unknown`** (neu in `docs/63`): `isError`, „The page gave no answer to
+  the click request: it may have gone through. Check the page before you click again."
+  Gilt für die Anfrage, die keine Antwort bekam (Frist, abgelehnter `sendMessage`, kein
+  Frame erreicht). Das Feld `url` trägt die Adresse vor dem Klick.
 - **`not_readable`** gilt im Klick-Pfad nur noch **vor** dem Klick: Ist der Tab
   schon unlesbar (`about:config`, PDF, `view-source:`), wird nicht geklickt, und
   der Code bleibt `not_readable`. **`read_failed`** (der eingespritzte Code

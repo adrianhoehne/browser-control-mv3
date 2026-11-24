@@ -1,6 +1,6 @@
 ---
 description: Ein Klick, dessen Anfrage keine Antwort bekommt, soll den eigenen Code click_outcome_unknown tragen statt not_readable — die Antwort sagt dann, dass der Klick durchgegangen sein kann, und der Agent prüft die Seite, bevor er erneut klickt.
-status: proposed
+status: active
 ---
 
 # Ein Klick ohne Antwort sagt das
@@ -71,15 +71,6 @@ antwortet (`click_outcome_unknown`).
 - **Kein automatisches Wiederholen** und kein Rückzug des Klicks.
 - **Keine Änderung an `read`, `type`, `inspect`.** Sie behalten ihre Codes.
 - **Keine Änderung an `docs/61`.** Der Vorher-Fall bleibt, wie er ist.
-
-## Amendments to previous spec docs
-
-- **`docs/61-klick-seite-danach.md`**: die Abgrenzung kommt in die Vertragstabelle —
-  `not_readable` gilt nur, wenn die Injektion abgelehnt wurde, nicht wenn die
-  Anfrage ausblieb.
-- **`docs/54-refusals-englisch.md`**: der neue Satz in der Textliste.
-
-Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Testing
 
@@ -399,3 +390,9 @@ Nach `CONTRIBUTING.md`, Schritt 4, öffnet erst ein `✅ Ship it` die Umsetzung.
   bleibt stehen — sie ist eine datierte Messung; die neue Zahl kommt mit Datum und Befehl
   in diesen Absatz. Der Vertrag sagt jetzt, dass `url` nur im Rahmen der Extension einen
   Leser hat.
+
+- **2026-11-23, Stufe 3 nachgezogen, Spec `active`.** `docs/06` nennt den neuen Code in
+  der Liste, `docs/54` trägt den Satz mit Datum und die Textzahl 58, `docs/61` bekommt die
+  Zeile „Anfrage ohne Antwort" in der Vertragstabelle. `docs/53` braucht keine Änderung:
+  es beschreibt das Verfahren der Anleitung, die Anleitung selbst war Stufe 3.
+  Fallzahlen abgelesen: `cargo test` 305 (134 in `mcp.rs`), `npm test` 577.

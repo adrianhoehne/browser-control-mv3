@@ -55,6 +55,7 @@ Antwort als Fehlschlag und wiederholte denselben Klick.
 | Belegfelder | `url`; `kind` und `contentType` wie `not_readable` (`bridge.js:1997-2003`) |
 | `clicked` | **nicht** im Fehlerrahmen |
 | vor dem Klick unlesbar | `not_readable`, kein neuer Code — der Klick wurde nie ausgeführt |
+| Anfrage ohne Antwort | `click_outcome_unknown` (`docs/63`) — der Klick kann durchgegangen sein |
 
 `not_readable_after_click` entsteht in `clickErrorFor` **nach** dem Klick und ist
 deshalb **kein** Eintrag in `CLICK_OUTCOMES` (`extension/bridge.js:505`) — das ist
