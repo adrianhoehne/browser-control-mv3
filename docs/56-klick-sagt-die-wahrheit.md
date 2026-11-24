@@ -1,6 +1,6 @@
 ---
 description: Ein Klick auf ein Ziel außerhalb des Sichtfelds wird herangescrollt und neu gemessen, die Antwort nennt scrolled, und ein Ziel, das draußen bleibt, heißt offscreen_after_scroll — Teil a der Teilung vom 2026-11-23.
-status: proposed
+status: active
 ---
 
 # Der Klick sagt die Wahrheit, Teil a — die Lage
@@ -111,20 +111,6 @@ wird als `false` gelesen — „in jedem anderen Fall" deckt das.
 - **Keine Änderung an `inspect`.** Das Feld `offscreen` gehört `docs/62`.
 - **Kein `reason`-Feld auf dem Draht.** Der Code trägt den Grund.
 - **Keine Aussage über die Seite nach dem Klick.** Das ist `docs/61`.
-
-## Amendments to previous spec docs
-
-- **`docs/06-klicken.md`**: die Erfolgsantwort bekommt `scrolled` (Reihenfolge:
-  hinter `clicked`); der neue Code `offscreen_after_scroll`; `not_clickable`
-  behält seine drei Gründe.
-- **`docs/53-browser-help.md`**: die Anleitung von `browser_click` in
-  `bridge-rs/src/mcp/help.rs:82-102` nennt `scrolled` und den vierten
-  Ablehnungsgrund.
-- **`docs/15-ruhe-fuer-click-und-navigate.md`, Beispiel**: dort steht `clicked`
-  **vor** `url`. Die Feldreihenfolge ist Vertrag (`extension/bridge.js:3014-3016`);
-  das Beispiel wird auf die heutige Reihenfolge gezogen.
-
-Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Testing
 
@@ -367,3 +353,11 @@ Klick steht in `docs/61`.
 - **2026-11-23, Absprache.** Der Betreiber hat Ziel und Abnahmekriterien dieser
   Spec abgestimmt (`CONTRIBUTING.md`, Schritt 2). Der Bau kann beginnen, sobald
   der Dev-Plan von einem zweiten Autor geprüft ist.
+
+- **2026-11-23, Stufe 4 nachgezogen, Spec `active`.** `docs/06` nennt `scrolled` in
+  der Antwort und in der Feldliste, dazu den neuen Code `offscreen_after_scroll`
+  samt Reihenfolge (`not_clickable` gilt vor der Lage). `docs/15` zeigt die
+  Feldreihenfolge im Beispiel und die neue Signatur `clickResult(tabId, reported,
+  before, settle, want)`. `docs/54` trägt den neuen Satz mit Datum. `docs/53` und
+  `help.rs` waren Stufe 3. Fallzahlen abgelesen: `cargo test` 293 (123 in
+  `mcp.rs`), `npm test` 553.

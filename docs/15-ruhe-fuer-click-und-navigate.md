@@ -22,7 +22,7 @@ Nach dem Auslösen wartet der Aufruf auf **Ruhe** (250 ms ohne Mutation, höchst
 3 000 ms) und meldet das im Ergebnis:
 
 ```json
-{"tabId":23,"clicked":"a#kaufen","url":"…","settled":true,"waitedMs":412, …}
+{"tabId":23,"url":"…","title":"…","clicked":"a#kaufen","scrolled":false,"settled":true,"waitedMs":412, …}
 ```
 
 - **`click`**: klicken → warten → lesen. Die feste **300-ms-Pause entfällt** —
@@ -228,7 +228,9 @@ die rote Zeile steht unter `## Bekannte Lücken`.
    Der zweite `arm`-Aufruf (Rückfall) liefert einen Boolean, der **verworfen** wird
    — `arm` liefert je Werkzeug anderes, und das bleibt so.
    Danach der zweite `requireClickOwnership`, dann
-   `clickResult(tabId, clicked, before, settle)` mit den zwei Feldern **hinten**
+   `clickResult(tabId, reported, before, settle, want)`; `scrolled` steht seit
+   `docs/56` direkt hinter `clicked`, die zwei Felder `settled`/`waitedMs` bleiben
+   **hinten**
    hinter `via`. Ein überholter Klick armed keinen Rückfall; der Sentinel reist nie
    in ein Ergebnis.
    Testseite: `createClickTabs({settle = NO_SETTLE_RESULT})` beantwortet den Marker

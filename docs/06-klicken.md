@@ -13,9 +13,11 @@ können ist schlechter als es gar nicht zu können.
 ## Ziel
 
 `browser_click` mit einem CSS-Selektor klickt das erste passende Element im
-Agenten-Tab, wartet kurz, ob die Seite reagiert, und antwortet mit dem neuen Zustand: `tabId`, `url`, `title`, `clicked` (eine kurze
-Beschreibung des getroffenen Elements), `text` — der Seitentext **nach** dem
-Klick —, `truncated` und `via`, nach denselben Regeln wie `browser_read`.
+Agenten-Tab, wartet kurz, ob die Seite reagiert, und antwortet mit dem neuen
+Zustand: `tabId`, `url`, `title`, `clicked` (eine kurze Beschreibung des
+getroffenen Elements), `scrolled` (neu in `docs/56`: `true`, wenn das Ziel erst
+herangescrollt werden musste), `text` — der Seitentext **nach** dem Klick —,
+`truncated` und `via`, nach denselben Regeln wie `browser_read`.
 
 Der Agent bekommt damit genau die Rückmeldung, die er für den nächsten Schritt
 braucht: hat der Klick gewirkt, und was steht jetzt da.
@@ -46,7 +48,7 @@ Antwort:
 ```json
 {"type":"response","id":4,"ok":true,
  "result":{"tabId":7,"url":"https://www.youtube.com/watch?v=…","title":"… - YouTube",
-           "clicked":"a#video-title-link","text":"…","truncated":true,"via":"innerText"}}
+           "clicked":"a#video-title-link","scrolled":false,"text":"…","truncated":true,"via":"innerText"}}
 ```
 
 - **Selektor**: jeder String; ein fehlender oder nicht-String-Selektor ist
@@ -94,6 +96,9 @@ Antwort:
 - **`invalid_selector`**: `isError`, „The selector is invalid: <selektor>."
 - **`no_match`**: `isError`, „No element matches: <selektor>."
 - **`not_clickable`**: `isError`, „The element is not visible or is disabled: <selektor>."
+- **`offscreen_after_scroll`** (neu in `docs/56`): `isError`, „The element stays outside
+  the viewport after scrolling: <selektor>." — **kein** Klick. Die Prüfung läuft
+  **nach** `not_clickable`: ein Element ohne Fläche wird nicht gescrollt.
 - **`no_agent_tab`**: `TOOL_TEXTS.NO_AGENT_TAB`, wörtlich derselbe Satz wie bei
   `browser_read` („No agent tab — call browser_navigate first.").
 - **`not_readable`** (die Seite ließ sich nach dem Klick nicht lesen) und
@@ -164,7 +169,7 @@ Fehlerzeilen; wer wissen will, was nicht passte, liest die Werkzeug-Antwort.
 2. `tools/list` liefert vier Werkzeuge; `browser_click` hat
    `required: ["selector"]` und `additionalProperties: false`.
 3. Mit Fake-Extension liefert `browser_click` Text, der sich als JSON parsen
-   lässt und `tabId`, `url`, `title`, `clicked`, `text`, `truncated`, `via`
+   lässt und `tabId`, `url`, `title`, `clicked`, `scrolled`, `text`, `truncated`, `via`
    enthält.
 4. `invalid_selector`, `no_match` und `not_clickable` kommen als `isError` mit
    den englischen Sätzen an (Beleg: `test/mcp.test.js`; englisch seit `docs/54`), und in allen drei Fällen

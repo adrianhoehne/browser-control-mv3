@@ -94,6 +94,10 @@ er nicht — dafür sind die gepinnten Assertions da.
    `typed_text` und `contains_text`. Dazu kommt der Satz, den `browser_inspect`
    ohne jeden Filter antwortet; er nennt beide Namen. Der Wortlaut bleibt englisch,
    umlautfrei und gepinnt.
+   **Nachgezogen nach `docs/56`:** ein neuer Ablehnungsgrund im Klick-Pfad,
+   `The element stays outside the viewport after scrolling: <selector>.` Er steht
+   in `texts.rs` und ist ebenso englisch und umlautfrei; der Umlaut-Wächter deckt
+   ihn ohne eigenen Fall.
 
 ## Dev plan
 
