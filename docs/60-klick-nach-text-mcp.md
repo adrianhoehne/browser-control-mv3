@@ -43,7 +43,9 @@ kommt heute beim Agenten an:
    Konstanten (kein „Vorschlag"):
    - `CLICK_NEEDS_FILTER`: ``browser_click needs `selector` or `contains_text`.``
    - `CLICK_AMBIGUOUS`: nennt Suchbegriff, Zahl der Treffer und den Rat, und bei
-     erreichtem Deckel „at least". Wortlaut, gepinnt:
+     erreichtem Deckel „at least". Den erreichten Deckel meldet die Extension als
+     `truncated` in `details` — dasselbe Wort, das `inspect` für „count ist eine
+     Untergrenze" führt. Wortlaut, gepinnt:
 
      ```
      `contains_text: "<term>"` matches <n> elements (<candidates>). Narrow it with
@@ -72,7 +74,7 @@ kommt heute beim Agenten an:
 | `selector` | nicht mehr in `required`; Kombination mit `contains_text` erlaubt |
 | beide | erlaubt, einschränkend — die Extension entscheidet, was passt (`docs/58`) |
 | keines / leer | `CLICK_NEEDS_FILTER`, `isError: true`, vor dem Draht |
-| `text_ambiguous` | englischer Satz mit Zahl, Kandidaten und Rat |
+| `text_ambiguous` | englischer Satz mit Zahl, Kandidaten und Rat; bei `truncated` in `details` sagt er „at least" |
 | `no_match` | englischer Satz mit dem Begriff, der zum Aufruf passt |
 | Zahlen beim Agenten | die zwei neuen Sätze verschieben die Fallzahlen in `docs/54` Kriterium 4 und `PROJECT-STATE.md`, Abschnitt „Beweise" |
 
@@ -145,57 +147,112 @@ Der Musterfall für die Leitung steht schon im Repo: `mcp.rs:2200` prüft
 
 ## Dev plan
 
-Entwurf des Spec-Autors. Nach `CONTRIBUTING.md`, Schritt 3, gehört der Dev-Plan zu
-einem zweiten Autor.
+Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 
-**Stufe 0 — die zwei eingefrorenen Fixtures amortisieren (Freigabe des Betreibers)**
+1. **Stufe 0 — die zwei eingefrorenen Artefakte, datierter Akt (Freigabe liegt vor: 2026-11-23)**
+   `scripts/parity/expected/2-tools.txt` Zeile 61 — `browser_click` kommt in der Datei genau
+   einmal vor (`grep -c 'browser_click'` ⇒ 1), und der Parity-Fall 4 schickt
+   `{"selector":"a#video-title-link","bogus":1}`, bleibt also bei der Argument-Refusal; nur der
+   Satz wächst auf vier Namen. `scripts/parity/expected/1-initialize-and-tools-list.txt`
+   Zeile 5, `"name":"browser_click"` genau einmal — gemessen **gegen den Stand nach
+   `docs/59`**, nicht gegen die 8 062 von heute.
+   Proof: `--self-test` vorher 7/7; nach Stufe 2 `bash scripts/parity.sh --impl rust --check;
+   echo $?` ⇒ 7/7, 0. In beiden Artefakten ändert sich je eine Zeile, `# cases=39` bleibt.
+   **Stufe 0, 1 und 2 gehen in einem Auftrag:** dazwischen ist `--check` rot.
 
-- `2-tools.txt`, **Zeile 61** (Fall `# case=4` steht dreimal in der Datei): heute
-  ``browser_click takes only `selector`, `frame` and `tab`.``
-- `1-initialize-and-tools-list.txt`, Zeile 5: `tools/list` trägt das Schema.
-  Stand **vor `docs/59`**: 8 062 Zeichen; `docs/59` fasst dieselbe Zeile an.
+2. **Stufe 1 — Argumente, Schema, Beschreibung (`tools.rs`, eine Konstante in `texts.rs`)**
+   `CLICK_ARGUMENTS` (`:58`, Kommentar `:57`) bekommt `contains_text`; das Schema (`:153-176`)
+   verliert `selector` aus `required` (`:172-174`), bekommt das Property `contains_text`
+   (`:157-170`) und beschreibt die Kombination; die Typ-Prüfung kommt als
+   `has_declared_click_argument_types` neben `has_declared_inspect_argument_types`
+   (`:909-929`) und ersetzt die Einzelprüfung `:678-682`; `texts::CLICK_NEEDS_FILTER` in
+   `texts.rs` (nur die Konstante, neben `INSPECT_NEEDS_FILTER` `:115`); die
+   Argument-Refusal in `unexpected_arguments` (`:1235`) nennt vier Namen;
+   `BROWSER_CLICK_DESCRIPTION` (`:392-393`) sagt nicht mehr „Clicks the first element that
+   matches the CSS selector" — die einzige Stelle, an der der Agent `contains_text` vor dem
+   ersten Aufruf entdecken kann. `click_tool` (`:675-723`): Payload (`:701-706`) setzt `text`
+   **nur**, wenn `contains_text` gesetzt war — sonst brechen zwei bestehende Pins
+   (`:2200`, `:2284`), die `json!({ "selector": … })` byteweise vergleichen.
+   **Reihenfolge der Prüfungen, wie in `inspect_tool`** (`:787`/`:790`/`:795`): Typen
+   (`-32602`) → unbekannte Schlüssel (Refusal-Satz) → „kein Ziel" (`CLICK_NEEDS_FILTER`).
+   Nur so bleibt `{"selector":7}` bei `-32602` (`:2224`) und `{"selector":…,"x":1}` beim
+   Refusal-Satz (`:2263`), während `{}` den neuen Satz bekommt.
+   Proof: `cargo test --manifest-path bridge-rs/Cargo.toml --test mcp
+   mcp_toolsCallBrowserClick_withContainsText_shouldSendTextOnTheWire -- --exact` ⇒
+   `test result: ok. 1 passed`, dasselbe für `…withSelectorAndContainsText_shouldSendBoth`,
+   `…withoutAnyTarget_shouldSayClickNeedsFilter`, `…withAnEmptyContainsText_shouldSayClickNeedsFilter`,
+   `…toolsList_shouldDeclareContainsTextForClick` — **die Zeile zählt, nicht der Exit-Code:**
+   ein Filter ohne Treffer endet mit 0 und `0 passed`. Der alte Fall
+   `mcp_toolsCallBrowserClick_withoutAUsableSelector_…` (`:2214-2226`) wird zur Einzelprüfung
+   mit `{"selector": 7}` reduziert und behält `-32602`; der `{}`-Ast wandert in den neuen Fall.
+   Unverändert grün bleiben müssen `:2186-2211` (`:2200`), `:2272-2289` (`:2284`),
+   `:2244-2269` (`:2263`) und der Schema-Pin `:1075-1088`.
+   Kriterium 6: `awk 'NR==5' scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m`
+   ⇒ ≤ 8 500 — **die Beschreibungsänderung zählt gegen dasselbe Budget**, nach dem Edit messen.
 
-**Die Freigabe des Betreibers für beide Artefakte liegt vor (2026-11-23).**
+3. **Stufe 2 — Sätze und Abbildung (`texts.rs`, `failure.rs`)**
+   `texts.rs`: `CLICK_AMBIGUOUS` im gepinnten Wortlaut als eine Zeile (der Zeilenumbruch in
+   `## Ziel` 4 ist Typografie) plus die Deckel-Form „at least"; die zweite `NO_MATCH`-Form
+   neben `no_match` (`:97-99`). `failure.rs`: `CLICK_AMBIGUOUS_CODE` neben `NOT_CLICKABLE_CODE`
+   (`:38`); im `BROWSER_CLICK`-Zweig (`:124-137`) ein Arm für `text_ambiguous`
+   (`texts::click_ambiguous(term, matches, candidates, truncated)`) und die Wahl der
+   `no_match`-Form; `match_of(params)` als Gegenstück zu `selector_of` (`:250-258`) — es liest
+   den **Drahtschlüssel** `text`, und die Regel „beide gesetzt ⇒ Begriff gewinnt" steht nur im
+   `BROWSER_CLICK`-Zweig, damit `type` (`:144-150`) unberührt bleibt; `click_candidates_of`
+   als Zwilling von `frame_candidates_of` (`:377-387`) mit `CLICK_CANDIDATE_LIMIT = 5` neben
+   `FRAME_CANDIDATE_LIMIT` (`:66`), verbunden mit `", "` wie `frame_ambiguous_text` (`:368-374`).
+   Die Belege kommen als `details` an, weil der Hub das ganze `error`-Objekt durchreicht
+   (`hub.rs:618-621`) — dieselbe Form, die `error_frame_with` (`tests/mcp.rs:115-119`) baut.
+   Proof: `…withTextAmbiguous_shouldNameCountCandidatesAndAdvice` ⇒ `1 passed`;
+   `…withNoMatchForATerm_shouldNameTheTerm` ⇒ `1 passed`; `…withoutAnyTarget…` bleibt grün;
+   `cargo test --test texts -- --exact texts_shouldContainNoGermanUmlauts` ⇒ `1 passed`
+   (der Wächter deckt die zwei neuen Sätze ohne eigenen Fall). Die Deckel-Form hat keinen
+   eigenen Fall — sie wird im `text_ambiguous`-Fall mitgeprüft, ohne den Fall umzubenennen.
 
-**Stufe 0 bis 2 gehen in einem Auftrag:** zwischen Stufe 0 und Stufe 2 ist
-`--check` rot, weil die Fixture die neuen Sätze und das neue Schema trägt und der
-Code beides noch nicht liefert.
+4. **Stufe 3 — Anleitung und Doku**
+   `help.rs`, `CLICK`-Block (`:82-102`): Argument-Tabelle (`:85-91`) um `contains_text` und
+   „beides erlaubt", `## Pitfalls` (`:98-99`) um den exakten Vorrang und den Rat, `## Example`
+   (`:96`) mit einem Textklick. `docs/06`, `docs/53`, `docs/54`, `docs/README.md` (Status),
+   `docs/PROJECT-STATE.md` (Abschnitt „Beweise"); der Amendments-Abschnitt entfällt, die Spec
+   wird `active`. Die Fallzahlen in `docs/54` Kriterium 4 werden aus dem Lauf abgelesen:
+   `cargo test --manifest-path bridge-rs/Cargo.toml -- --test-threads=1 | grep -E '^test
+   result'` und `npm test | grep -E '^# (tests|pass) '`.
+   Proof: `npm run check; echo $?` ⇒ 0; `cargo clippy --manifest-path bridge-rs/Cargo.toml
+   --all-targets -- -D warnings` ⇒ sauber, in der CI-Form mit `--target` zweimal
+   (`.github/workflows/test.yml:45-46`); `grep -n '60-klick' docs/README.md` zeigt `active`.
 
-Beweis: `--self-test` vorher 7/7, nach Stufe 2 `--check` 7/7; in beiden Artefakten
-ändert sich je eine Zeile (`browser_click` kommt in jedem der zwei genau einmal
-vor, in den übrigen fünf null mal).
+**Was schiefgehen kann**
 
-**Stufe 1 — Argumente, Schema und Beschreibung (`tools.rs`)**
+- **Der Draht darf `text` nicht immer tragen.** `click_tool` baut den Payload von Hand
+  (`:701-706`); ein bedingungsloses `payload.insert("text", …)` macht zwei bestehende
+  Zusicherungen rot (`:2200`, `:2284`), ohne dass ein neuer Fall es merkt — der Fehler zeigt
+  sich als roter alter Fall, nicht als roter neuer.
+- **Die Reihenfolge der drei Prüfungen ist die halbe Änderung.** „kein Ziel" vor der
+  Schlüsselprüfung würde `{"x":1}` in `CLICK_NEEDS_FILTER` verwandeln und `:2263` rot machen;
+  „kein Ziel" vor der Typprüfung würde `{"selector":7}` zu einem Werkzeugfehler machen und
+  `:2224` brechen.
+- **Die zwei Sätze sind gepinnt.** `CLICK_UNEXPECTED_ARGUMENTS_TEXT` (`:722`) und der
+  Fixture-Satz (`2-tools.txt:61`) müssen zeichengleich sein; `texts.rs` ist englisch und
+  umlautfrei, sonst schlägt der Wächter zu.
+- **„at least" braucht einen Träger,** den keine der beiden Specs benennt: der Plan nimmt
+  `truncated` (dasselbe Wort wie in `inspect`) und liest es in `failure.rs` aus `details`.
+- **`no_match`-Form und `selector_of` teilen sich den Wortlaut.** `selector_of` druckt
+  `undefined` (`:250-258`); die Begriff-Form darf das nicht erben, sonst steht das Wort wieder
+  im Satz, das Kriterium 5 ausschließt.
 
-`CLICK_ARGUMENTS` bekommt `contains_text` (der Kommentar über der Liste, `:57`,
-zählt dann vier), das Schema verliert `selector` aus `required` und beschreibt die
-Kombination, die Typ-Prüfung kommt dazu. Der Payload bildet auf `text` ab (Ziel 2).
-Die Argument-Refusal in `unexpected_arguments` (`click` steht neben `:1236`/`:1239`)
-nennt vier Namen, und `BROWSER_CLICK_DESCRIPTION` (`:392`) sagt nicht mehr „Clicks
-the first element that matches the CSS selector" — das wäre nach dieser Spec
-falsch und ist die einzige Stelle, an der der Agent `contains_text` vor dem ersten
-Aufruf entdecken kann.
+**Reihenfolge und Abhängigkeiten**
 
-Beweis: Kriterien 1, 2, 6.
+Stufe 0 an Stufe 1 und 2 gebunden (ein Auftrag); Stufe 1 setzt `docs/59` Stufe 1 voraus (die
+Argumentliste und der Name), Stufe 2 setzt `docs/58` Stufen 2 und 3 voraus (Codes, `matches`,
+`candidates` als `ClickError.details`). Stufe 3 ist Doku und zuletzt. `--check` nie parallel zu
+einer Testsuite: der Lauf besitzt 18115/18116.
 
-**Stufe 2 — Sätze und Abbildung (`failure.rs`, `texts.rs`)**
+**Was der nächste Inkrement erbt**
 
-Zwei neue Sätze, eine zweite `NO_MATCH`-Form, zwei neue Arme im
-`BROWSER_CLICK`-Zweig. `no_match` wählt die Form nach dem Aufruf: Selektor oder
-Begriff; sind **beide** gesetzt, gewinnt der Begriff (`selector_of` bekommt ein
-`match_of`-Gegenstück, dieselbe Regel wie in `docs/58`).
-
-Beweis: Kriterien 3, 4, 5.
-
-**Stufe 3 — Anleitung und Doku**
-
-`help.rs`, `docs/06`, `docs/53`, `docs/54`, `docs/README.md`; der
-Amendments-Abschnitt entfällt, die Spec wird `active`. Die Fallzahlen in `docs/54`
-Kriterium 4 und `PROJECT-STATE.md`, Abschnitt „Beweise" werden nachgezogen.
-
-Beweis: `npm run check` ⇒ 0, und `grep -n '60-klick' docs/README.md` zeigt
-`active`.
-
+`docs/61` hängt am selben `BROWSER_CLICK`-Zweig in `failure.rs`. Ein Fehlerblock mit Feldern
+für alle Werkzeuge bleibt der in `## Bekannte Lücken` benannte eigene Zuwachs. Das
+Live-Kriterium 8 bleibt Betreiber-Messung, und `docs/58` Kriterium 8 misst dieselbe Seite von
+der anderen Seite der Naht.
 ## Touch boundary
 
 | erlaubt | nicht |

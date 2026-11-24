@@ -173,8 +173,8 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
    `{"contains_text":"Grey"}` klickt „Grey", ohne `text_ambiguous`. Beleg: der
    Fall `click_withAnExactMatchAndASubstringMatch_shouldClickTheExactOne` ⇒ `^ok`.
 3. **Die Kombination schränkt ein.** Fixture mit zwei Knöpfen „Kaufen", einer in
-   `div.korb` ⇒ `{"selector":"div.korb *","contains_text":"Kaufen"}` klickt den
-   einen. Beleg: der Fall ⇒ `^ok`.
+   `div.korb` ⇒ `{"selector":"div.korb > button","contains_text":"Kaufen"}` klickt den
+   einen (der Harness-Matcher trennt nur an `>`, siehe Dev-Plan). Beleg: der Fall ⇒ `^ok`.
 4. **Mehrdeutig heißt kein Klick.** Zwei Geschwister mit demselben Text ⇒
    `text_ambiguous` mit `matches: 2`, zwei Kandidaten, kein `click()`. Beleg: der
    Fall ⇒ `^ok`.
@@ -192,66 +192,118 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Dev plan
 
-Entwurf des Spec-Autors. Nach `CONTRIBUTING.md`, Schritt 3, gehört der Dev-Plan zu
-einem zweiten Autor.
+Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 
-**Stufe 1 — das Harness (`test/extension.test.js`)**
+1. **Stufe 1 — Testinfrastruktur (`test/extension.test.js`)**
+   Kein zweiter Baum neben `createInspectElement`: der Inspect-Realm hat schon alles, was die
+   Textsuche braucht — `children`, `parentNode`, `innerText`, ein Rect mit `x`/`y`, `disabled`,
+   `getAttribute` (`:9228-9278`), `document.querySelectorAll`/`documentElement`
+   (`:893-902`), `body.querySelectorAll` (`:9293-9303`) und `selectorForElement`-taugliche
+   Selektoren über `matchesSelector`. Der Klick-Realm hat davon nichts: `createClickElement`
+   (`:1300-1327`) kennt kein `innerText`, keine `children`, kein `parentNode`, `bodyOf`
+   liefert `createBodyStub` (`:1360-1381`), dessen `querySelectorAll` absichtlich wirft
+   (`:1373-1375`). Ein zweiter Baum wäre eine zweite Antwort auf eine Frage, die `docs/57`
+   gerade erst beantwortet hat.
+   Zu bauen: `click()` mit `clicks`-Zähler und `scrollIntoView`/`scrolls` auf
+   `createInspectElement` (dieselben zwei Zusätze, die `docs/56` Stufe 1 an
+   `createClickElement` macht); `createInspectBody` bekommt den Text der Seite
+   (`page.bodyText`), weil der dritte Schritt eines Klicks liest: `textOf`
+   (`page-agent.js:138-144`) fällt auf `withoutNonTextElements(body)`
+   (`:123-127`) zurück, das ruft `cloneNode(true)` — der Stub hat keins, und der Klick
+   endet als `read_failed`; ein Helfer `createTextClickPage({ children })` über
+   `createInspectPage` (`:9375-9387`) mit `url`/`title` aus `DEFAULT_CLICK_PAGE` (`:6824-6828`).
+   Unangetastet: `createClickElement`, `createBodyStub`, `bodyOf` (`:1392-1398`),
+   `createClickPage` (`:6838-6844`).
+   Proof: `npm test; echo $?` ⇒ 0 mit `^# fail 0`; die bestehenden `inspect_…`- und
+   `click_…`-Fälle und die `page.queries`-Zähler bleiben grün, weil die Änderung additiv ist.
+   Einen eigenen `^ok` hat diese Stufe nicht — der erste Fall, der sie benutzt, steht in
+   Stufe 3. Sie bleibt trotzdem getrennt, damit der Reviewer die Harness-Änderung ohne
+   Produktcode-Diff sieht.
 
-Ohne diese Stufe ist **kein** Fall der Tabelle lauffähig. Der Klick-Realm gibt
-`document.querySelectorAll` nur bei `page.dom === true` (`:893-902`) und
-`createClickPage` setzt das nicht (`:6838-6844`); `bodyOf` liefert für eine
-Klick-Seite `createBodyStub` (`:1360`), dessen `querySelectorAll` absichtlich
-wirft (`:1373-1375`). `createClickElement` (`:1300-1327`) hat kein `innerText`,
-kein `children`, kein `parentNode` und ein konstantes Rect ohne `x`/`y`.
+2. **Stufe 2 — die Suche und der Klick (`extension/page-agent.js`)**
+   `clickPageSource(selector, containsText, want)` (`:455-486`): `isAddressedFrame` bleibt die
+   erste Anweisung (`:459-461`); der Selektor-Pfad (`:463-481`) läuft nur, wenn ein Selektor
+   gesetzt ist; die Kandidaten sind `document.querySelectorAll(selector)` bei beiden Angaben,
+   sonst `body.querySelectorAll("*")` — dieselbe Menge und Reihenfolge wie in
+   `inspectPageSource` (`:817-822`), Deckel `CLICK_CANDIDATE_LIMIT = 5000` als eigene Konstante
+   im Schnipsel (Wert wie `bridge.js:260`, `## Bekannte Lücken`); Sichtbarkeit immer
+   (`isVisible`, kein `includeHidden`); dann `dropAncestorsOfMatches` aus `docs/57` Stufe 1
+   **nur** bei gesetztem, nicht leerem Begriff; dann der exakte Vorrang (`trim().toLowerCase()`
+   auf beiden Seiten, keine dritte Faltung); genau ein Treffer ⇒ `click()`, mehrere ⇒
+   `{ outcome: "text_ambiguous", matches, candidates, truncated }` mit bis zu fünf Selektoren
+   aus `selectorForElement(el, 200, 10)` — die zwei Zahlen sind Argumente an der Aufrufstelle,
+   kein Drahtfeld. Eintrag der Op-Tabelle (`:2105`):
+   `click: (args) => clickPageSource(args.selector, args.text ?? null, args.want ?? null)`.
+   Proof: dieselben Fälle wie Stufe 3, aber über `callPageAgentOp` (`:6515-6532`) — der helle
+   Weg ohne Bridge; er zeigt den Rückgabewert des Ops (`outcome`, `clicked`, `matches`,
+   `candidates`). `docs/56` Stufe 1 hat diesen Weg für `scrolled` verworfen, weil dort das Feld
+   die Bridge passieren muss; hier ist der Rückgabewert selbst die Behauptung.
 
-Also: `document.querySelectorAll`/`body.querySelectorAll` im Klick-Realm,
-`innerText`, `children` und `parentNode` für `createClickElement`, ein
-`createClickPage({ elements })` für den Baum der Fälle.
+3. **Stufe 3 — Argumente, Codes, Träger (`extension/bridge.js`)**
+   `clickRequestSelector` (`:2767-2773`) wird eine Prüfung über beide Argumente und gibt
+   `{ selector, text }` zurück; `MISSING_SELECTOR_MESSAGE` (`:281`) **bleibt**, `type` benutzt
+   sie (`:3084`), daneben kommt `MISSING_TARGET_MESSAGE`; `click_withASelectorThatIsNotAString…`
+   (`:7414`) bleibt grün, `click_withoutASelector…` (`:7399`) wird der „weder noch"-Fall.
+   `ClickError` (`:2728-2734`) bekommt `details` wie `ReadError` (`:1848-1855`), `clickErrorFor`
+   (`:2752-2760`) reicht sie durch — sonst erreichen `matches` und `candidates` die Bridge nie.
+   `clickOutcomeOf` (`:2959-2969`) hängt die drei Felder an den `ClickError`, das Paar aus
+   `docs/56` Stufe 1 bleibt. `text_ambiguous` in `CLICK_OUTCOMES` und `CLICK_REFUSAL_MESSAGES`
+   (`:505-510`) — ohne den Eintrag wirft `clickOutcomeOf` `click_failed`. `clickPageRequest`
+   (`:3028-3030`) schickt `text`.
+   Proof: die Fälle 1 bis 10 der Tabelle, je Name
+   `npm test | grep -cE '^ok [0-9]+ - <name>'` ⇒ 1; dazu der geänderte Pin
+   `click_andType_travelAsOpsAndCarryNoCode` (`:11150`, Zusicherung `:11176-11180`) mit
+   `args: { selector, text: null, want: null }`; `npm test; echo $?` ⇒ 0 mit `^# fail 0` und
+   `^# cancelled 0`.
+   **Stufe 1 bis 3 gehen in einem Auftrag:** `clickRequestSelector` weist einen Aufruf ohne
+   `selector` ab (`:2767-2772`), `clickPageRequest` schickt kein `text`, und `text_ambiguous`
+   fehlt in `CLICK_OUTCOMES` — jeder der zehn Fälle hängt an allen drei Stufen.
 
-Beweis: ein `func`-Lauf über den neuen Helfer, der `document.querySelectorAll`
-und `parentNode` im Klick-Realm zeigt. Die Fälle der Tabelle werden erst mit dem
-Sammel-Auftrag oben grün.
+4. **Stufe 4 — Doku**
+   `docs/06`, `docs/README.md` (Status), `docs/PROJECT-STATE.md` (Abschnitt „Beweise"), die
+   zwei Fallzahlen in `docs/54` Kriterium 4; der Amendments-Abschnitt entfällt, die Spec wird
+   `active`.
+   Proof: `npm run check; echo $?` ⇒ 0; `grep -n '58-klick' docs/README.md` zeigt `active`.
+   Kriterium 7: `cargo test --manifest-path bridge-rs/Cargo.toml -- --test-threads=1` ⇒
+   `test result: ok` mit `0 failed` (kein Rust geändert).
 
-**Stufen 1 bis 3 gehen in einem Auftrag.** Der Fall der Tabelle
-(`click_withContainsText_shouldClickTheInnermostMatchingElement`) hängt an der
-ganzen Kette: `clickRequestSelector` weist einen Aufruf ohne `selector` ab
-(`bridge.js:2767-2772`), `clickPageRequest` schickt kein `text` (`:3028-3030`), und
-`text_ambiguous` fehlt ohne Stufe 3 in `CLICK_OUTCOMES` (`:505`). Zwischenbeweis
-ohne Bridge: der `func`-Lauf der Seite.
+**Was schiefgehen kann**
 
-**Stufe 2 — die Suche und der Klick (`extension/page-agent.js`)**
+- **Kriterium 3 ist mit dem genannten Selektor nicht prüfbar.** `div.korb *` scheitert am
+  Matcher des Harness: `matchesSelector` trennt nur an `>` (`:9562`), und
+  `parseCompoundSelector` wirft bei einem Leerzeichen-Teil (`:9497-9513`) — die Seite antwortet
+  `invalid_selector`, nicht „ein Klick". Entweder schickt der Fall `div.korb > button` (dann
+  ist das Kriterium wörtlich nicht erfüllt) oder der Fall läuft im Klick-Realm mit dem
+  exakten Schlüssel in `page.elements` (`:1255-1259`). Das ist eine Entscheidung des
+  Betreibers, keine des Umsetzers.
+- **Der dritte Schritt liest.** Auf einem `dom: true`-Realm liefert `createInspectBody` heute
+  `innerText: ""` und `textContent: ""`; `withoutNonTextElements` (`:123-127`) ruft
+  `cloneNode` und der Klick endet als `read_failed`. Das ist der Grund für `page.bodyText` in
+  Stufe 1 und der wahrscheinlichste Stolperstein des Inkrements.
+- **`page.dom` schaltet mehr als `querySelectorAll`:** `bodyOf` (`:1393`) und `querySelectorIn`
+  (`:1274`) hängen an demselben Schalter. Die bestehenden Klick-Fälle dürfen ihn nicht
+  setzen, sonst verlieren sie ihren `page.elements`-Schlüssel.
+- **`matches` ist am Deckel eine Untergrenze,** und `docs/60` braucht „at least". Der Träger
+  dafür ist in keiner der beiden Specs benannt; der Plan nimmt `truncated` — dasselbe Wort,
+  das `inspect` schon für „count ist eine Untergrenze" führt (`page-agent.js:827-829`,
+  `:1158-1160`).
 
-`clickPageSource(selector, containsText, want)`: Sind beide gesetzt, erst den
-Selektor anwenden, dann die Textsuche darauf. Dann die Engste-Regel aus `docs/57`
-(die nur bei Textsuche greift), **dann** den exakten Vorrang, dann klicken. Mehr
-als ein Treffer ⇒ `text_ambiguous` mit Kandidaten; Deckel 5000, feste
-`textLimit`/`classLimit` im Schnipsel. Der Eintrag der Op-Tabelle (`:2105`) trägt
-das neue Argument.
+**Reihenfolge und Abhängigkeiten**
 
-Beweis: Fälle 1 bis 5 der Tabelle über den `func`-Runner (der `func`-Lauf sieht
-den Rückgabewert der Seite, ohne Bridge).
+Voraussetzungen, die im Baum liegen müssen, bevor Stufe 1 beginnt — alle drei sind heute
+nicht gebaut (`grep -rn 'offscreen_after_scroll\|scrolled\|dropAncestorsOfMatches' extension/
+test/` ⇒ nichts am 2026-11-23): `docs/59` Stufe 1 (Name `contains_text`), `docs/57` Stufe 1
+(`dropAncestorsOfMatches`), `docs/56` Stufe 1 (`scrolled`, `offscreen_after_scroll` und
+`innerWidth`/`innerHeight` im Realm — ohne die zwei Fensterzahlen liest die Lageprüfung
+`undefined`, Fall 8). Diese Spec baut keines der drei. Stufe 1 → 2 → 3 (ein Auftrag),
+Stufe 4 zuletzt.
 
-**Stufe 3 — Argumente und Codes (`extension/bridge.js`)**
+**Was der nächste Inkrement erbt**
 
-`clickRequestSelector` wird zu einer Prüfung über beide Argumente. `ClickError`
-bekommt `details` wie `ReadError`; `clickErrorFor` reicht sie durch.
-`text_ambiguous` wandert in `CLICK_OUTCOMES` und `CLICK_REFUSAL_MESSAGES`
-(`:505-510`) — ohne den Eintrag wirft `clickOutcomeOf` (`:2959-2969`)
-`click_failed`. Der leere Suchbegriff und „weder noch" bekommen ihren Satz neben
-`MISSING_SELECTOR_MESSAGE` (`:281`). `clickPageRequest` (`:3028-3030`) schickt
-`text` mit.
-
-Beweis: Fälle 4 bis 6 und die Belegfelder aus Fall 4.
-
-**Stufe 4 — die Doku**
-
-`docs/06`, `docs/README.md`; der Amendments-Abschnitt entfällt, die Spec wird
-`active`. Die Fallzahlen in `docs/54` Kriterium 4 und `PROJECT-STATE.md`, Abschnitt „Beweise"
-werden nachgezogen.
-
-Beweis: `npm run check` ⇒ 0 und `grep -n '58-klick' docs/README.md` zeigt
-`active`.
-
+`docs/60` bildet `text_ambiguous`, `no_match` mit Begriff und `ClickError.details` auf die
+MCP-Seite ab; ohne diese Spec gibt es dort nichts abzubilden. `docs/61` hängt am selben
+`clickErrorFor` (`:2752-2760`). Das Live-Kriterium 8 bleibt Betreiber-Messung; die
+Listen-Seiten-Grenze (`## Bekannte Lücken`) ist kein Arbeitsauftrag.
 ## Touch boundary
 
 | erlaubt | nicht |

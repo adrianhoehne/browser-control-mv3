@@ -119,8 +119,7 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 | `bridge-rs/tests/texts.rs` | `texts_shouldContainNoGermanUmlauts` | der Wächter aus `docs/54` deckt die geänderten Sätze |
 | `scripts/parity/expected/2-tools.txt` | Zeilen 63 und 67 | die Sätze nennen die neuen Namen (Stufe 0, mit Freigabe) |
 | `scripts/parity/expected/1-initialize-and-tools-list.txt` | Zeile 5 | `tools/list` trägt die neuen Schemata (Stufe 0, mit Freigabe) |
-| `scripts/parity/expected/2-tools.txt` | Zeilen 63 und 67 | die Sätze nennen die neuen Namen (Stufe 0, mit Freigabe) |
-| `scripts/parity/expected/1-initialize-and-tools-list.txt` | Zeile 5 | `tools/list` trägt die neuen Schemata (Stufe 0, mit Freigabe) |
+| `bridge-rs/tests/mcp.rs` | `help_forInspectAndType_shouldNameTheNewArguments` | die Anleitung (`help.rs`, Ziel 5) nennt `contains_text` und `typed_text` |
 
 ## Acceptance criteria
 
@@ -143,65 +142,98 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 5. **Die Liste bleibt klein.** `awk 'NR==5'
    scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m` ⇒ **höchstens
    8 500** (heute 8 062, Grenze aus `docs/53`).
-6. **Alles andere grün.** `npm run check` ⇒ 0, `cargo test` ⇒ `test result: ok`
+6. **Die Anleitung nennt die neuen Namen.** Beleg: der Fall
+   `help_forInspectAndType_shouldNameTheNewArguments` ⇒ `1 passed` (die Zeile zählt; ein
+   Filter ohne Treffer endet mit 0 und `0 passed`).
+7. **Alles andere grün.** `npm run check` ⇒ 0, `cargo test` ⇒ `test result: ok`
    mit `0 failed`,
    `bash scripts/parity.sh --impl rust --check` ⇒ 7/7 **nach** Stufe 0.
 
 ## Dev plan
 
-Entwurf des Spec-Autors. Nach `CONTRIBUTING.md`, Schritt 3, gehört der Dev-Plan zu
-einem zweiten Autor; die Stufen hier sind Vorschlag, nicht Abnahme.
+Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 
-**Stufe 0 — die zwei eingefrorenen Fixtures amortisieren (Freigabe des Betreibers)**
+1. **Stufe 0 — die zwei eingefrorenen Artefakte, datierter Akt (Freigabe liegt vor: 2026-11-23)**
+   `scripts/parity/expected/2-tools.txt` Zeile 63 (`browser_type takes only …`) und Zeile 67
+   (`browser_inspect takes only …`); `scripts/parity/expected/1-initialize-and-tools-list.txt`
+   Zeile 5 (`tools/list`: die zwei Schemata, `required` von `type`). Heute trägt Zeile 5
+   **8 062** Zeichen (`awk 'NR==5' … | wc -m`); nach der Umbenennung rund 8 077, Grenze 8 500
+   aus `docs/53`. In beiden Artefakten kommt jedes der zwei Werkzeuge genau einmal vor
+   (`grep -c 'browser_type'`, `grep -c 'browser_inspect'`), also ändern sich drei Zeilen —
+   kein Fall, keine Fallzahl, `# cases=39` bleibt.
+   Proof: `bash scripts/parity.sh --impl rust --self-test; echo $?` ⇒ 7/7, 0 (vorher).
+   **Stufe 0 und Stufe 1 gehen in einem Auftrag:** dazwischen ist `--check` rot, weil die
+   Fixture den neuen Namen schon trägt und der Code ihn noch nicht ausgibt.
 
-Zwei Artefakte ändern sich, beide `scripts/parity/expected/`:
+2. **Stufe 1 — Argumente, Schemata, Anleitungen (`bridge-rs/src/mcp/`)**
+   `tools.rs`: `TYPE_ARGUMENTS` (`:64`) und `INSPECT_ARGUMENTS` (`:66-73`, die Zeile `"text",`
+   ist `:68`); das `type`-Schema Property (`:186-188`) und `required` (`:201-204`), das
+   `inspect`-Schema Property (`:231-233`). Lesestellen: die Tupel-Prüfung in `type_tool`
+   (`:734-739`, `args.get("text")` ist `:736`), `payload.insert("text", …)` (`:758`)
+   **bleibt** — `text` ist der Drahtname; die Prüfung „mindestens ein Filter" (`:795`);
+   `has_declared_inspect_argument_types` (`:909-929`, die Typzeile `:916`; ihr Aufruf `:787`
+   bleibt wörtlich); `declared_keys_of(&args, &INSPECT_ARGUMENTS)` (`:799`) — der Name wandert
+   sonst wörtlich auf die Leitung, deshalb hier die Abbildung `contains_text` → `text` **in
+   deklarierter Reihenfolge** (die Pins `mcp.rs:2821` und `:2823` prüfen sie). Die zwei Sätze
+   in `unexpected_arguments` (`:1236` für `type`, Literal `:1239` für `inspect`).
+   `texts.rs`: nur `INSPECT_NEEDS_FILTER` (`:115`). `help.rs`: `TYPE` (`:104-127`, Tabelle
+   `:108-115`, Beispiel `:120`) und `INSPECT` (`:148-171`, Tabelle `:153-160`, Beispiel `:165`).
+   Mitwandern in `bridge-rs/tests/mcp.rs`: `TYPE_UNEXPECTED_ARGUMENTS_TEXT` (`:723`),
+   `INSPECT_NEEDS_FILTER_TEXT` (`:765`), `type_call` (`:477-483`), die Schemata-Pins
+   (`:1090-1110`, `:1123-1138`), die Aufrufe `:2391`, `:2426`, `:2446`, `:2469`, `:3333`.
+   Proof: `cargo test --manifest-path bridge-rs/Cargo.toml --test mcp
+   mcp_toolsCallBrowserInspect_withContainsText_shouldSendTextOnTheWire -- --exact` ⇒
+   `test result: ok. 1 passed`; dasselbe für `…BrowserType_withTypedText_shouldSendTextOnTheWire`,
+   `…Inspect_withAnUnknownArgument_shouldNameContainsText`,
+   `…Type_withAnUnknownArgument_shouldNameTypedText`,
+   `…Inspect_withoutAnyFilter_shouldSayContainsText`, `…toolsList_shouldDeclareContainsTextAndTypedText`
+   — **die Zeile zählt, nicht der Exit-Code:** ein Filter ohne Treffer endet mit 0 und
+   `0 passed`. Dazu unverändert grün: `mcp_toolsCallBrowserInspect_withAFrame_shouldPassTheSubstringInSchemaOrder`
+   (`:2794`, beweist die Draht-Reihenfolge) und `cargo test --test texts -- --exact
+   texts_shouldContainNoGermanUmlauts` ⇒ `1 passed`. Kriterium 4:
+   `grep -cE '^\s{4}"text",$' bridge-rs/src/mcp/tools.rs || true` ⇒ 0 (heute 1, Zeile 68).
+   Kriterium 5: `awk 'NR==5' scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m`
+   ⇒ ≤ 8 500. Kriterium 6: `bash scripts/parity.sh --impl rust --check; echo $?` ⇒ 7/7, 0 —
+   nie gleichzeitig mit einer Testsuite, der Lauf besitzt 18115/18116.
 
-- `2-tools.txt` Zeile 63 (`browser_type takes only …`) und Zeile 67
-  (`browser_inspect takes only …`).
-- `1-initialize-and-tools-list.txt` Zeile 5: die `tools/list`-Antwort trägt die
-  Schemata, also die Argumentnamen. Heute 8 062 Zeichen. Ohne diese Amendierung
-  ist Kriterium 5 nicht erreichbar und `--check` rot.
+3. **Stufe 2 — Doku**
+   `docs/07`, `docs/09`, `docs/53`, `docs/54`, `docs/README.md` (Status), `docs/PROJECT-STATE.md`
+   (Abschnitt „Beweise"); der Amendments-Abschnitt entfällt, die Spec wird `active`. Die
+   Textzahl in `docs/54` Kriterium 4 wird abgelesen, nicht gerechnet. `extension/**` bleibt
+   unangetastet: der Draht spricht weiter `text`, `sendInspect(socket, 2, { text: … })`
+   (`test/extension.test.js:10322`) bleibt stehen.
+   Proof: `npm test; echo $?` ⇒ 0 mit `^# fail 0` und `^# cancelled 0`; `npm run check; echo $?`
+   ⇒ 0; `grep -n '59-argumentnamen' docs/README.md` zeigt `active`.
 
-Das ist derselbe bewusste, datierte Akt wie in `docs/53`, Stufe 0 — nicht die
-Nebenwirkung eines Argumentbaus. **Die Freigabe des Betreibers liegt vor
-(2026-11-23).** **Stufe 0 und Stufe 1 gehen in einem Auftrag:**
-zwischen beiden ist `--check` rot, weil die Fixture den neuen Namen schon trägt
-und der Code ihn noch nicht ausgibt. Ein einzelner Commit für Stufe 0 ist nach
-`CONTRIBUTING.md` („no commit without green acceptance") nicht möglich.
+**Was schiefgehen kann**
 
-Beweis: `--self-test` vorher 7/7, nach Stufe 1 `--check` 7/7. Geändert haben sich
-ganz genau zwei Zeilen in `2-tools.txt` und eine in
-`1-initialize-and-tools-list.txt`.
+- **Die Abbildung fehlt.** Ohne Stufe 1, letzter Punkt, liest die Extension `request.text` als
+  `null` (`page-agent.js:831`), dann trifft **jedes** sichtbare Element (`:844`), und
+  `hub.rs:996` druckt `text=-`; die zwei Hub-Fälle (`tests/hub.rs:2179`, `:2307`) werden rot.
+- **Die Typ-Prüfung wird vergessen.** `:916` ist die einzige Stelle, die `{"contains_text":5}`
+  abfängt; ohne sie geht die Zahl in die Seite. `:787` bleibt unverändert, weil die Funktion
+  ihren eigenen Namen behält.
+- **`MISSING_SELECTOR_MESSAGE` wird mit umbenannt.** `bridge.js:3084` benutzt dieselbe Konstante
+  für `type`; sie steht in `extension/**`, also außerhalb der Touch boundary und außerhalb
+  dieses Inkrements. `help.rs` führt in der `TYPE`-Tabelle außerdem `enter`, während das
+  Argument `submit` heißt (`help.rs:110`, `tools.rs:189`) — eine bestehende Abweichung, die
+  diese Spec nicht entscheidet; wer sie behebt, tut es sichtbar und nicht als Nebenwirkung.
+- **Für `help.rs` gibt es kein Kriterium und keinen Fall** in `## Testing` — die Anleitung ist
+  nur durch `grep` belegt. Der Plan erfindet keinen Fall; fehlt einer, gehört er in die Spec.
 
-**Stufe 1 — Argumente, Schemata, Anleitungen (`bridge-rs/src/mcp/`)**
+**Reihenfolge und Abhängigkeiten**
 
-`tools.rs`:
+Stufe 0 hängt an Stufe 1 (ein Auftrag). Stufe 1 ist Voraussetzung für `docs/58` Stufe 2
+(Name `contains_text`) und für `docs/60` Stufe 1 (Argumentliste von `click`). `help.rs` ist
+derselbe `INSPECT`/`TYPE`-Block, den `docs/57` Stufe 2 anfasst: nacheinander im selben Baum,
+nie parallel. Stufe 2 ist reine Doku und hängt an nichts Späterem.
 
-- `TYPE_ARGUMENTS` und `INSPECT_ARGUMENTS` (`:58`, `:66-73`) und die zwei
-  JSON-Schemata.
-- Die vier Lesestellen: `args.get("text")` in `:736` (`type`), die Prüfung
-  `:795` (`INSPECT_NEEDS_FILTER`) und `:916`
-  (`has_declared_inspect_argument_types`, `:909-929`) — ohne die letzte prüft die
-  Bridge den Typ von `contains_text` nicht, und `{"contains_text":5}` geht in die
-  Seite.
-- `payload.insert("text", …)` in `:758` **bleibt**; die `inspect`-Payload-
-  Abbildung kommt neu dazu (Ziel 6).
-- Die zwei Sätze in `unexpected_arguments` (`:1230-1250`): `:1236` (`type`) und
-  `:1239` (`inspect`). Sie sind String-Literale in `tools.rs`, **nicht** in
-  `texts.rs`.
-- `help.rs`: die Anleitungen `INSPECT` und `TYPE`.
+**Was der nächste Inkrement erbt**
 
-`texts.rs`: nur `INSPECT_NEEDS_FILTER` (`:115`).
-
-Beweis: Kriterien 1 bis 5.
-
-**Stufe 2 — Doku**
-
-`docs/07`, `docs/09`, `docs/53`, `docs/54`, `docs/README.md`; der
-Amendments-Abschnitt entfällt, die Spec wird `active`.
-
-Beweis: Kriterium 5 und `npm run check`.
-
+`docs/58` baut den Textklick mit diesem Namen, `docs/60` die vierte Zeile der
+`browser_click`-Refusal; beide fassen Zeile 5 derselben Fixture an und brauchen je einen
+eigenen datierten Akt. Der Drahtname `text` bleibt dauerhaft doppeldeutig
+(`## Bekannte Lücken`) und wird in keinem der beiden Folge-Inkremente angefasst.
 ## Touch boundary
 
 | erlaubt | nicht |
