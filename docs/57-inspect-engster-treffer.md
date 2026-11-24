@@ -134,48 +134,98 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Dev plan
 
-Entwurf des Spec-Autors. Nach `CONTRIBUTING.md`, Schritt 3, gehört der Dev-Plan zu
-einem zweiten Autor.
+Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 
-**Stufe 1 — die Engste-Regel (`extension/page-agent.js`)**
+**Stufe 1 — Helfer, beide Quellen, Harness (`extension/page-agent.js`, `test/extension.test.js`)**
 
-`dropAncestorsOfMatches(elements)` liegt **auf Modulebene**, nicht in
-`inspectPageSource`: `docs/58` benutzt denselben Helfer für den Textklick. Der
-gemeinsame Scope ist die Fabrik, in der `describeElement` (`:33`) und
-`inspectPageSource` (`:730`) beide liegen; `:2105` ist nur der Eintrag der
-Op-Tabelle und wird oft falsch zitiert.
+`dropAncestorsOfMatches(hits)` auf der IIFE-Ebene (`:19`) — dort liegen
+`describeElement` (`:33`) und beide Quellen; `:2105` ist nur der Eintrag der
+Op-Tabelle. Der Helfer bekommt die Treffer des geprüften Fensters (höchstens
+`request.candidateLimit`, also `INSPECT_CANDIDATE_LIMIT` = 5000 aus `bridge.js:260`),
+bildet eine Menge daraus und gibt die Treffer zurück, die keinen Treffer unter sich
+haben.
 
-In `inspectPageSource` zwei Durchläufe statt einem: erst sammeln, dann Vorfahren
-markieren und verwerfen. Die Regel läuft nur, wenn ein Suchbegriff gesetzt und
-`includeHidden` falsch ist. Dieselbe Regel in `inspectShadowPageSource`
-(`:964-1060`), die ihre eigene Kopie von `textOf` und `described` hat.
+**Der Weg nach oben ist nicht nur `parentElement`.** An einer Schattengrenze ist
+`parentElement` `null` und `parentNode` die Wurzel, deren `host` weiterführt — genau
+so setzt es das Harness (`createShadowRoot`); ein Helfer, der nur `parentElement`
+liest, verliert jeden Vorfahren oberhalb des Hosts.
 
-**Der Fixture-Bauer faltet Kinder nicht.** `createInspectElement` setzt `:9255`
-`innerText: innerText ?? textContent` mit `textContent = ""` (`:9233`) und reicht
-`children` nur weiter, ohne den Text zu vererben. Deshalb hat kein bestehender
-Textfall je einen Vorfahren getroffen; die Vorfahren im neuen Fall tragen ihren
-Text ausdrücklich im `innerText`.
+- `inspectPageSource` (`:730`): die Schleife `:835-848` sammelt erst alle Treffer,
+  dann läuft die Regel, dann `count` und die Lieferung bis `request.limit`. Der
+  Regel-Zweig hängt an `needle !== null && needle !== "" && request.includeHidden
+  !== true`: der leere Suchbegriff ist gesetzt und passt auf alles, dort gilt die
+  Regel nicht; `includeHidden` schaltet sie ganz ab.
+- `inspectShadowPageSource` (`:964-1167`, Liefer-Schleife `:1139-1153`): dieselbe
+  Reihenfolge, `selectorOf(endpoint)` als Selektor. Der Eingang `:972`
+  (`segments.length === 1` → `inspectPageSource`) bleibt unverändert.
+- Kein zweiter `querySelectorAll`, keine zusätzliche Layout-Messung: `isVisible` und
+  `innerText` laufen wie heute einmal je geprüftem Kandidaten.
 
-Beweis: Kriterien 1 bis 3, Fälle 1 bis 6 der Tabelle.
+Harness: die Vorfahren der neuen Fälle tragen ihren Text im `innerText`, weil
+`createInspectElement` `:9255` `innerText: innerText ?? textContent` setzt und Kinder
+nicht faltet; ein Vorfahre ohne eigenes `innerText` trifft den Suchbegriff nicht.
+`createInspectFixture` (`:9398`) hat mit `listBox > nestedEntry` bereits eine
+Schachtelung — der Fall mit leerem Suchbegriff (`:10943`) hängt daran.
 
-**Stufe 2 — die Anleitung (`bridge-rs/src/mcp/help.rs`)**
+Fünf bestehende Fälle haben keine verschachtelten Treffer und bleiben grün:
+`:10314` (`count: 1`), `:10335` (drei Geschwister, `count: 3`), `:10356` (Deckel,
+Geschwister), `:10943` (leerer Suchbegriff, `count: 8`), `:10962` (`count` 1 und 2).
+Kein bestehender Fall verbindet `>>>` mit einem Suchbegriff — die Regel im
+Schatten-Zweig braucht deshalb einen eigenen Fall
+(`inspect_withAPiercingSelectorAndANeedle_shouldAnswerOnlyTheInnermost`), sonst ist
+sie unbelegt.
 
-Der Text von `browser_inspect` nennt die Regel und die zwei Ausnahmen.
+Beweis: die sechs Fälle der Tabelle; `:10943` wird dabei **nur umbenannt** und behält
+seine drei Assertions (`count: 8`, zwei geliefert, `truncated: true`) — es belegt
+dann beides, den leeren Suchbegriff und den Deckel. Je Name
+`grep -cE '^ok [0-9]+ - <name>'` ⇒ 1; `npm test; echo $?` ⇒ 0 mit `^# fail 0` und
+`^# cancelled 0`.
 
-Beweis: der neue Fall
-`mcp_toolsCallBrowserHelp_forInspect_shouldNameTheInnermostRule`. Der bestehende
-Abschnitts-Test aus `docs/53` prüft nur die sechs Überschriften und lässt falschen
-Text durch.
+**Stufe 2 — Anleitung (`bridge-rs/src/mcp/help.rs`, `bridge-rs/tests/mcp.rs`)**
 
-**Stufe 3 — die Doku**
+Der INSPECT-Block (`:148-171`): `## Pitfalls` (`:167-168`) nennt die Engste-Regel und
+die zwei Ausnahmen (`selector` allein, `includeHidden`). Neuer Fall
+`help_forInspect_shouldNameTheInnermostRule` — die Datei-Konvention ist `help_…`
+(drei Fälle bestehen so); `## Testing` nennt ihn `mcp_toolsCallBrowserHelp_…`.
 
-`docs/09` nachziehen, `docs/README.md` (Status), dieser Amendments-Abschnitt
-entfällt, die Spec wird `active`. Der neue `help`-Fall schiebt die Fallzahlen in
-`docs/54` Kriterium 4 (287 Fälle, 117 in `mcp.rs`) und `PROJECT-STATE.md:33-34`;
-beide werden hier nachgezogen.
+Beweis: `cargo test --manifest-path bridge-rs/Cargo.toml --test mcp
+help_forInspect_shouldNameTheInnermostRule -- --exact` ⇒ `test result: ok. 1 passed`
+(die Zeile zählt; ein Filter ohne Treffer endet mit 0 und `0 passed`), dazu
+`help_forEveryTool_shouldAnswerWithTheSixSections` grün — der prüft nur die sechs
+Überschriften und lässt falschen Text durch.
 
-Beweis: `npm run check` ⇒ 0, `grep -n '57-inspect' docs/README.md` zeigt `active`.
+**Stufe 3 — Doku**
 
+`docs/09` (`count`-Regel, Sonderfall leerer Suchbegriff, `selector` allein,
+`includeHidden`), `docs/53`, `docs/README.md` (Status), `docs/PROJECT-STATE.md`, Abschnitt „Beweise";
+der Amendments-Abschnitt entfällt, die Spec wird `active`. Die zwei Fallzahlen-Pins
+(`docs/54` Kriterium 4: 287 Fälle, 117 in `mcp.rs`, `npm test`) nennen die Zahl, die
+der Lauf in der Schlusszeile druckt — abgelesen, nicht gerechnet: `cargo test` zählt
+heute 117 in `mcp.rs`, in `test/extension.test.js` stehen 460 `test(`-Blöcke.
+
+Beweis: `npm run check; echo $?` ⇒ 0; `grep -n '57-inspect' docs/README.md` zeigt
+`active`; `bash scripts/parity.sh --impl rust --check; echo $?` ⇒ 7/7, 0.
+
+**Eingefrorene Artefakte: keiner.** Vergleich 2 antwortet aus der Fake-Extension
+(`inspectResultOf` reicht `count` und `elements` durch, `bridge.js:3335-3354`); die
+Regel läuft ausschließlich in der Seite, `2-tools.txt` (`# cases=39`) bleibt Zeile
+für Zeile gleich.
+
+**Was schiefgehen kann.** Der Helfer läuft über alle Treffer, also über höchstens
+5000 Elternketten — bei tiefer Verschachtelung ist das die teuerste Stelle dieser
+Spec (`## Bekannte Lücken`). Zweitens: ein Treffer oberhalb des Deckels bleibt in der
+Liste, weil sein Nachfahre nie geprüft wurde; `truncated: true` ist dann die einzige
+Warnung. Drittens: `help.rs` ist derselbe Block, den `docs/59` (Argumentnamen,
+`text` → `contains_text`) umschreibt — nacheinander im selben Baum, nie parallel.
+
+**Reihenfolge.** Stufe 1 → Stufe 2 → Stufe 3; Stufe 1 ist Voraussetzung für
+`docs/58` (Textklick) und teilt sich den Helfer mit ihm.
+
+**Was der nächste Inkrement erbt.** `docs/62` fügt `offscreen` in dieselben zwei
+`described`-Funktionen (`:788`, `:1040`) — es fasst damit dieselben Dateien an und
+folgt dieser Spec. `docs/58` benutzt `dropAncestorsOfMatches` für den Textklick.
+Ein hilfreicherer Satz bei 0 Treffern (`## Bekannte Lücken`, `contains_text` als
+Filter) bleibt offen.
 ## Touch boundary
 
 | erlaubt | nicht |

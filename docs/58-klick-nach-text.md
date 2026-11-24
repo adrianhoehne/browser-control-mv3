@@ -246,7 +246,7 @@ Beweis: Fälle 4 bis 6 und die Belegfelder aus Fall 4.
 **Stufe 4 — die Doku**
 
 `docs/06`, `docs/README.md`; der Amendments-Abschnitt entfällt, die Spec wird
-`active`. Die Fallzahlen in `docs/54` Kriterium 4 und `PROJECT-STATE.md:33-34`
+`active`. Die Fallzahlen in `docs/54` Kriterium 4 und `PROJECT-STATE.md`, Abschnitt „Beweise"
 werden nachgezogen.
 
 Beweis: `npm run check` ⇒ 0 und `grep -n '58-klick' docs/README.md` zeigt

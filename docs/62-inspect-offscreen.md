@@ -33,7 +33,7 @@ und `visibility` — die Lage nicht. `described` liefert `rect`, aber keine Deut
    Lage, und ein Element ohne Fläche hat keine. `visible: false` sagt bereits
    alles.
 4. Das Feld steht in **beiden** Quellen: `inspectPageSource` (`:730`) und
-   `inspectShadowPageSource` (`:964-1060`). Sonst liefert ein Schatten-Treffer eine
+   `inspectShadowPageSource` (`:964-1167`). Sonst liefert ein Schatten-Treffer eine
    andere Feldmenge als ein Dokument-Treffer — und
    `inspect_withAShadowHit_shouldDeliverTheSameFieldSetAsADocumentHit` (`:10921`)
    prüft genau das.
@@ -90,39 +90,91 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Dev plan
 
-Entwurf des Spec-Autors. Nach `CONTRIBUTING.md`, Schritt 3, gehört der Dev-Plan zu
-einem zweiten Autor.
+Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 
-**Stufe 1 — das Feld in beiden Quellen (`extension/page-agent.js`)**
+**Stufe 1 — Harness und das Feld in beiden Quellen**
 
-`described()` (`:788`) und seine Kopie im Schatten-Zweig (`:1040`) bekommen das
-Feld, berechnet aus dem schon vorhandenen `rect` und `window.innerWidth` /
-`window.innerHeight`. Keine zusätzliche Messung. Die zwei Kommentare „the eleven
-documented fields, and nothing else" (`:787`, `:1034`) werden auf zwölf gezogen.
+`test/extension.test.js:943` ist `const window = {}`; `innerWidth`/`innerHeight`
+kommen heute im ganzen Repo nicht vor. Die zwei Zahlen kommen dort hinein
+(`1024` × `768`) — falls `docs/56` sie schon eingeführt hat, entfällt der Teilschritt;
+er ist idempotent. `createInspectElement` braucht nichts: sein Rect-Default ist
+`{ x: 0, y: 0, width: 100, height: 20 }` (`:9237`), also immer gesetzt.
 
-**Das Harness braucht die zwei Zahlen.** `test/extension.test.js:943` ist
-`const window = {}`; `innerWidth`/`innerHeight` kommen heute im ganzen Repo nicht
-vor — sofern `docs/56` sie nicht schon eingeführt hat (dieselbe Stelle, die Kette
-ist `56` → `57` → `62`). Die Fixtures setzen `rect.x`/`rect.y`; ohne Werte wäre
-`x` `undefined` und `Math.round` lieferte `NaN`.
+`extension/page-agent.js`, `described` in beiden Quellen (`:788`, `:1040`):
+`const rect = rectOf(candidate)` **einmal**, dann `rect` und `offscreen` aus derselben
+Messung — keine zweite `getBoundingClientRect`. Prädikat: Fläche 0 ⇒ `false`;
+sonst `true`, wenn `rect.x + rect.width <= 0 || rect.y + rect.height <= 0 ||
+rect.x >= window.innerWidth || rect.y >= window.innerHeight`. Position im Objekt:
+hinter `visible`, vor `disabled`, in beiden Kopien gleich — sonst kippt `:10921`.
+Die zwei Kommentare „the eleven documented fields, and nothing else“ (`:787`,
+`:1034`) werden auf zwölf gezogen.
 
-Beweis: Kriterien 1 bis 4.
+Das Prädikat ist dieselbe Regel wie die Lageprüfung aus `docs/56`: es lebt auf der
+IIFE-Ebene (`:19`) und wird geteilt, nicht kopiert. Baut 62 zuerst, führt diese Spec
+es ein und `docs/56` benutzt es; baut 56 zuerst, umgekehrt. Eine Definition, zwei
+Aufrufer.
 
-**Stufe 2 — die Anleitung (`bridge-rs/src/mcp/help.rs`)**
+Tests: zwei neue Fälle der Tabelle; der Elf-Felder-Fall `:10199` (vollständiges
+`deepStrictEqual`) bekommt `offscreen: false` ins Literal, `:10921` ändert `length`
+11 → 12 (`:10940`). **Achtung beim Fläche-0-Fall:** `createInspectElement` liefert
+auch bei `display: "none"` ein Rect (`100 × 20`); der Fall setzt
+`rect: { x: 0, y: 0, width: 0, height: 0 }` ausdrücklich, sonst prüft er nichts.
 
-Ein Satz zu `offscreen` in der Anleitung von `browser_inspect`.
+Beweis: `inspect_withAnElementOutsideTheViewport_shouldSetOffscreenTrue` (`x = -9966`
+⇒ `true`, Element im Bild ⇒ `false`), `inspect_withAnElementWithoutArea_shouldSetOffscreenFalse`
+(⇒ `false`, `visible: false`), `inspect_withAShadowHit_shouldDeliverTheSameFieldSetAsADocumentHit`
+(⇒ `^ok`, zwölf Schlüssel). Je Name `grep -cE '^ok [0-9]+ - <name>'` ⇒ 1;
+`npm test; echo $?` ⇒ 0 mit `^# fail 0` und `^# cancelled 0`.
 
-Beweis: der neue Fall `mcp_toolsCallBrowserHelp_forInspect_shouldNameOffscreen`.
+**Stufe 2 — Anleitung (`bridge-rs/src/mcp/help.rs`, `bridge-rs/tests/mcp.rs`)**
 
-**Stufe 3 — die Doku**
+INSPECT-Block `:148-171`: die `## Returns`-Zeile (`:161-162`) bekommt `offscreen` in
+die Feldaufzählung. Sie listet heute nur acht der elf Felder (`index`, `ariaLabel`,
+`disabled` fehlen) — nachgezogen wird **nur** `offscreen`; die drei anderen bleiben
+eine Lücke und stehen unten. Neuer Fall `help_forInspect_shouldNameOffscreen` (die
+Datei-Konvention ist `help_…`; `## Testing` nennt ihn `mcp_toolsCallBrowserHelp_…`).
 
-`docs/09`, `docs/53`, `docs/README.md`; der Amendments-Abschnitt entfällt, die Spec
-wird `active`. Die drei neuen Fälle schieben die Zahlen in `docs/54` Kriterium 4
-(287 Fälle, 117 in `mcp.rs`, `npm test` ⇒ 547) und `PROJECT-STATE.md:33-34`; beide
-werden hier nachgezogen.
+Beweis: `cargo test --manifest-path bridge-rs/Cargo.toml --test mcp
+help_forInspect_shouldNameOffscreen -- --exact` ⇒ `test result: ok. 1 passed` — die
+Zeile zählt, ein Filter ohne Treffer endet mit 0 und `0 passed`.
 
-Beweis: `npm run check` ⇒ 0, `grep -n '62-inspect' docs/README.md` zeigt `active`.
+**Stufe 3 — Doku**
 
+`docs/09`: das Beispiel `:28`, der Feldkatalog `:36-45` und die Zeile
+„`rect` sagt, wo es ist — der Agent muss selbst schließen, ob es im Bild ist“
+(`:450`, `## Bekannte Lücken`) — sie ist ab jetzt falsch und wird ersetzt. Dazu
+`docs/53`, `docs/README.md` (Status), `docs/PROJECT-STATE.md`, Abschnitt „Beweise"; der
+Amendments-Abschnitt entfällt, die Spec wird `active`. Die zwei Fallzahlen-Pins
+(`docs/54` Kriterium 4) nennen die Zahl aus der Schlusszeile des Laufs.
+
+Beweis: `npm run check; echo $?` ⇒ 0; `grep -n '62-inspect' docs/README.md` zeigt
+`active`; `bash scripts/parity.sh --impl rust --check; echo $?` ⇒ 7/7, 0.
+
+**Eingefrorene Artefakte: keiner.** `2-tools.txt:14-15` (Fall 7, elf Felder ohne
+`offscreen`) bleibt grün, weil die Antwort aus der **Fake**-Extension kommt:
+`inspectResultOf` (`bridge.js:3335-3354`) reicht `entry.elements` unverändert durch
+und prüft nur `outcome`/`url`/`title`/`count`/`elements` (`isUsableInspectResult`,
+`:3357-3369`). `# cases=39`, `1-initialize-and-tools-list.txt` und
+`3-extension-failures.txt` bleiben unberührt.
+
+**Was schiefgehen kann.** Der Debug-Block prüft Elementfelder gegen eine Whitelist:
+`ELEMENT_FIELDS` (`hub.rs:1282-1302`) kennt `offscreen` nicht, das Feld erscheint im
+Debug-Log als `<unlisted field>` (`hub.rs:1352`). `hub.rs` steht in der Touch
+boundary auf *nicht* — es bleibt dabei; wer den Wert dort sehen will, braucht eine
+Zeile in der Tabelle und eine geöffnete Grenze. Zweitens ist `innerWidth` die
+Fensterbreite, nicht der sichtbare Ausschnitt (`## Bekannte Lücken`); jeder Realm hat
+sein eigenes `window`, also auch jeder iframe seine eigenen Zahlen.
+
+**Reihenfolge.** Stufe 1 → 2 → 3. `docs/57` (Teil a) ändert `count` und die
+Trefferliste, nicht die Feldmenge; die Feldset-Zusicherung `:10921` bleibt unter
+beiden Specs gültig, die Reihenfolge `57` → `62` ist trotzdem die einfachere. Dieselbe
+Datei faßt `docs/56` an (IIFE-Helfer, `window` im Realm) — nacheinander, nicht
+parallel.
+
+**Was der nächste Inkrement erbt.** Die `## Returns`-Zeile der `inspect`-Anleitung
+fehlen weiterhin `index`, `ariaLabel` und `disabled` (eigener, kleiner Anlass, `docs/53`
+prüft nur die sechs Überschriften). Das Feld sagt nichts über Verdeckung
+(`## Bekannte Lücken`) — ein eigenes Inkrement, wenn der Betreiber es will.
 ## Touch boundary
 
 | erlaubt | nicht |

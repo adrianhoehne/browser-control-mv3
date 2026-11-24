@@ -21,7 +21,7 @@ stattgefunden. Nur die Seite danach ließ sich nicht injizieren. Das Modell las 
 Antwort als Fehlschlag und wiederholte denselben Klick.
 
 **Ursache, im Code nachgesehen.** Nach dem Klick liest `clickAgentTab` die Seite
-(`extension/bridge.js:2796`). Scheitert das, reicht `clickErrorFor` (`:2752`) den
+(`extension/bridge.js:2998`, dort wird die Seite nach dem Klick gelesen). Scheitert das, reicht `clickErrorFor` (`:2752`) den
 `ReadError` unverändert durch: aus dem Erfolg wird `not_readable`.
 
 ## Ziel
@@ -99,41 +99,101 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
    `url` und `kind`.
 4. **`read` bleibt.** Der bestehende `read`-Fall bleibt grün, ohne Anpassung.
 5. **Die Bridge kennt den Code.**
-   `cargo test --test mcp click_withNotReadableAfterClick_shouldNameTheReturnPath`
-   ⇒ grün.
+   `cargo test --manifest-path bridge-rs/Cargo.toml --test mcp
+   click_withNotReadableAfterClick_shouldNameTheReturnPath -- --exact` ⇒ die Zeile
+   `test result: ok. 1 passed` (die Zeile zählt, nicht der Exit-Code).
 6. **Alles andere grün.** `npm run check` ⇒ 0, `cargo test` ⇒ `test result: ok`
    mit `0 failed`, `bash scripts/parity.sh --impl rust --check` ⇒ 7/7.
    `3-extension-failures.txt` bleibt unberührt (`# cases=2`).
 
 ## Dev plan
 
-Entwurf des Spec-Autors. Nach `CONTRIBUTING.md`, Schritt 3, gehört der Dev-Plan zu
-einem zweiten Autor.
+Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 
-**Stufe 1 — der Code in der Extension (`extension/bridge.js`)**
+**Stufe 1 — der neue Code in der Extension (`extension/bridge.js`, `test/extension.test.js`)**
 
-`clickErrorFor` fängt den `ReadError` mit `code === "not_readable"` nur im
-Klick-Pfad ab und ersetzt ihn durch `not_readable_after_click` samt Belegfeldern;
-die zwei bestehenden Node-Fälle wandern mit.
+- Konstanten: `NOT_READABLE_AFTER_CLICK_CODE` neben `NOT_READABLE_CODE` (`:113`);
+  keinen festen Satz neben `NOT_READABLE_MESSAGE` (`:278`), sondern einen Bauer —
+  der Satz trägt die Adresse: `notReadableAfterClickMessage(url)`, nach dem Muster
+  von `not_readable_with_url` in `texts.rs` (`:52-54`). Ohne Adresse der kürzere Satz.
+- `clickErrorFor` (`:2752-2760`): der `ReadError`-Arm (`:2758`) wird zweistufig —
+  `error.code === NOT_READABLE_CODE` ⇒ `{ code: NOT_READABLE_AFTER_CLICK_CODE,
+  message: …, ...error.details }`, sonst unverändert `readErrorFrame(error)`.
+  `readErrorFrame` (`:1865`) bleibt unangetastet, weil `read` (`readErrorFor`,
+  `:2023`) und `type` (`typeErrorFor`, `:3064`) sie mitbenutzen; dort wird nichts
+  geändert.
+- Kein Eintrag in `CLICK_OUTCOMES` (`:505`): der Code entsteht **nach** dem Klick,
+  nicht als Ausgang des Schnipsels.
 
-Beweis: Kriterien 1, 2, 3 und 4.
+Tests: die zwei bestehenden Fälle werden umbenannt und ziehen ihre Erwartung nach —
+`:7492` → `click_whenThePageCannotBeReadAfterTheClick_shouldAnswerNotReadableAfterClick`
+(erwartet `not_readable_after_click`), `:7528` →
+`click_whenThePageAfterTheClickIsUnreadable_shouldCarryTheAddressAndKind` (neuer Code,
+`url`/`kind` bleiben). Neu:
+`click_whenThePageAfterTheClickIsUnreadable_shouldAnswerNotReadableAfterClick` prüft
+den Satz (`The click went through`, `browser_navigate`). Der `read`-Fall `:4525` und
+der `type`-Fall `:8803` bleiben **ohne** Änderung — sie sind der Beweis, dass der
+Code auf den Klick-Pfad beschränkt ist.
 
-**Stufe 2 — Bridge und Texte**
+Beweis: je Name `grep -cE '^ok [0-9]+ - <name>'` ⇒ 1;
+`grep -c 'click_.*shouldPassNotReadableThrough' test/extension.test.js` ⇒ 0;
+`npm test; echo $?` ⇒ 0 mit `^# fail 0` und `^# cancelled 0`, darin
+`^ok [0-9]+ - read_whenTheTabIsCompleteAndTheInjectionIsRefused_shouldAnswerNotReadable`
+und `… - type_whenThePageCannotBeReadAfterTyping_shouldPassNotReadableThrough` je 1.
 
-`bridge-rs/src/mcp/failure.rs` (Konstante und Arm), `texts.rs` (der Satz),
-`bridge-rs/tests/mcp.rs`, `bridge-rs/tests/texts.rs`.
+**Stufe 2 — Bridge und Texte, unabhängig von Stufe 1**
 
-Beweis: Kriterium 5 (der Satz) und die Abbildung in der Bridge.
+`bridge-rs/src/mcp/failure.rs`: `NOT_READABLE_AFTER_CLICK_CODE` neben
+`NOT_READABLE_CODE` (`:28`), dazu im `BROWSER_CLICK`-Zweig (`:125-136`) ein Arm
+**vor** `page_failure_text` (`:135`), der `not_readable_after_click_text(details)`
+ruft. `page_failure_text` (`:239-250`) und `not_readable_text` (`:270-293`) bleiben
+unverändert — sonst bekäme `read` den neuen Satz.
+`texts.rs`: `NOT_READABLE_AFTER_CLICK` (kurz, ohne Adresse) und
+`not_readable_after_click_with_url(url)`, gebaut wie `NOT_READABLE` /
+`not_readable_with_url` (`:38-54`).
+`tests/mcp.rs`: `click_withNotReadableAfterClick_shouldNameTheReturnPath` — die
+Fake-Extension antwortet `error_frame_with("not_readable_after_click",
+json!({"url": …}))`, erwartet wird der gepinnte Satz mit `browser_navigate`.
+
+Beweis: `cargo test --manifest-path bridge-rs/Cargo.toml --test mcp
+click_withNotReadableAfterClick_shouldNameTheReturnPath -- --exact` ⇒ `test result:
+ok. 1 passed` — die Zeile zählt, nicht der Exit-Code: ein Filter ohne Treffer endet
+mit 0 und `0 passed`. Dazu `--test texts` ⇒ `1 passed`.
 
 **Stufe 3 — Anleitung und Doku**
 
-`bridge-rs/src/mcp/help.rs` (Anleitung `browser_click`), `docs/06`, `docs/15`,
-`docs/53`, `docs/54`, `docs/README.md`; der Amendments-Abschnitt entfällt, die
-Spec wird `active`. Die Fallzahlen in `docs/54` Kriterium 4 und
-`PROJECT-STATE.md:33-34` werden nachgezogen.
+`help.rs`, CLICK-Block `## Pitfalls` (`:98-99`) nennt den neuen Code und den Rückweg
+`browser_navigate`; `docs/06`, `docs/15` (die zwei Stellen, die im Klick-Pfad
+`not_readable` nennen), `docs/53`, `docs/54` (die Textliste), `docs/README.md`
+(Status), `docs/PROJECT-STATE.md`, Abschnitt „Beweise"; der Amendments-Abschnitt entfällt, die Spec
+wird `active`.
 
-Beweis: `npm run check` ⇒ 0, `grep -n '61-klick' docs/README.md` zeigt `active`.
+Beweis: `npm run check; echo $?` ⇒ 0; `grep -n '61-klick' docs/README.md` zeigt
+`active`; `help_forEveryTool_shouldAnswerWithTheSixSections` bleibt grün.
 
+**Eingefrorene Artefakte: keiner.** Vergleich 2 hat keinen Klick-Fall mit
+`not_readable` (`ERROR_FIXTURE_ARGS` in `scripts/parity.sh:259-273` nennt für `click`
+nur `error:no_match`), `tools/list` ändert sich nicht (kein neues Argument), und
+`3-extension-failures.txt` bleibt bei `# cases=2`. Eine Fixture-Amendierung mit
+Betreiberfreigabe ist nicht nötig.
+
+**Was schiefgehen kann.** Der Satz steht zweimal: als Extension-Meldung und in
+`texts.rs`. Beide sind gepinnt, ein Wortlaut-Drift macht genau einen der zwei Fälle
+rot — ein gemeinsamer Text ist nicht möglich, weil `extension/bridge.js` nicht aus
+Rust importiert werden kann (`docs/54` sagt dasselbe für die anderen Sätze). Zweitens
+trägt der Fehlerrahmen die Felder in der Reihenfolge `code, message, url, kind,
+contentType`; der Spread muss **hinter** `message` stehen, sonst überschreibt
+`details` den Code nicht, sondern nur die Meldung.
+
+**Reihenfolge.** Stufe 2 ist von Stufe 1 unabhängig (Fake-Antwort), Stufe 3 setzt
+beide voraus. Innerhalb von Stufe 1: Konstanten → `clickErrorFor` → Fälle. `docs/56`
+fasst dieselbe Datei an (`clickOutcomeOf`, `CLICK_OUTCOMES`, `clickErrorFor`) — die
+beiden Specs laufen nacheinander im selben Baum, nie parallel.
+
+**Was der nächste Inkrement erbt.** `docs/56` (Lage und `scrolled`) teilt sich
+`clickErrorFor`; ein Klick, der eine Datei herunterlädt, landet weiterhin hier
+(`## Bekannte Lücken`) und braucht eine eigene Spec, wenn er eigene Behandlung
+bekommen soll. `page_busy` und `no_agent_tab` bleiben im Klick-Pfad, wie sie sind.
 ## Touch boundary
 
 | erlaubt | nicht |

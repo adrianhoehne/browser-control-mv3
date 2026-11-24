@@ -74,7 +74,7 @@ kommt heute beim Agenten an:
 | keines / leer | `CLICK_NEEDS_FILTER`, `isError: true`, vor dem Draht |
 | `text_ambiguous` | englischer Satz mit Zahl, Kandidaten und Rat |
 | `no_match` | englischer Satz mit dem Begriff, der zum Aufruf passt |
-| Zahlen beim Agenten | die zwei neuen Sätze verschieben die Fallzahlen in `docs/54` Kriterium 4 und `PROJECT-STATE.md:33-34` |
+| Zahlen beim Agenten | die zwei neuen Sätze verschieben die Fallzahlen in `docs/54` Kriterium 4 und `PROJECT-STATE.md`, Abschnitt „Beweise" |
 
 ## Non-goals
 
@@ -191,7 +191,7 @@ Beweis: Kriterien 3, 4, 5.
 
 `help.rs`, `docs/06`, `docs/53`, `docs/54`, `docs/README.md`; der
 Amendments-Abschnitt entfällt, die Spec wird `active`. Die Fallzahlen in `docs/54`
-Kriterium 4 und `PROJECT-STATE.md:33-34` werden nachgezogen.
+Kriterium 4 und `PROJECT-STATE.md`, Abschnitt „Beweise" werden nachgezogen.
 
 Beweis: `npm run check` ⇒ 0, und `grep -n '60-klick' docs/README.md` zeigt
 `active`.
