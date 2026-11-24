@@ -104,6 +104,11 @@ er nicht — dafür sind die gepinnten Assertions da.
    und ist an beiden Stellen gepinnt.
    **Nachgezogen nach `docs/57`:** kein neuer Satz — die Anleitung von
    `browser_inspect` in `help.rs` nennt die Engste-Regel und ihre drei Ausnahmen.
+   **Nachgezogen nach `docs/58`:** drei Sätze im Klick-Pfad — „weder noch" bzw.
+   leerer Begriff, `text_ambiguous` (mit „at least" am Deckel), und die Begriff-Form
+   von `no_match` samt Deckel-Zeile. Sie stehen in `extension/bridge.js`; der
+   Umlaut-Wächter deckt sie nicht (er prüft `texts.rs`, `tools.rs`, `help.rs`), die
+   Node-Fälle pinnen sie.
 
 ## Dev plan
 

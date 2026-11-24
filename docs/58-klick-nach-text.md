@@ -1,6 +1,6 @@
 ---
 description: browser_click trifft künftig auch nach Text — contains_text allein oder zusammen mit selector, engster Treffer, exakter Treffer zuerst, bei Mehrdeutigkeit text_ambiguous mit Kandidaten; Teil a der Teilung vom 2026-11-23, alles in der Erweiterung.
-status: proposed
+status: active
 ---
 
 # Klicken nach Text, Teil a — die Erweiterung
@@ -143,14 +143,6 @@ und Felder auf die MCP-Seite ab.
 - **Keine Wirkungsprüfung.** Was nach dem Klick geprüft wird, steht in `docs/56`.
 - **Keine MCP-Arbeit.** Argumentliste, Schema, Sätze, Fixtures und Anleitung
   gehören `docs/60`.
-
-## Amendments to previous spec docs
-
-- **`docs/06-klicken.md`**: `selector` ist nicht mehr Pflicht; `contains_text`
-  kommt dazu, auch zusammen mit `selector`; `text_ambiguous` und
-  `offscreen_after_scroll` sind neue Fehler; die Antwort trägt `scrolled`.
-
-Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Testing
 
@@ -377,3 +369,11 @@ Befunde der Runden 1 bis 3 sind eingearbeitet; die Runde-Protokolle stehen in
   Feldwert die gezählte Zahl bleibt. Und ein `no_match` am Deckel trägt
   `truncated: true` samt Satz, dass die Suche dort endete — sonst behauptet die
   Antwort „nichts gefunden", obwohl Kandidaten nie gelesen wurden.
+
+- **2026-11-23, Stufe 4 nachgezogen, Spec `active`.** `docs/06` nennt `selector`
+  oder `contains_text`, den neuen Fehler `text_ambiguous` mit seinen Belegen und die
+  Begriff-Form von `no_match` samt Deckel. `docs/54` trägt die drei neuen Sätze mit
+  Datum und sagt, dass der Umlaut-Wächter sie nicht deckt (sie stehen in
+  `extension/bridge.js`) — die Node-Fälle pinnen sie. `docs/53` braucht keine
+  Änderung: es beschreibt das Verfahren der Anleitung, nicht ihren Inhalt.
+  Fallzahlen abgelesen: `cargo test` 296 (126 in `mcp.rs`), `npm test` 574.

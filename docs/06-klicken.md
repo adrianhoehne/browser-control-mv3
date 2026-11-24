@@ -94,8 +94,18 @@ Antwort:
 - **unbekanntes Argument**: `isError` mit „browser_click takes only `selector`, `frame` and `tab`."
   (Tabelle je Werkzeug, wie bei `browser_navigate`; englisch seit `docs/54`).
 - **`invalid_selector`**: `isError`, „The selector is invalid: <selektor>."
-- **`no_match`**: `isError`, „No element matches: <selektor>."
+- **`no_match`**: `isError`, „No element matches: <selektor>." Bei einem Textklick
+  nennt der Satz den Begriff; endete die Suche am Kandidatendeckel, trägt die
+  Antwort zusätzlich `truncated: true`.
+- **`text_ambiguous`** (neu in `docs/58`): `isError`, mehr als ein Element trifft den
+  Begriff. Belege: `matches` (Zahl), `candidates` (bis fünf Selektoren),
+  `truncated`; am Deckel sagt der Satz „at least". **Kein** Klick.
+- **`invalid_params` ohne Ziel**: weder `selector` noch `contains_text`, oder ein
+  leerer Suchbegriff. Der Satz nennt beide Namen."
 - **`not_clickable`**: `isError`, „The element is not visible or is disabled: <selektor>."
+- **`selector` oder `contains_text`** (seit `docs/58`): mindestens eines, beide
+  zusammen schränken ein (Selektor **und** Text). Ein leerer Selektor neben einem
+  Begriff zählt als „nicht gesetzt".
 - **`offscreen_after_scroll`** (neu in `docs/56`): `isError`, „The element stays outside
   the viewport after scrolling: <selektor>." — **kein** Klick. Die Prüfung läuft
   **nach** `not_clickable`: ein Element ohne Fläche wird nicht gescrollt.
