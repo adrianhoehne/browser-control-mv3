@@ -99,7 +99,8 @@ Antwort:
   Antwort zusätzlich `truncated: true`.
 - **`text_ambiguous`** (neu in `docs/58`): `isError`, mehr als ein Element trifft den
   Begriff. Belege: `matches` (Zahl), `candidates` (bis fünf Selektoren),
-  `truncated`; am Deckel sagt der Satz „at least". **Kein** Klick.
+  `truncated`; am Deckel sagt der Satz „at least". **Kein** Klick. Die Brücke baut
+  daraus den englischen Satz mit Zahl, Kandidaten und Rat (`docs/60`).
 - **`invalid_params` ohne Ziel**: weder `selector` noch `contains_text`, oder ein
   leerer Suchbegriff. Der Satz nennt beide Namen."
 - **`not_clickable`**: `isError`, „The element is not visible or is disabled: <selektor>."

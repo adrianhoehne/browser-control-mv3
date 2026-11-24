@@ -1,6 +1,6 @@
 ---
 description: Die MCP-Naht des Textklicks — contains_text im Schema, die Leitung bleibt text, CLICK_NEEDS_FILTER vor dem Draht, text_ambiguous und no_match als englische Sätze, zwei eingefrorene Fixtures; Teil b der Teilung vom 2026-11-23.
-status: proposed
+status: active
 ---
 
 # Klicken nach Text, Teil b — die MCP-Naht
@@ -85,19 +85,6 @@ kommt heute beim Agenten an:
 - **Keine Felder im Fehlerblock.** Ein Werkzeugfehler bleibt ein Textblock.
 - **Kein neues Werkzeug.**
 - **Keine Änderung an `inspect`, `type` oder `read`.**
-
-## Amendments to previous spec docs
-
-- **`docs/06-klicken.md`**: die Argument-Refusal nennt vier Namen; `text_ambiguous`
-  ist ein Fehler der Bridge; `no_match` nennt den Begriff.
-- **`docs/54-refusals-englisch.md`**: drei Sätze kommen hinzu (`CLICK_NEEDS_FILTER`,
-  `CLICK_AMBIGUOUS`, die zweite `NO_MATCH`-Form), einer ändert sich (die
-  Argumentliste von `browser_click`).
-- **`docs/53-browser-help.md`**: die Anleitung von `browser_click` in
-  `bridge-rs/src/mcp/help.rs` bekommt `contains_text`, den exakten Vorrang und
-  einen Punkt unter „Pitfalls".
-
-Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Testing
 
@@ -313,3 +300,15 @@ Nach `CONTRIBUTING.md`, Schritt 4, öffnet erst ein `✅ Ship it` die Umsetzung.
 - **2026-11-23, Absprache.** Der Betreiber hat Ziel und Abnahmekriterien dieser
   Spec abgestimmt (`CONTRIBUTING.md`, Schritt 2). Der Bau kann beginnen, sobald
   der Dev-Plan von einem zweiten Autor geprüft ist.
+
+- **2026-11-23, Stufe 3 nachgezogen, Spec `active`.** `docs/06` sagt, dass die Brücke
+  aus `text_ambiguous` den englischen Satz baut. `docs/54` trägt die drei Sätze der
+  MCP-Seite mit Datum; der Umlaut-Wächter deckt sie, weil sie in `texts.rs` stehen.
+  `docs/53` braucht keine Änderung: es beschreibt das Verfahren der Anleitung, die
+  Anleitung selbst steht in `help.rs`. Die Werkzeugliste misst 8221 Zeichen (Grenze
+  8500). Fallzahlen abgelesen: `cargo test` 303 (133 in `mcp.rs`), `npm test` 575.
+- **2026-11-23, Drahtname korrigiert (Befund beim Bau).** Die Erweiterung las den
+  Begriff aus `contains_text`, obwohl `docs/58` „ein Name auf der Leitung" zusichert
+  und diese Spec `text` schickt. Behoben in `8e662af`: `clickRequestSelector` liest
+  `params.text`, die Erweiterungs-Tests senden `text`, und ein Fall hält fest, dass
+  der MCP-Name auf dem Draht abgelehnt wird.

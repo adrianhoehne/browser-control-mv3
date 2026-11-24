@@ -109,6 +109,10 @@ er nicht — dafür sind die gepinnten Assertions da.
    von `no_match` samt Deckel-Zeile. Sie stehen in `extension/bridge.js`; der
    Umlaut-Wächter deckt sie nicht (er prüft `texts.rs`, `tools.rs`, `help.rs`), die
    Node-Fälle pinnen sie.
+   **Nachgezogen nach `docs/60`:** dieselben drei Fälle noch einmal auf der
+   MCP-Seite — `CLICK_NEEDS_FILTER`, `click_ambiguous(term, matches, candidates,
+   truncated)` mit „at least" am Deckel, und die Begriff-Form von `no_match`. Sie
+   stehen in `texts.rs`, sind umlautfrei und gepinnt; der Wächter deckt sie.
 
 ## Dev plan
 
