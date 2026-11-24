@@ -58,12 +58,16 @@ fand die Elemente über `innerText` — die Suche nach Text funktioniert seit
 4. **Genau ein Treffer:** klicken. Der Klick geht auf den engsten Treffer; das
    Sprudeln zum umgebenden Knopf ist die Regel, nicht die Ausnahme.
 5. **Mehr als ein Treffer:** `text_ambiguous`, **kein** Klick, mit den Belegen
-   `matches` (Zahl) und `candidates` (bis fünf Selektoren).
+   `matches` (Zahl) und `candidates` (bis fünf Selektoren). Bei erreichtem
+   Kandidatendeckel sagt der Satz „at least N"; der Feldwert bleibt die gezählte
+   Zahl, der Satz macht daraus eine Untergrenze.
 6. **Kein Treffer:** `no_match`. Der Satz nennt den Begriff, wenn nur
    `contains_text` gesetzt war, und den Selektor, wenn `selector` gesetzt war. Sind
    **beide** gesetzt, gewinnt der Begriff. Die bestehende Konstante
    `NO_MATCH_MESSAGE` (`bridge.js:284`) bleibt für den Selektor-Fall unverändert;
-   die Begriff-Form kommt dazu.
+   die Begriff-Form kommt dazu. **Ist der Deckel erreicht, trägt die Antwort
+   zusätzlich `truncated: true`**, und der Satz sagt, dass die Suche dort endete:
+   Hinter dem Deckel kann ein Treffer liegen.
 7. Die Lageprüfung aus `docs/56` gilt unverändert: heranscrollen, neu messen,
    notfalls `offscreen_after_scroll`.
 8. Weder `selector` noch `contains_text`: `invalid_params`. Ein **leerer**
@@ -161,6 +165,9 @@ Nach der Umsetzung wird dieser Abschnitt entfernt.
 | `test/extension.test.js` | `click_withoutContainsTextAndWithoutSelector_shouldAnswerInvalidParams` | weder noch ⇒ `invalid_params` |
 | `test/extension.test.js` | `click_withContainsTextOnAnElementOutsideTheViewport_shouldStillRefuseOffscreenAfterScroll` | Textklick und Lageprüfung greifen zusammen |
 | `test/extension.test.js` | `click_withContainsTextInAFrame_shouldRespectTheFrameFilter` | `frame` gilt auch für den Textklick |
+| `test/extension.test.js` | `click_withMoreCandidatesThanTheCap_shouldAnswerTextAmbiguousAndNotClick` | am Deckel wird nicht geklickt, auch bei genau einem Treffer: `text_ambiguous`, `matches: 1`, `truncated: true`, Satz „at least" |
+| `test/extension.test.js` | `click_withMoreCandidatesThanTheCapAndNoMatch_shouldAnswerNoMatchWithTruncated` | kein Treffer vor dem Deckel: `no_match` mit `truncated: true` und dem Satz über das Deckel-Ende |
+| `test/extension.test.js` | `click_withABlankSelectorAndAContainsText_shouldClickByTheTermAlone` | ein leerer Selektor neben einem Begriff zählt als „nicht gesetzt" |
 | `test/extension.test.js` | `click_andType_travelAsOpsAndCarryNoCode` (bestehend, `:11174-11179`) | die Klick-Nachricht trägt jetzt ein drittes Feld `text`; bei einem Selektor-Klick ist es `null` |
 
 ## Acceptance criteria
@@ -364,3 +371,9 @@ Befunde der Runden 1 bis 3 sind eingearbeitet; die Runde-Protokolle stehen in
 - **2026-11-23, Absprache.** Der Betreiber hat Ziel und Abnahmekriterien dieser
   Spec abgestimmt (`CONTRIBUTING.md`, Schritt 2). Der Bau kann beginnen, sobald
   der Dev-Plan von einem zweiten Autor geprüft ist.
+
+- **2026-11-23, Deckelpfad präzisiert (Code-Review).** Zwei Regeln, die der Text
+  vorher nicht trug: Bei erreichtem Deckel sagt der Satz „at least N", weil der
+  Feldwert die gezählte Zahl bleibt. Und ein `no_match` am Deckel trägt
+  `truncated: true` samt Satz, dass die Suche dort endete — sonst behauptet die
+  Antwort „nichts gefunden", obwohl Kandidaten nie gelesen wurden.

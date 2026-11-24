@@ -6868,6 +6868,32 @@ function createClickPage({ element, ...overrides } = {}) {
 }
 
 /**
+ * The invented page of a *text* click — the inspect realm, with the click page's address
+ * and title.
+ *
+ * A text click needs the tree `createInspectPage` builds: `children`, `parentNode`,
+ * `innerText`, a real `querySelectorAll` and the matcher behind it. That is no second
+ * tree next to the click realm — a `createClickPage` names its page by one selector key
+ * and cannot be searched at all, which is exactly why spec 58 reuses the inspect realm
+ * instead of growing a third one.
+ *
+ * `bodyText` is the text the read behind a click answers (`createInspectBody` hands it
+ * to the body's copy); `children` is the page tree a case searches.
+ */
+function createTextClickPage({ children = [], bodyText = "" } = {}) {
+  // On the page `createInspectPage` returns, not on a copy of it: the body it built
+  // closes over *that* object, and a spread copy would hand a page whose `bodyText`
+  // nobody reads.
+  const page = createInspectPage({
+    children,
+    title: DEFAULT_CLICK_PAGE.title,
+    url: DEFAULT_CLICK_PAGE.url,
+  });
+  page.bodyText = bodyText;
+  return page;
+}
+
+/**
  * The click path with an injection that can be steered per case.
  *
  * A click runs *three* snippets now — click, settle, read — and the fixture answers
@@ -6988,7 +7014,8 @@ test("click_withAnEmptySelector_shouldAskThePageInsteadOfRefusing", async () => 
   await sendClick(socket, 2, { selector: "" });
 
   // THEN every string reaches the page, the empty one included — only a missing or
-  // non-string selector is decided in the extension:
+  // non-string selector is decided in the extension, and a blank one beside a term, where
+  // it narrows nothing (that case has its own test).
   assert.equal(responsesById(socket).get(2).error.code, "invalid_selector");
   assert.equal(tabs.scriptCalls.length, 1);
 });
@@ -7520,18 +7547,27 @@ test("click_onATabThatOnlyShowsAnAboutAddress_shouldAnswerEmptyUrlAndTitle", asy
   assert.equal(answer.result.text, "");
 });
 
-test("click_withoutASelector_shouldAnswerInvalidParamsAndInjectNothing", async () => {
+test("click_withoutContainsTextAndWithoutSelector_shouldAnswerInvalidParams", async () => {
   // GIVEN a stored agent tab and a page that could be clicked:
-  const tabs = createClickTabs();
+  const page = createTextClickPage({
+    children: [createInspectElement({ tagName: "BUTTON", innerText: "Kaufen" })],
+  });
+  const tabs = createClickTabs({ page });
   const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
 
-  // WHEN the request carries no selector at all,
+  // WHEN the request names its target neither by selector nor by text — the "weder
+  // noch" case since spec 58,
   await sendClick(socket, 2, {});
 
-  // THEN it is a parameter mistake of the caller, decided before any injection:
+  // THEN it is a parameter mistake of the caller, decided before any injection, and
+  // the sentence names the argument a click needs (`contains_text` next to `selector`):
   const answer = responsesById(socket).get(2);
   assert.equal(answer.ok, false);
   assert.equal(answer.error.code, "invalid_params");
+  assert.ok(
+    answer.error.message.includes("selector") && answer.error.message.includes("contains_text"),
+    `the refusal must name both arguments, got: ${answer.error.message}`,
+  );
   assert.deepStrictEqual(tabs.scriptCalls, []);
 });
 
@@ -8195,6 +8231,348 @@ test("click_withoutFrame_shouldAddressTheMainFrameOnly", async () => {
   assert.equal(tabs.channel.calls[2].message.args.want, null);
   assert.equal(tabs.channel.calls[2].message.args.offset, 0);
   assert.equal(tabs.channel.calls[2].message.args.maxChars, TEXT_LIMIT);
+});
+
+/* ------------------------------------------------------ click: text (spec 58) */
+
+/**
+ * One `click` op through the real dispatcher, on the page realm `callPageAgentOp` builds
+ * — the bright path without the bridge.
+ *
+ * Spec 58's stages 2 and 3 are one increment, so some cases read the *bridge's* answer
+ * (the code, the sentence, the error frame) and others read the *page's* answer: the
+ * outcome, how many hits there were, which selectors they are. The page-side answer is
+ * the claim about the search, and it is the one a bridge-level case would only see
+ * through three more layers.
+ */
+function clickByText(page, args) {
+  return callPageAgentOp(page, "click", {
+    selector: args.selector ?? null,
+    text: args.text ?? null,
+    want: args.want ?? null,
+  });
+}
+
+test("click_withContainsText_shouldClickTheInnermostMatchingElement", async () => {
+  // GIVEN a page where button, div and span all carry "Kaufen" — the container reads the
+  // text of what is below it, which is how a real `innerText` behaves and the only way
+  // this case can ask the innermost rule anything (`createInspectElement` does not fold
+  // children, so the fixture has to say it, as in spec 57):
+  const label = createInspectElement({ tagName: "SPAN", className: "label", innerText: "Kaufen" });
+  const buy = createInspectElement({
+    tagName: "BUTTON",
+    className: "buy",
+    innerText: "Kaufen",
+    children: [label],
+  });
+  const list = createInspectElement({
+    tagName: "DIV",
+    id: "page",
+    innerText: "Kaufen",
+    children: [buy],
+  });
+  const page = createTextClickPage({ children: [list], bodyText: "Erfundene Produktseite" });
+  const tabs = createSettlingClickTabs(page);
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the bridge clicks by text alone,
+  await sendClick(socket, 2, { contains_text: "kaufen" });
+  await settleAsyncWork();
+
+  // THEN exactly one element was clicked, and it is the innermost one — the click on
+  // "kaufen" (lower case, part of the term's whole point) reaches the span:
+  assert.equal(label.clicks, 1, "the innermost hit is clicked exactly once");
+  assert.equal(buy.clicks, 0, "the button around it must not be clicked");
+  assert.equal(list.clicks, 0, "the container must not be clicked");
+
+  // ... the answer names it, and it is the whole answer of a click plus the read behind
+  // it — a page text nobody wrote would have ended the call as `read_failed`,
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.clicked, "span.label");
+  assert.equal(answer.result.text, "Erfundene Produktseite");
+  assert.equal(answer.result.url, DEFAULT_CLICK_PAGE.url);
+
+  // ... and the term reached the page under its wire name `text`, next to a `selector`
+  // that stays `null`.
+  assert.deepStrictEqual(inThisRealm(tabs.channel.calls[0].message.args), {
+    selector: null,
+    text: "kaufen",
+    want: null,
+  });
+});
+
+test("click_withAnExactMatchAndASubstringMatch_shouldClickTheExactOne", async () => {
+  // GIVEN a page where "Grey" is one button and "Grey Blue" another:
+  const exact = createInspectElement({ tagName: "BUTTON", id: "grau", innerText: "Grey" });
+  const longer = createInspectElement({ tagName: "BUTTON", id: "grau-blau", innerText: "Grey Blue" });
+  const page = createTextClickPage({ children: [exact, longer] });
+
+  // WHEN the term is the exact text of the first one,
+  const { value: outcome } = await clickByText(page, { text: "Grey" });
+
+  // THEN the exact hit wins over the substring hit — no `text_ambiguous`, because the
+  // caller said exactly which of the two it means:
+  assert.equal(outcome.outcome, "clicked");
+  assert.equal(outcome.clicked, "button#grau");
+  assert.equal(exact.clicks, 1);
+  assert.equal(longer.clicks, 0);
+});
+
+test("click_withSelectorAndContainsText_shouldClickOnlyWhatBothMatch", async () => {
+  // GIVEN two buttons with the same text, one of them inside `div.korb`:
+  const inCart = createInspectElement({ tagName: "BUTTON", id: "im-korb", innerText: "Kaufen" });
+  const cart = createInspectElement({ tagName: "DIV", className: "korb", children: [inCart] });
+  const elsewhere = createInspectElement({ tagName: "BUTTON", id: "woanders", innerText: "Kaufen" });
+  const page = createTextClickPage({ children: [cart, elsewhere] });
+
+  // WHEN selector and term are given together,
+  const { value: outcome } = await clickByText(page, {
+    selector: "div.korb > button",
+    text: "Kaufen",
+  });
+
+  // THEN the selector narrowed the set and the term filtered it: the one button both
+  // match was clicked, the other one not. One query, the whole selector — the text
+  // search never asked for every element of the body:
+  assert.equal(outcome.outcome, "clicked");
+  assert.equal(outcome.clicked, "button#im-korb");
+  assert.equal(inCart.clicks, 1);
+  assert.equal(elsewhere.clicks, 0);
+  assert.deepStrictEqual(inThisRealm(page.queries), ["div.korb > button"]);
+});
+
+test("click_withABlankSelectorAndAContainsText_shouldClickByTheTermAlone", async () => {
+  // GIVEN one button carrying the term, and a caller that sends a selector of nothing but
+  // whitespace next to it — the shape a model produces when it has no selector at all:
+  const button = createInspectElement({ tagName: "BUTTON", innerText: "Kaufen" });
+  const page = createTextClickPage({ children: [button], bodyText: "Erfundene Produktseite" });
+  const tabs = createSettlingClickTabs(page);
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the bridge clicks together with that blank selector,
+  await sendClick(socket, 2, { selector: "   ", contains_text: "Kaufen" });
+  await settleAsyncWork();
+
+  // THEN the blank selector narrows nothing and never reaches the page: `querySelector("")`
+  // throws, so the page would answer `invalid_selector` for a call whose target the term
+  // already names. It travels as "not set" and the term alone decides (spec 58, 1: the
+  // selector *may* narrow):
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, true);
+  assert.equal(answer.result.clicked, "button");
+  assert.equal(button.clicks, 1);
+  assert.deepStrictEqual(inThisRealm(tabs.channel.calls[0].message.args), {
+    selector: null,
+    text: "Kaufen",
+    want: null,
+  });
+});
+
+test("click_withTwoMatchesAndNoExactOne_shouldAnswerTextAmbiguousAndNotClick", async () => {
+  // GIVEN two siblings with the very same text, and no hit that is exactly the term:
+  const first = createInspectElement({ tagName: "SPAN", id: "eins", innerText: "In den Einkaufswagen" });
+  const second = createInspectElement({ tagName: "SPAN", id: "zwei", innerText: "In den Einkaufswagen" });
+  const row = createInspectElement({ tagName: "DIV", className: "reihe", children: [first, second] });
+  const page = createTextClickPage({ children: [row] });
+  const tabs = createClickTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the bridge clicks by that text,
+  await sendClick(socket, 2, { contains_text: "In den Einkaufswagen" });
+
+  // THEN it refuses instead of guessing — a wrong click is the most expensive mistake
+  // this project knows — and the refusal carries the evidence:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "text_ambiguous");
+  assert.equal(answer.error.matches, 2);
+  assert.deepStrictEqual(inThisRealm(answer.error.candidates), ["span#eins", "span#zwei"]);
+  assert.equal(answer.error.truncated, false);
+
+  // ... neither was clicked,
+  assert.equal(first.clicks, 0);
+  assert.equal(second.clicks, 0);
+
+  // ... and the click never reached its wait or its read: the refusal is the answer.
+  assert.deepStrictEqual(tabs.channel.ops(), ["click"]);
+});
+
+test("click_withMoreCandidatesThanTheCap_shouldAnswerTextAmbiguousAndNotClick", async () => {
+  // GIVEN one candidate more than the click snippet examines — five thousand are looked
+  // at, the last one never is, and a second hit could sit behind it. The 5001 is written
+  // out on purpose: the click cap is a literal of its own snippet and is deliberately
+  // decoupled from `INSPECT_CANDIDATE_LIMIT` (spec 58, `## Bekannte Lücken`), so a case
+  // that read the inspect constant would stop testing this cap the moment the two drift.
+  const children = [];
+  for (let position = 0; position < 5001; position += 1) {
+    children.push(
+      createInspectElement({
+        tagName: "P",
+        id: position === 42 ? "treffer" : `eintrag-${position}`,
+        innerText: position === 42 ? "Erfundener Treffer" : `Erfundener Eintrag ${position}`,
+      }),
+    );
+  }
+  const page = createTextClickPage({ children });
+  const tabs = createClickTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the term finds exactly one hit among the examined five thousand,
+  await sendClick(socket, 2, { contains_text: "Erfundener Treffer" });
+
+  // THEN it refuses instead of clicking: the count of a run that stopped early is a
+  // lower bound, and a lower bound cannot say "this is the only target" — the second hit
+  // may be in the part nobody read (spec 58, `## Der Vertrag`):
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "text_ambiguous");
+  assert.equal(answer.error.matches, 1);
+  assert.equal(answer.error.truncated, true);
+  assert.deepStrictEqual(inThisRealm(answer.error.candidates), ["p#treffer"]);
+
+  // ... and the sentence turns the counted 1 into the floor it really is (spec 58,
+  // `## Ziel`, 5): "more than one" would be a lie about a run that saw exactly one hit.
+  assert.equal(answer.error.message, "At least 1 element matches this text.");
+
+  // ... and nothing was clicked: a click out of an aborted run is exactly the
+  // wrong-target mistake the refusal exists for.
+  assert.equal(page.elements.reduce((sum, element) => sum + element.clicks, 0), 0);
+  assert.deepStrictEqual(tabs.channel.ops(), ["click"]);
+});
+
+test("click_withMoreCandidatesThanTheCapAndNoMatch_shouldAnswerNoMatchWithTruncated", async () => {
+  // GIVEN the shape of the case above with the term behind the cap instead of inside
+  // it: five thousand candidates are examined, the 5001st — the only one carrying
+  // "Hinter dem Deckel" — is never read.
+  const children = [];
+  for (let position = 0; position < 5001; position += 1) {
+    children.push(
+      createInspectElement({
+        tagName: "P",
+        id: position === 5000 ? "hinter-dem-deckel" : `eintrag-${position}`,
+        innerText: position === 5000 ? "Hinter dem Deckel" : `Erfundener Eintrag ${position}`,
+      }),
+    );
+  }
+  const page = createTextClickPage({ children });
+  const tabs = createClickTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the term stands only there,
+  await sendClick(socket, 2, { contains_text: "Hinter dem Deckel" });
+
+  // THEN the answer is `no_match` — but not the absolute "nothing matches": the search
+  // stopped at the cap and never read the rest of the list, so the frame carries
+  // `truncated: true` and the sentence says where the search ended (spec 58,
+  // `## Ziel`, 6). Without the field the caller would read a wrong absolute.
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "no_match");
+  assert.equal(answer.error.truncated, true);
+  assert.ok(
+    answer.error.message.includes("Hinter dem Deckel"),
+    `the refusal must name the term, got: ${answer.error.message}`,
+  );
+  assert.ok(
+    answer.error.message.includes("candidate cap"),
+    `the refusal must say that the search ended at the cap, got: ${answer.error.message}`,
+  );
+
+  // ... and it is a refusal: nothing was clicked, and the click never reached its wait
+  // or its read.
+  assert.equal(page.elements.reduce((sum, element) => sum + element.clicks, 0), 0);
+  assert.deepStrictEqual(tabs.channel.ops(), ["click"]);
+});
+
+test("click_withContainsTextThatMatchesNothing_shouldAnswerNoMatchWithTheTerm", async () => {
+  // GIVEN a page whose text is known and the term is not in it:
+  const page = createTextClickPage({
+    children: [createInspectElement({ tagName: "BUTTON", innerText: "Kaufen" })],
+    bodyText: "Erfundene Produktseite",
+  });
+  const tabs = createClickTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN nothing matches,
+  await sendClick(socket, 2, { contains_text: "gibtsnicht" });
+
+  // THEN the answer names the term the caller searched for — and never `undefined`,
+  // which is what a sentence built from the wrong field would say:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "no_match");
+  assert.ok(
+    answer.error.message.includes("gibtsnicht"),
+    `the refusal must name the term, got: ${answer.error.message}`,
+  );
+  assert.equal(answer.error.message.includes("undefined"), false);
+  assert.deepStrictEqual(tabs.channel.ops(), ["click"]);
+});
+
+test("click_withAnEmptyContainsText_shouldAnswerInvalidParamsAndNotClick", async () => {
+  // GIVEN a page where an empty term would match every visible element:
+  const button = createInspectElement({ tagName: "BUTTON", innerText: "Kaufen" });
+  const page = createTextClickPage({ children: [button] });
+  const tabs = createClickTabs({ page });
+  const { socket } = await connectedBackground({ tabs, settings: STORED_TAB_SETTINGS });
+
+  // WHEN the term is present but empty — a click target without text is none,
+  await sendClick(socket, 2, { contains_text: "" });
+
+  // THEN it is the same refusal as naming no target at all, and nothing was injected
+  // or clicked:
+  const answer = responsesById(socket).get(2);
+  assert.equal(answer.ok, false);
+  assert.equal(answer.error.code, "invalid_params");
+  assert.equal(answer.error.message.includes("contains_text"), true);
+  assert.equal(button.clicks, 0);
+  assert.deepStrictEqual(tabs.scriptCalls, []);
+});
+
+test("click_withContainsTextOnAnElementOutsideTheViewport_shouldStillRefuseOffscreenAfterScroll", async () => {
+  // GIVEN a button the reader cannot see — far left, the shape of the Amazon
+  // keyboard-shortcut menu — and a page where scrolling does not help:
+  const farLeft = createInspectElement({
+    tagName: "BUTTON",
+    id: "weit-links",
+    innerText: "Menü",
+    rect: { x: -9966, y: 10, width: 100, height: 20 },
+    scrollBringsIntoView: false,
+  });
+  const page = createTextClickPage({ children: [farLeft] });
+
+  // WHEN the text click finds it,
+  const { value: outcome } = await clickByText(page, { text: "Menü" });
+
+  // THEN the position check of spec 56 still applies to a text target: it was scrolled
+  // to once, measured again, and refused — never clicked blind:
+  assert.equal(outcome.outcome, "offscreen_after_scroll");
+  assert.equal(farLeft.scrolls, 1);
+  assert.deepStrictEqual(inThisRealm(farLeft.scrollOptions), [
+    { block: "center", inline: "center", behavior: "instant" },
+  ]);
+  assert.equal(farLeft.clicks, 0);
+});
+
+test("click_withContainsTextInAFrame_shouldRespectTheFrameFilter", async () => {
+  // GIVEN a page carrying the term, addressed through a frame substring it does not
+  // have:
+  const button = createInspectElement({ tagName: "BUTTON", innerText: "Kaufen" });
+  const page = createTextClickPage({ children: [button] });
+
+  // WHEN the text click runs in that frame,
+  const { value: outcome } = await clickByText(page, {
+    text: "Kaufen",
+    want: "https://anderer-rahmen.example/",
+  });
+
+  // THEN the frame filter is the first statement, for the text click exactly as for the
+  // selector click: the marker, the frame's own address, no query and no click.
+  assert.equal(outcome.outcome, "not_the_frame");
+  assert.equal(outcome.href, DEFAULT_CLICK_PAGE.url);
+  assert.equal(button.clicks, 0);
+  assert.deepStrictEqual(inThisRealm(page.queries), []);
 });
 
 /* ------------------------------------------------------------------- type */
@@ -9480,6 +9858,15 @@ const UNSUPPORTED_SELECTOR = 'a[href*="x"]';
  * element for a normal child, a root node at the top of a shadow tree, where
  * `parentElement` stays `null` as in the real DOM. `root` is the root node the element
  * lives in — `null` for the document tree, the `ShadowRoot` for a shadow tree.
+ *
+ * `click()` and `scrollIntoView()` are the two behaviours a click needs since specs 56
+ * and 58, and they are the ones `createClickElement` already carries: the same
+ * `clicks`/`scrolls` counters, the same `scrollOptions` log, the same
+ * `scrollBringsIntoView: false` for the page where scrolling does not help, and the same
+ * `onClick` hook for a fixture that simulates what the click does to the page. A text
+ * click runs in *this* realm — its search needs `children`, `parentNode`, `innerText`
+ * and a real `querySelectorAll` — so the counters have to be here and not only in the
+ * older fixture. `onClick` is additive: without it `click()` only counts.
  */
 function createInspectElement({
   tagName = "DIV",
@@ -9497,6 +9884,8 @@ function createInspectElement({
   shadowRoot = null,
   parentNode = null,
   root = null,
+  scrollBringsIntoView = true,
+  onClick = () => {},
 } = {}) {
   const element = {
     nodeType: 1,
@@ -9514,10 +9903,29 @@ function createInspectElement({
     parentNode,
     root,
     parentElement: null,
+    // The two counters of a click: neither says what the snippet *meant*, only what it
+    // did. A refused target keeps `clicks === 0`, and a target under the fold keeps a
+    // `scrolls` of 1 with the options the snippet passed.
+    clicks: 0,
+    scrolls: 0,
+    scrollOptions: [],
     // `getAttribute("class")` answers a string while `className` may not (an SVG
     // element carries an object there), which is why the snippet reads the attribute.
     getAttribute: (name) => (name === "class" ? className || null : attributes[name] ?? null),
     getBoundingClientRect: () => ({ ...rect }),
+    scrollIntoView(options) {
+      element.scrolls += 1;
+      element.scrollOptions.push(options);
+      if (scrollBringsIntoView === false) return;
+      // The one thing scrolling does here: the target ends up where the visible area
+      // starts, which is what the second measurement then reads.
+      rect.x = 0;
+      rect.y = 0;
+    },
+    click() {
+      element.clicks += 1;
+      onClick();
+    },
   };
   // The root's `host` is the element carrying it — the back reference
   // `element.shadowRoot.host` of the real DOM, and the only way up from a root.
@@ -9545,6 +9953,13 @@ function descendantsOf(element) {
  * its candidates exactly there, and the method goes through `matchesSelector` so that
  * a fixture cannot be searched with a selector the matcher does not really check.
  * Built once, because two bodies would break the identity the round trip depends on.
+ *
+ * `page.bodyText` is the text a *read* behind a click sees. The click itself never
+ * reads text — but a text click is always followed by one, and `readPageSource`'s
+ * `textOf` falls back to `withoutNonTextElements(body)` for the body: that calls
+ * `cloneNode(true)` and reads the copy's `textContent`. A body without a copy ends the
+ * whole click as `read_failed`, which is what a plain inspect page (no `bodyText`) gets
+ * — the honest answer of a fixture whose text nobody wrote.
  */
 function createInspectBody(page) {
   if (page.body === undefined) {
@@ -9553,6 +9968,13 @@ function createInspectBody(page) {
       page.queries.push(selector);
       return descendantsOf(body).filter((candidate) => matchesSelector(page, candidate, selector));
     };
+    // A copy with the page text and nothing to strip: this realm's elements carry no
+    // script, style or noscript children to remove. Read lazily, so a fixture may set
+    // `bodyText` after `createInspectPage` built the body.
+    body.cloneNode = () => ({
+      textContent: page.bodyText ?? "",
+      querySelectorAll: () => [],
+    });
     page.body = body;
   }
   return page.body;
@@ -11710,11 +12132,12 @@ test("click_andType_travelAsOpsAndCarryNoCode", async () => {
     );
   }
 
-  // ... the click sent its selector and the frame filter, and nothing else,
+  // ... the click sent its selector, its (absent) term and the frame filter, and
+  // nothing else,
   assert.deepStrictEqual(inThisRealm(clickTabs.channel.calls[0].message), {
     callId: clickTabs.channel.calls[0].message.callId,
     op: "click",
-    args: { selector: DEFAULT_CLICK_SELECTOR, want: null },
+    args: { selector: DEFAULT_CLICK_SELECTOR, text: null, want: null },
   });
 
   // ... the typing sent the whole request as plain JSON plus the filter, the password
@@ -11729,8 +12152,10 @@ test("click_andType_travelAsOpsAndCarryNoCode", async () => {
     want: null,
   });
 
-  // ... and the selector builder of `inspect` is in neither op — it belongs to that
-  // tool's own snippet and would be dead weight in the page agent's click and type.
+  // ... and no message names the selector builder: `selectorForElement` is code *inside*
+  // the inspect and click snippets (the text click builds its `candidates` with it), not a
+  // wire field, so it may reach the page as source but never as an argument — that is what
+  // this loop pins.
   for (const call of [...clickTabs.channel.calls, ...typeTabs.channel.calls]) {
     assert.equal(JSON.stringify(call.message.args).includes("selectorForElement"), false);
   }

@@ -285,9 +285,29 @@
   const PAGE_BUSY_MESSAGE = "The page is still loading.";
   const READ_FAILED_MESSAGE = "The result of the injection was unusable.";
   const MISSING_SELECTOR_MESSAGE = "click needs a selector as a string.";
+  // The sibling of the sentence above, for a click that names its target neither by
+  // selector nor by text: since spec 58 a click may aim by text alone, so "no selector"
+  // is only a mistake when there is no term either. `type` keeps
+  // `MISSING_SELECTOR_MESSAGE` — it has no text search.
+  const MISSING_TARGET_MESSAGE = "click needs a selector or a contains_text as a string.";
   const SUPERSEDED_MESSAGE = "A newer call replaced this one.";
   const INVALID_SELECTOR_MESSAGE = "The selector is invalid.";
   const NO_MATCH_MESSAGE = "No element matches this selector.";
+  // The sentence for `no_match` when the search was carried by a term (spec 58,
+  // `## Ziel`, 6). `noMatchMessageFor` completes it with the term; the plain selector
+  // refusal above stays what it always was.
+  const NO_TEXT_MATCH_MESSAGE = "No element matches this text: ";
+  // The refusal of a text search that found more than one target. The evidence — how
+  // many, and up to five selectors — rides in the error frame's `details`. This is the
+  // sentence of an uncapped run; one that stopped at the candidate cap says "at least
+  // N" instead, because its count is a lower bound (`textAmbiguousMessageFor`, spec 58,
+  // `## Ziel`, 5).
+  const TEXT_AMBIGUOUS_MESSAGE = "More than one element matches this text.";
+  // The tail of a `no_match` whose run stopped at the candidate cap: the search never
+  // read the whole candidate list, so a match may lie behind the cap (spec 58,
+  // `## Ziel`, 6).
+  const NO_TEXT_MATCH_AT_CAP_MESSAGE =
+    "The search stopped at the candidate cap — a match may lie beyond it.";
   const NOT_CLICKABLE_MESSAGE = "The element is not visible or is disabled.";
   // The fourth refusal reason, and a code of its own: `not_clickable` keeps its three
   // reasons, and the code carries the new one (`docs/56`, `## Warum ein eigener Code`).
@@ -517,12 +537,14 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     "no_match",
     "not_clickable",
     "offscreen_after_scroll",
+    "text_ambiguous",
   ];
   const CLICK_REFUSAL_MESSAGES = Object.freeze({
     invalid_selector: INVALID_SELECTOR_MESSAGE,
     no_match: NO_MATCH_MESSAGE,
     not_clickable: NOT_CLICKABLE_MESSAGE,
     offscreen_after_scroll: OFFSCREEN_AFTER_SCROLL_MESSAGE,
+    text_ambiguous: TEXT_AMBIGUOUS_MESSAGE,
   });
 
   // The same shape for `type`. `type_failed` sits in the refusal list because the
@@ -2740,12 +2762,20 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
 
   /* ------------------------------------------------------------------ click */
 
-  /** Same contract as `NavigateError` and `ReadError`: the code rides along. */
+  /**
+   * Same contract as `NavigateError` and `ReadError`: the code rides along.
+   *
+   * `details` are the optional extra fields of the error frame, exactly as on
+   * `ReadError`: a `text_ambiguous` needs `matches`, `candidates` and `truncated`, and
+   * without this carrier they would never reach the caller (spec 58). Every other
+   * `ClickError` is built without them, so its frame is the old two-field one.
+   */
   class ClickError extends Error {
-    constructor(code, message) {
+    constructor(code, message, details = {}) {
       super(message);
       this.name = "ClickError";
       this.code = code;
+      this.details = details;
     }
   }
 
@@ -2798,7 +2828,11 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * first injection fails there, and nothing went through (`docs/61`).
    */
   function clickErrorFor(error, { clicked = false } = {}) {
-    if (error instanceof ClickError) return { code: error.code, message: error.message };
+    // The spread carries `matches`/`candidates`/`truncated` of a `text_ambiguous` and
+    // adds nothing for every other `ClickError`, whose `details` is the empty object.
+    if (error instanceof ClickError) {
+      return { code: error.code, message: error.message, ...error.details };
+    }
     // The filter's verdict, with its `frames`/`candidates` details. Without this line the
     // `frame_not_found` of the settle wait would arrive as `click_failed` — and the wait is
     // exactly where a click loses its frame (spec 26).
@@ -2826,16 +2860,43 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
   }
 
   /**
-   * The selector, checked as little as possible: every string goes into the page,
-   * where `querySelector` decides what it means — the empty one included. Only a
-   * missing or non-string argument is a decision of ours.
+   * The target of a click, checked over both arguments: `{ selector, text }`.
+   *
+   * A click names its target by `selector`, by `contains_text` or by both — at least one
+   * of them, and each one as a string (spec 58, `## Der Vertrag`). Nothing more is
+   * checked: every selector string goes into the page, where `querySelector` decides
+   * what it means — the empty one included, as long as it is the only target.
+   *
+   * A term that is present but empty is the same mistake as no target at all: a click
+   * target without text is none (spec 58, `## Ziel`, 8). The returned `text` is the wire
+   * name of `contains_text` from here on; `null` means "no text search".
+   *
+   * A selector that is empty or nothing but whitespace narrows nothing next to a term:
+   * `querySelector("")` throws, so the page would answer `invalid_selector` for a call
+   * whose target the term already names. There it is handed on as `null` — "not set",
+   * which is what the argument means (spec 58, 1: the selector *may* narrow). Alone it
+   * stays a string and keeps the old answer, `invalid_selector`.
    */
   function clickRequestSelector(params) {
-    const selector = params?.selector;
-    if (typeof selector !== "string") {
+    const selector = params?.selector ?? null;
+    const term = params?.contains_text ?? null;
+    if (term !== null && (typeof term !== "string" || term.trim() === "")) {
+      throw new ClickError(INVALID_PARAMS_CODE, MISSING_TARGET_MESSAGE);
+    }
+    if (selector !== null && typeof selector !== "string") {
       throw new ClickError(INVALID_PARAMS_CODE, MISSING_SELECTOR_MESSAGE);
     }
-    return selector;
+    if (selector === null && term === null) {
+      throw new ClickError(INVALID_PARAMS_CODE, MISSING_TARGET_MESSAGE);
+    }
+    const blankSelector = typeof selector === "string" && selector.trim() === "";
+    // Trimmed on the way out, not only in the page: the page compares the trimmed term,
+    // so the `no_match` sentence must quote the term that was really searched for (spec
+    // 58, `## Ziel`, 6). A blank term never gets here — it is no target at all.
+    return {
+      selector: term !== null && blankSelector ? null : selector,
+      text: term === null ? null : term.trim(),
+    };
   }
 
   /**
@@ -2864,7 +2925,7 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * (nothing was clicked) and one after the read (the click opened this page).
    */
   async function clickAgentTab(params, clicked = { done: false }) {
-    const selector = clickRequestSelector(params);
+    const target = clickRequestSelector(params);
     // After the selector check, like the window of a `read`: a caller with a wrong `frame`
     // hears about its own mistake whether or not an agent tab exists, and nothing is
     // injected for a request that could not be answered.
@@ -2881,10 +2942,10 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     supersedePageSlot(tab.id);
     const click = claimPageSlot(tab.id, () => settleWindow(tab.id, want));
     try {
-      const { answers } = await askPageAgent(tab.id, clickPageRequest(selector, want), {
+      const { answers } = await askPageAgent(tab.id, clickPageRequest(target, want), {
         allFrames: want !== null,
       });
-      const reported = clickOutcomeOf(frameTargetOf(valuesOf(answers), want));
+      const reported = clickOutcomeOf(frameTargetOf(valuesOf(answers), want), target);
       // From here on the page has been clicked. Everything below can still throw a
       // `ReadError` — the read after the wait above all — and that one is the page the
       // click *opened*, which is the whole difference `clickErrorFor` is asked about.
@@ -3034,20 +3095,95 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * `scrolled` as well, and `entry.scrolled === true` is the whole rule — an extension
    * that does not send the field at all (an older one) answers `false`, which is what
    * "in every other success case" means (`docs/56`, `## Der Vertrag`).
+   *
+   * Two outcomes carry more than a code. `no_match` names what was searched for, and the
+   * term wins over the selector when both were given (`target`, spec 58, `## Ziel`, 6).
+   * `text_ambiguous` is the one refusal with evidence: `matches`, `candidates` and
+   * `truncated` ride in the error frame's `details`, and an answer without a usable
+   * `matches` is broken rather than ambiguous. A `no_match` whose run stopped at the
+   * candidate cap carries `truncated: true` alone: its count is zero because the rest of
+   * the list was never read, so the sentence says where the search ended (spec 58,
+   * `## Ziel`, 6).
    */
-  function clickOutcomeOf(entry) {
+  function clickOutcomeOf(entry, target) {
     const outcome = entry?.outcome;
     if (!CLICK_OUTCOMES.includes(outcome)) {
       console.warn(UNUSABLE_CLICK_RESULT_LOG_LINE);
       throw new ClickError(CLICK_FAILED_CODE, CLICK_FAILED_MESSAGE);
     }
+    if (outcome === "text_ambiguous") {
+      const candidates = entry.candidates;
+      const usable =
+        Number.isInteger(entry.matches) &&
+        entry.matches > 0 &&
+        Array.isArray(candidates) &&
+        candidates.every((candidate) => typeof candidate === "string");
+      if (!usable) {
+        console.warn(UNUSABLE_CLICK_RESULT_LOG_LINE);
+        throw new ClickError(CLICK_FAILED_CODE, CLICK_FAILED_MESSAGE);
+      }
+      const truncated = entry.truncated === true;
+      throw new ClickError(outcome, textAmbiguousMessageFor(entry.matches, truncated), {
+        matches: entry.matches,
+        candidates,
+        truncated,
+      });
+    }
     if (outcome !== "clicked") {
+      if (outcome === "no_match") {
+        const truncated = entry.truncated === true;
+        throw new ClickError(
+          outcome,
+          noMatchMessageFor(target, truncated),
+          truncated ? { truncated } : {},
+        );
+      }
       throw new ClickError(outcome, CLICK_REFUSAL_MESSAGES[outcome]);
     }
     return {
       clicked: typeof entry.clicked === "string" ? entry.clicked : "",
       scrolled: entry.scrolled === true,
     };
+  }
+
+  /**
+   * The `text_ambiguous` sentence, and the one place its count is worded.
+   *
+   * An uncapped run knows how many elements it found, and "more than one" is the whole
+   * truth. A run that stopped at the candidate cap does not: its `matches` is a lower
+   * bound, and the sentence has to say so — the field keeps the counted number, the
+   * sentence makes it a floor (spec 58, `## Ziel`, 5).
+   */
+  function textAmbiguousMessageFor(matches, truncated) {
+    if (!truncated) return TEXT_AMBIGUOUS_MESSAGE;
+    return `At least ${matches} ${matches === 1 ? "element matches" : "elements match"} this text.`;
+  }
+
+  /**
+   * The `no_match` sentence for the target that was searched for.
+   *
+   * The term wins over the selector when both were given (spec 58, `## Ziel`, 6): the
+   * caller that added a term wanted that term found. `NO_MATCH_MESSAGE` stays the whole
+   * sentence of a selector-only click. The term is capped like a described text, because
+   * it is caller-supplied and the error frame has a size — and it is always a string, so
+   * the sentence can never end in `undefined`.
+   *
+   * `truncated` is the candidate cap of the text search, not the page text: a search
+   * that stopped there never read the rest of the list, so "nothing matches" is only
+   * known about the part it saw. The sentence says that instead of leaving the caller
+   * with a wrong absolute (spec 58, `## Ziel`, 6).
+   *
+   * `target` has a default because this function is called from one place today and the
+   * empty target costs nothing: without it a future call without a target would end as a
+   * `TypeError` and answer `click_failed` instead of a refusal.
+   */
+  function noMatchMessageFor(target = { text: null }, truncated = false) {
+    const sentence =
+      target.text === null
+        ? NO_MATCH_MESSAGE
+        : `${NO_TEXT_MATCH_MESSAGE}${target.text.slice(0, INSPECT_TEXT_LIMIT)}`;
+    if (!truncated) return sentence;
+    return `${sentence} ${NO_TEXT_MATCH_AT_CAP_MESSAGE}`;
   }
 
   /**
@@ -3110,13 +3246,15 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
   }
 
   /**
-   * The `click` call: the selector and the frame filter.
+   * The `click` call: the target and the frame filter.
    *
-   * The filter travels always, `null` included — one shape for both callers, like
-   * `settlePageRequest`, because the page reads `null` as "the main frame".
+   * `text` is the wire name of `contains_text` (spec 58, `## Der Vertrag`): one name on
+   * the wire, two in the MCP. Both fields travel always, `null` included — one shape for
+   * both callers, like `settlePageRequest`, because the page reads `null` as "no text
+   * search" and as "the main frame".
    */
-  function clickPageRequest(selector, want = null) {
-    return { op: "click", args: { selector, want } };
+  function clickPageRequest(target, want = null) {
+    return { op: "click", args: { selector: target.selector, text: target.text, want } };
   }
 
   /* ------------------------------------------------------------------- type */

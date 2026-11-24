@@ -537,14 +537,35 @@
    *
    * Synchronous on purpose: the 300 ms wait belongs to the background, and this op is
    * answered the moment the click was dispatched. `args` is the only thing that crossed
-   * the channel — `selector` plus the frame filter, nothing else.
+   * the channel — `selector`, the term of a text search and the frame filter, nothing
+   * else.
+   *
+   * Three ways to name a target, and one tail for all of them:
+   *
+   * 1. `selector` alone — the old path, untouched: `querySelector`, the first match in
+   *    document order.
+   * 2. `contains_text` (called `text` on the wire) alone — every element of the body is
+   *    a candidate, exactly the set `inspect` searches (spec 58).
+   * 3. both — `document.querySelectorAll(selector)` narrows the set first, the term
+   *    filters it (spec 58, `## Ziel`, 1).
    *
    * The order is the contract: `isVisible` and `disabled` first (the three old reasons,
    * `not_clickable`), then the position. A target outside the visible area is scrolled
    * to the centre and measured again; one that stays outside is refused with its own
    * code, and the answer of a click that did happen says whether it had to scroll.
+   *
+   * A text search adds three rules between the candidates and that tail, and their
+   * order is the contract too: the innermost hit first (`dropAncestorsOfMatches`,
+   * spec 57), then the exact hit over the substring hit (spec 58, `## Ziel`, 3), then
+   * the click — or a refusal, because more than one hit is no target (spec 58).
+   *
+   * A search that reached its candidate cap never clicks: its hit count is a lower bound,
+   * and a lower bound cannot say "exactly one target". With at least one hit it answers
+   * `text_ambiguous` and says "at least N"; with no hit among the examined candidates it
+   * answers `no_match` — but carries `truncated: true`, because the rest of the list was
+   * never read and a match may lie behind the cap (spec 58, `## Ziel`, 5 and 6).
    */
-  function clickPageSource(selector, want) {
+  function clickPageSource(selector, containsText, want) {
     // The frame filter of spec 26, and the first statement on purpose: a frame that is not
     // meant answers the marker and does nothing else — no query, no description, no click.
     // `href` is what `frameTargetOf`'s candidates are made of, and this realm is the only
@@ -559,34 +580,171 @@
     function frameFieldsOf() {
       return typeof want === "string" ? { href: String(location.href) } : {};
     }
-    let element;
+    // The candidate cap of a text search, a literal of this function on purpose: only
+    // what this function closes over reaches the page, and the value is the bridge's
+    // `INSPECT_CANDIDATE_LIMIT` — one number, two places, kept in step by hand like
+    // `TYPEABLE_INPUT_TYPES` above (spec 58, `## Bekannte Lücken`). Every candidate
+    // costs an `innerText` read, which costs layout.
+    const CLICK_CANDIDATE_LIMIT = 5000;
+    // How many selectors a `text_ambiguous` answer carries, and with which limits the
+    // selector builder runs. The two numbers are arguments of this call site and not
+    // wire fields (spec 58, `## Der Vertrag`); `200`/`10` are the bridge's
+    // `INSPECT_TEXT_LIMIT`/`INSPECT_CLASS_LIMIT` for the same reason as the cap above.
+    const CANDIDATE_SELECTOR_LIMIT = 5;
+
+    /** `innerText` of a real element is a string; a stub may be less polite. */
+    function textOf(element) {
+      const raw = element.innerText;
+      return typeof raw === "string" ? raw : "";
+    }
+
+    /**
+     * The click on one element, with the two refusals in their order and the scroll.
+     *
+     * Shared by the selector path and the text path so that neither can grow a second
+     * answer to "can this be clicked": one rule, one function, one place to change it.
+     */
+    function clickAt(element) {
+      if (!isVisible(element) || element.disabled === true) {
+        return { outcome: "not_clickable", ...frameFieldsOf() };
+      }
+
+      // The position, and only *after* the two refusals above: an element without area
+      // is `not_clickable`, it is not something to scroll to (spec 56, criterion 4).
+      const scrolled = scrollIntoViewIfNeeded(element);
+      // Measured again, because the scroll may or may not have helped: a target that
+      // stays outside after it would be clicked blind, and "clicked" would be the lie
+      // this refusal exists to avoid.
+      if (!intersectsViewport(element.getBoundingClientRect())) {
+        return { outcome: "offscreen_after_scroll", ...frameFieldsOf() };
+      }
+
+      // Described *before* the click: a re-render may drop `id` and `class` the
+      // moment the click runs, and the answer would describe nothing.
+      const clicked = describeElement(element);
+      element.click();
+      return { outcome: "clicked", clicked, scrolled, ...frameFieldsOf() };
+    }
+
+    // The term decides which path runs. `null`, the empty string and a term of nothing
+    // but whitespace are "no text search" — the bridge refuses both of the latter before
+    // they get here, and a term that trims to nothing would match every element
+    // (`indexOf("")` is `0`).
+    const trimmedTerm = typeof containsText === "string" ? containsText.trim() : "";
+    const term = trimmedTerm === "" ? null : trimmedTerm;
+
+    if (term === null) {
+      // `selector` alone: the old path, untouched. `querySelector` throws a
+      // `SyntaxError` for a selector it cannot parse — the empty string included.
+      let element;
+      try {
+        element = document.querySelector(selector);
+      } catch (error) {
+        return { outcome: "invalid_selector", ...frameFieldsOf() };
+      }
+      if (element === null || element === undefined) {
+        return { outcome: "no_match", ...frameFieldsOf() };
+      }
+      return clickAt(element);
+    }
+
+    let candidates;
     try {
-      element = document.querySelector(selector);
+      // The selector narrows, the text filters; without a selector every element of the
+      // body is a candidate — the same set and the same order `inspectPageSource`
+      // searches (spec 58, `## Ziel`, 2). Only this collection can throw: the body query
+      // is one literal `*`, while a caller's selector decides what it means, and
+      // `querySelectorAll` says `SyntaxError` to anything it cannot parse.
+      candidates =
+        typeof selector === "string"
+          ? Array.from(document.querySelectorAll(selector))
+          : document.body === null
+            ? []
+            : Array.from(document.body.querySelectorAll("*"));
     } catch (error) {
-      // `querySelector` throws a `SyntaxError` for a selector it cannot parse — the
-      // empty string included. Nothing was clicked.
       return { outcome: "invalid_selector", ...frameFieldsOf() };
     }
-    if (element === null || element === undefined) return { outcome: "no_match", ...frameFieldsOf() };
-    if (!isVisible(element) || element.disabled === true) {
-      return { outcome: "not_clickable", ...frameFieldsOf() };
+
+    // Reached the cap means "there were more candidates than were examined", and the
+    // hit count then stops being the truth and becomes a lower bound — the same reading
+    // `inspect` gives its `truncated`.
+    const truncated = candidates.length > CLICK_CANDIDATE_LIMIT;
+    const examined = Math.min(candidates.length, CLICK_CANDIDATE_LIMIT);
+    // One treatment for the term: `trim` and `toLowerCase`, and both comparisons use it.
+    // A term with a stray space is the same term, and the substring search must not read
+    // a different needle than the exact comparison that follows it (spec 58, `## Ziel`, 3).
+    const needle = term.toLowerCase();
+    const hits = [];
+
+    for (let position = 0; position < examined; position += 1) {
+      const candidate = candidates[position];
+      // Visibility always, and never `includeHidden`: `click` has no such argument, and
+      // an element nobody can see is one nobody can click (spec 58, `## Ziel`, 2).
+      if (!isVisible(candidate)) continue;
+      // `innerText`, exactly like `inspect`: it folds whitespace and skips what is
+      // invisible, so the comparison runs on what a reader sees. No third folding of the
+      // page text is added: the hit only gets `toLowerCase` here, and the term was
+      // trimmed once, for this check and the exact comparison alike (spec 58, `## Ziel`, 3).
+      const text = textOf(candidate);
+      if (text.toLowerCase().indexOf(needle) === -1) continue;
+      hits.push({ element: candidate, text });
     }
 
-    // The position, and only *after* the two refusals above: an element without area
-    // is `not_clickable`, it is not something to scroll to (spec 56, criterion 4).
-    const scrolled = scrollIntoViewIfNeeded(element);
-    // Measured again, because the scroll may or may not have helped: a target that
-    // stays outside after it would be clicked blind, and "clicked" would be the lie
-    // this refusal exists to avoid.
-    if (!intersectsViewport(element.getBoundingClientRect())) {
-      return { outcome: "offscreen_after_scroll", ...frameFieldsOf() };
+    // The innermost hits first: a container carries the text of everything below it and
+    // stands earlier in document order, so a full list answers the container instead of
+    // the target (spec 57). Only a real term takes this step — the selector path has no
+    // list to thin out.
+    const innermost =
+      hits.length === 0
+        ? []
+        : new Set(dropAncestorsOfMatches(hits.map((hit) => hit.element)));
+    const inner = hits.filter((hit) => innermost.has(hit.element));
+    // The exact hit beats a substring hit — a rule of `click` alone (spec 58,
+    // `## Ziel`, 3). `"Grey"` finds both "Grey" and "Grey Blue"; the caller meant the
+    // first one. Nothing is preferred when no hit is exact: then the list stands as it
+    // is and only the count still decides.
+    const exact = inner.filter((hit) => hit.text.trim().toLowerCase() === needle);
+    const matched = exact.length > 0 ? exact : inner;
+
+    /**
+     * The refusal of a search that cannot name one target: no click, and the evidence
+     * the caller needs to narrow it down — how many hits the run saw and which selectors
+     * they are.
+     */
+    function textAmbiguousOf(hits, capped) {
+      const selectors = [];
+      for (const hit of hits) {
+        if (selectors.length >= CANDIDATE_SELECTOR_LIMIT) break;
+        selectors.push(selectorForElement(hit.element, 200, 10));
+      }
+      return {
+        outcome: "text_ambiguous",
+        matches: hits.length,
+        candidates: selectors,
+        truncated: capped,
+        ...frameFieldsOf(),
+      };
     }
 
-    // Described *before* the click: a re-render may drop `id` and `class` the
-    // moment the click runs, and the answer would describe nothing.
-    const clicked = describeElement(element);
-    element.click();
-    return { outcome: "clicked", clicked, scrolled, ...frameFieldsOf() };
+    if (matched.length === 0) {
+      // Nothing among the examined candidates carries the term — but a search that stopped
+      // at the cap has not looked at the whole page, so "nothing matches" is only known
+      // about the part it saw. `truncated: true` says which of the two this is, and the
+      // bridge words the sentence that goes with it (spec 58, `## Ziel`, 6).
+      return truncated
+        ? { outcome: "no_match", truncated: true, ...frameFieldsOf() }
+        : { outcome: "no_match", ...frameFieldsOf() };
+    }
+    // A run that stopped at the cap never clicks, not even when it saw exactly one hit:
+    // the hit count is a lower bound from there on, so "exactly one target" is not
+    // something this run can claim — the second hit may sit behind the cap. The answer
+    // says so with `matches` as the lower bound and `truncated: true` (spec 58,
+    // `## Ziel`, 5).
+    if (truncated) return textAmbiguousOf(matched, true);
+    // More than one hit is no target: a wrong click is the most expensive mistake this
+    // project knows (spec 58, `## Warum bei Mehrdeutigkeit abgelehnt wird`).
+    if (matched.length > 1) return textAmbiguousOf(matched, false);
+    return clickAt(matched[0].element);
   }
 
   /* ------------------------------------------------------------------ type */
@@ -2245,7 +2403,7 @@
         args.want ?? null,
       ),
     settle: (args) => settlePageSource(args.quietWindowMs, args.deadlineMs, args.want ?? null),
-    click: (args) => clickPageSource(args.selector, args.want ?? null),
+    click: (args) => clickPageSource(args.selector, args.text ?? null, args.want ?? null),
     type: (args) => typePageSource(args.request, args.want ?? null),
     inspect: (args) => inspectAnswerFor(args.request, args.want ?? null),
     transcriptGate: () => transcriptGateSource(),
