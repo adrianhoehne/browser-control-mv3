@@ -1,6 +1,6 @@
 ---
 description: Die Zeilenabdeckung der Erweiterung läuft in der CI als eigener Job — npm run test:coverage aus docs/64, mit der Schwelle 90 Prozent und ohne neue Abhängigkeit.
-status: proposed
+status: active
 ---
 
 # Coverage in der CI
@@ -50,14 +50,6 @@ Keiner misst Abdeckung.
 - **Keine Schwelle je Datei**, keine Änderung an `docs/64` selbst.
 - **Kein `needs:`** — auch nicht auf `test`, obwohl beide dieselbe Suite fahren:
   zwei unabhängige Jobs sind billiger als eine Kette, die auf den langsameren wartet.
-
-## Amendments to previous spec docs
-
-- **`docs/40-ci-ablauf.md`**: sechs Jobs statt fünf; der neue Job `coverage` mit
-  seinem Zweck („ein Rückgang wird rot, bevor jemand fragt") und der Notiz, dass er
-  an nichts hängt.
-
-Nach der Umsetzung wird dieser Abschnitt entfernt.
 
 ## Testing
 
@@ -140,3 +132,10 @@ Nach `CONTRIBUTING.md`, Schritt 4, öffnet erst ein `✅ Ship it` die Umsetzung.
 
 - **2026-11-23, angelegt.** Aus der Wahl des Betreibers zwischen Rust-Abdeckung und
   CI-Abhängigkeit („B — Coverage in die CI").
+
+- **2026-11-23, Stufe 3 nachgezogen, Spec `active`.** `docs/40` nennt sechs Jobs,
+  trägt den neuen Job in der Tabelle und sagt, dass er an nichts hängt; die ältere
+  Zeile „die fünf Jobs" ist auf „seit `docs/65` sechs" gezogen. `docs/README.md`
+  steht auf `active`. Der Reviewer hat die zwei Workflow-Fälle gegen sechs
+  Mutationen geprüft (Befehl entfernt, Node 24, `windows-latest`, auskommentiert,
+  `needs: unit`, Job gelöscht) — jedes Mal rot.

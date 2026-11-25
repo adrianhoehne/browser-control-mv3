@@ -166,6 +166,7 @@ Bereiche — 8110/8111 gehören dem laufenden Dienst, 18110–18119 den Test-Sui
 | Job | Läuft auf | Schritte |
 |---|---|---|
 | `test` | `ubuntu-latest`, Matrix 22/24 | **unverändert**: checkout, setup-node, `npm run check`, `npm test` — ohne Rust |
+| `coverage` | `ubuntu-latest`, unabhängig | checkout, Node 22, `npm run test:coverage`; kein `needs:`, kein `npm install` (seit `docs/65`) |
 | `unit` | `ubuntu-latest` | checkout, Node (für `parity.sh`), rustup (stable, Ziele `x86_64-unknown-linux-musl` + `x86_64-pc-windows-gnu`, Teil `clippy`), `gcc-mingw-w64-x86-64`; `npm run check`, `npm test`, `npm run test:ci`; `cargo build --release` (beide Ziele), `cargo test -- --test-threads=1`, `clippy -D warnings --all-targets` (beide Ziele), `parity.sh --impl rust --check`, `parity.sh --self-test`; `upload-artifact` `bridge-linux` und `bridge-windows` |
 | `e2e` | `windows-latest`, braucht `unit` | checkout, Node, `download-artifact` `bridge-windows` **nach** `bridge-rs/target/x86_64-pc-windows-gnu/release/`, `env: E2E_BINARY: bridge-rs/target/x86_64-pc-windows-gnu/release/browser-control-bridge.exe`, `node scripts/e2e/run.mjs` |
 | `bundle` | `ubuntu-latest`, braucht `unit` | checkout, Node, `download-artifact` **beide** (`bridge-linux` → `bridge-rs/target/x86_64-unknown-linux-musl/release/`, `bridge-windows` → `bridge-rs/target/x86_64-pc-windows-gnu/release/`), `scripts/bundle.sh`, `npm run test:bundle`, `upload-artifact` `portable-zips` (beide Zips) |
@@ -177,7 +178,11 @@ Bereiche — 8110/8111 gehören dem laufenden Dienst, 18110–18119 den Test-Sui
 **`release` steht in derselben Datei wie `bundle`.** `needs:` und
 `actions/download-artifact` gelten nur innerhalb einer Workflow-Datei; ein Job in
 einer zweiten Datei sieht die Artefakte des ersten nicht. Deshalb: eine Datei,
-fünf Jobs, `release` mit `if: startsWith(github.ref, 'refs/tags/v')`.
+sechs Jobs, `release` mit `if: startsWith(github.ref, 'refs/tags/v')`.
+
+**`coverage` hängt an nichts** (seit `docs/65`): ein eigener Job, der
+`npm run test:coverage` fährt. Ein Abdeckungsrückgang macht die Pull-Request rot,
+ohne auf den Rust-Job zu warten; die Schwelle (90 %) steht in `docs/64`.
 
 **Vier Zeilen, die man sonst vergisst — und wo sie gepinnt sind:**
 
@@ -383,7 +388,7 @@ Kommando; die 4 s waren falsch zugeordnet.
 
 - **2026-11-17, umgesetzt (Stufen 1–4):** `scripts/e2e/{run,beacon,build-test-extension}.mjs`,
   `test/ci/{workflow,e2e}.test.js`, `npm run test:ci`, `scripts/ci-local.sh`, die fünf
-  Jobs in `.github/workflows/test.yml`, `CONTRIBUTING.md` (Abnahme), `docs/README.md`
+  Jobs in `.github/workflows/test.yml` (seit `docs/65` sechs), `CONTRIBUTING.md` (Abnahme), `docs/README.md`
   und `docs/PROJECT-STATE.md`. **Lokal gemessen** (Linux, Firefox 152, Release-Binary
   `x86_64-unknown-linux-musl`): `run.mjs` ⇒ Exit 0 mit `extension connected`, `open tab=2`,
   `PING 2026-11-17T16:10:38.636Z`; `E2E_BEACON_MODE=broken` ⇒ Exit 1, keine PING-Zeile,
