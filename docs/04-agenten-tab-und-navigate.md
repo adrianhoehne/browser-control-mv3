@@ -479,7 +479,11 @@ macht.
 
 ## Bekannte Lücken
 
-Stand 2026-10-23, vor der Umsetzung:
+Stand 2026-10-23, vor der Umsetzung. **Entschieden am 2026-11-23:** die drei Punkte
+unten bleiben dauerhaft Lücken. Sie beschreiben Lagen, die nur per Race entstehen
+(ein `complete`-Ereignis der auslaufenden Seite, eine Weiterleitung auf die alte
+Adresse); ein Fix hieße, den Vertrag um einen vierten Zustand zu erweitern, und das
+ist mehr Risiko als Nutzen. Wer sie schließen will, schreibt dafür eine eigene Spec.
 
 - **Der `onUpdated`-Zweig prüft die Adresse nicht** (2026-10-23, Code-Review nach
   dem Nachtrag): ein `complete`-Ereignis für den richtigen Tab, aber noch von

@@ -638,7 +638,11 @@ Nicht angefasst: `package.json`, `test/ports.js`, `deploy/`, `bridge/`,
 
 ## Bekannte Lücken
 
-Stand 2026-11-17, nach Stufe 4a von `docs/38`:
+Stand 2026-11-17, nach Stufe 4a von `docs/38`. **Eingeordnet am 2026-11-23:** die drei
+ungenmessenen Pfade sind Betreiber-Messungen, keine offenen Aufgaben im Code. Der
+`/usr/bin`-Zweig von `--fix-path` und der `is-active`-Fehlschlag sind implementiert und
+per Stub geprüft; ein echter systemd-Lauf auf einer fremden Distribution braucht einen
+zweiten Rechner. Gemessen wird beim nächsten Installationslauf dort, nicht hier.
 
 - **Kein Test gegen ein echtes systemd.** Die Tests prüfen die Aufrufe über
   Stubs; ob der Dienst auf einer fremden Distribution wirklich startet, sagt

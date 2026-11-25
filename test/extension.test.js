@@ -2566,8 +2566,10 @@ test("endpoint_withAStoredValue_shouldDialThatValue", async () => {
   await settleAsyncWork();
 
   // THEN the stored value is dialled. The default fills an empty field; it does not
-  // correct an operator who meant something else.
+  // correct an operator who meant something else. Exactly one socket: a second one
+  // — a retry, say — would leave the first assertion green.
   assert.equal(FakeWebSocket.latest()?.url, storedEndpoint);
+  assert.equal(FakeWebSocket.instances.length, 1, "one endpoint, one socket");
 });
 
 /**

@@ -61,22 +61,20 @@ Handarbeit statt Code — Anleitung in `INSTALL.md`, `### Token wechseln`) und
 
 ## Offene Nachträge (keine Features, laufen nebenher)
 
-Erledigt am 2026-11-23: `test/mcp.test.js` gibt es seit dem Rust-Port nicht mehr
-(`docs/38`); die Zeile „aufteilen nach Werkzeugfamilien" ist damit gegenstandslos.
-Ebenso erledigt: die `## Returns`-Zeile von `browser_read`, der Fallname
+**Erledigt am 2026-11-23:** `test/mcp.test.js` gibt es seit dem Rust-Port nicht mehr
+(`docs/38`); die `## Returns`-Zeile von `browser_read`, der Fallname
 `help_forInspect_shouldNameEveryElementField` und die Zwölf-Felder-Gleichheit in
-`mcp.rs`.
+`mcp.rs`; `docs/36` N1–N4 (N1 überholt, N2 war schon behoben, N3 gefixt, N4 überholt);
+`docs/35`, drei Pfade (Betreiber-Messungen, eingeordnet); `docs/28` (seit 2026-11-18
+`active`); die Doku-Drift aus N5 (in 0.4.0 nachgezogen); `docs/29`, vier Nachzieher
+(Laufzeit 1,4 s neu gemessen, `docs/30` in der Touch boundary, B1/C9/C10 als nicht mehr
+prüfbar geschlossen, das Diagnose-Muster erklärt); und die drei Restlöcher im
+`navigate`-Pfad, die dauerhaft als Lücke geführt werden (`docs/04`).
 
 | Vorhaben | Größe |
 |---|---|
-| Drei Restlöcher im `navigate`-Pfad schließen oder dauerhaft als Lücke führen: `onUpdated` prüft die Adresse nicht, `complete: false` nennt die vorherige Seite, eine Weiterleitung auf die alte Adresse endet in `complete: false` (`docs/04`, `## Bekannte Lücken`) | klein |
-| Für `click` fehlt weiter ein Live-Beleg der Ruhe-Erkennung — fünf Versuche fielen auf den Rückfall (`docs/15`, `## Bekannte Lücken`) | klein |
+| **`click` erreicht die Ruhe auf Seiten mit Timern nicht** — sechster Live-Versuch am 2026-11-23: `settled: false, waitedMs: 3937` auf einem Wikipedia-`#`-Anker. Der Guard (4 s) greift, der Rückfall trägt, aber jeder Klick auf einer solchen Seite kostet vier Sekunden und die Antwort unterscheidet „nicht still" nicht von „keine Reaktion" (`docs/15`, `## Bekannte Lücken`) | klein |
 | ~~**Windows-Installationsanleitung fehlt.**~~ **Erledigt:** `INSTALL.md`, Abschnitt 10 (Binary, Token, Task Scheduler, Prüfung) — der Weg ist mit `docs/38`, Stufe 3 gebaut; offen bleibt nur die Betreiber-Messung auf einem Windows-Rechner | winzig |
-| **`docs/36`, Nachträge N1–N4** (Code-Review 2026-11-15): der Endpunkt-Arm der Leer-Prüfung in `background.js` ist nach dem Fallback toter Code, und der Log-Text „Endpunkt oder Token fehlt" nennt einen Grund, den es nicht mehr gibt; `options.js` trimmt den gespeicherten Endpunkt, `background.js` nicht; `endpoint_withAStoredValue…` prüft `FakeWebSocket.instances.length` nicht; der Hinweis in `options.html` bricht die Zeilenbreite und klebt am Token-Label | klein |
-| **`docs/35`, drei ungemessene Pfade** (`## Bekannte Lücken`): ein echter systemd-Lauf auf einer fremden Distribution, der `/usr/bin`-Zweig von `--fix-path`, der `is-active`-Fehlschlag. Alle drei sind implementiert, aber nur per Stub geprüft | klein |
-| **`docs/28` abschließen** — die Spec ist `proposed`, der Code fertig: Amendments, Doku-Verweise und die Live-Messung fehlen | klein |
-| **Doku-Drift aus `docs/36` N5**: `README.md` und `PROJECT-STATE.md` beschrieben den Endpunkt als Handarbeit — in 0.4.0 nachgezogen, die Zeile bleibt als Erinnerung, dass solche Stellen beim Abschluss mitgesucht werden | winzig |
-| **Spec 29, vier Nachzieher aus dem Code-Review** (2026-11-06, nicht blockierend, bewußt nicht mehr angefaßt weil `docs/29` `active` ist und ein Zurückstellen auf `proposed` mehr kostet als der Wert): (a) die Laufzeiten in `docs/29` und `PROJECT-STATE.md` sind ~20 % zu hoch — frisch gemessen 2,3–2,7 s statt 3,0–3,2 s; (b) `## Touch boundary` in `docs/29` nennt `docs/30-prozess-und-konsole.md` nicht; (c) für die Code-Review-Befunde B1, C9, C10 steht keine Zeile im `## Log` von `docs/29`; (d) `DIAGNOSIS_PATTERNS` in `scripts/check.mjs:37` hat ein zweites Muster (`/\bError\b/`), das beim Syntaxfehler nie greift | winzig |
 
 ## Funktionalität
 

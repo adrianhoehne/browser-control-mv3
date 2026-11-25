@@ -147,6 +147,19 @@ nach den Handgriffen messbar und nach dem `git pull` aus dem Betreiber-Klon.
 Kriterien 1–6 laufen vor dem Commit; fällt 7 rot aus, wird vorwärts korrigiert und
 die rote Zeile steht unter `## Bekannte Lücken`.
 
+- **Sechster Live-Versuch, 2026-11-23: die Ruhe wird auf einer Seite mit Timern nie
+  erreicht.** `browser_click` auf `a.mw-jump-link` (ein `#`-Anker, also ohne
+  Navigation) im Artikel `https://en.wikipedia.org/wiki/Example` antwortet
+  `settled: false, waitedMs: 3937`. Der Wert ist der Guard
+  (`SETTLE_GUARD_MS = 4000`), nicht die Ruhe: Wikipedia betreibt dauerhaft Timer, die
+  250-ms-Stille tritt nie ein. Der Rückfall greift wie vorgesehen, aber ein Klick auf
+  einer solchen Seite kostet **etwa vier Sekunden**, und die Antwort sagt das nicht.
+  Zum Vergleich: `navigate` auf dieselbe Seite meldet `settled: true, waitedMs: 1763`
+  — der Lade-Pfad erreicht die Ruhe, der Klick-Pfad nicht.
+  **Folge für den Agenten:** `settled: false` heißt hier „die Seite war nicht still",
+  nicht „die Seite hat nicht reagiert"; wer daraus ein Wiederholen ableitet, klickt
+  doppelt. `docs/56` hat dieselbe Zahl (`waitedMs: 0` bei den Suchseiten) gemessen.
+
 ## Bekannte Lücken
 
 - **Kriterium 7 ist live nur halb belegt** (2026-10-23): `navigate` auf einen

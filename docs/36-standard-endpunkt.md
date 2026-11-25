@@ -339,19 +339,23 @@ Stand 2026-11-15, vor der Umsetzung:
   jedem Nicht-Loopback-Host und nennt `wss://` und den SSH-Tunnel
   (`INSTALL.md` §9). Offen bleibt allein der lokale Fall — dort ist der
   Klartext auf das Loopback-Interface begrenzt.
-- **Der Endpunkt-Half der Leer-Prüfung ist toter Code (N1, 2026-11-15).**
-  Nach dem Fallback kann `settings.endpoint` nicht mehr `""` sein; die Spec
-  wollte die Zeile behalten. Beim nächsten Inkrement streichen — zusammen mit
-  dem Log-Text „Endpunkt oder Token fehlt", der nur noch den Token meint.
-- **Zwei Trimmen (N2, 2026-11-15).** `options.js` trimmt den gespeicherten
-  Endpunkt, `bridge.js` nicht: ein handgepflegter Wert aus Leerzeichen wird
-  im Feld als Standard gezeigt und beim Verbinden verworfen. Über die
-  Optionsseite nicht erreichbar (sie trimmt beim Speichern).
-- **`endpoint_withAStoredValue…` zählt die Sockets nicht (N3).** Eine doppelte
-  Wahl bliebe in diesem Fall grün; die Nachbartests prüfen
-  `FakeWebSocket.instances.length`.
-- **Der Hinweis in `options.html` bricht die Zeilenbreite (N4)** und klebt
-  optisch am Token-Label (Flex-`gap` nach oben und unten gleich).
+- ~~**Der Endpunkt-Half der Leer-Prüfung ist toter Code (N1, 2026-11-15).**~~
+  **Überholt am 2026-11-23:** `extension/background.js` enthält keine
+  Endpunkt-Logik mehr (`grep -c 'ndpunkt\|ENDPOINT'` ⇒ 0); die Prüfung lebt in
+  `extension/bridge.js` (Endpunkt, Standard `DEFAULT_ENDPOINT`), der alte Arm und
+  sein Log-Text sind mit dem Umbau entfallen. Nachgezählt, nicht geglaubt.
+- ~~**Zwei Trimmen (N2, 2026-11-15).**~~ **Erledigt am 2026-11-23:** `asText`
+  (`extension/bridge.js:629-631`) trimmt beim Lesen; der handgepflegte Wert aus
+  Leerzeichen fällt auf den Standard zurück, wie die Spec es will. Kein
+  Produktcode geändert — der Befund war beim Nachsehen schon behoben.
+- ~~**`endpoint_withAStoredValue…` zählt die Sockets nicht (N3).**~~
+  **Erledigt am 2026-11-23:** der Fall prüft jetzt zusätzlich
+  `FakeWebSocket.instances.length === 1` (`test/extension.test.js:2572`); eine
+  doppelte Wahl wäre rot.
+- ~~**Der Hinweis in `options.html` bricht die Zeilenbreite (N4)**~~ **Überholt am
+  2026-11-23:** die Optionsseite ist mit `docs/54` neu geschrieben (englische
+  Hinweise, eigenes `<p class="hint">` je Feld); der Hinweis steht unter seinem
+  Feld und bricht sauber.
 - **Ungemessen:** ob Firefox `ws://127.0.0.1:8110` aus einer
   `moz-extension://`-Seite unter allen Profil-Einstellungen erlaubt. Loopback
   gilt als vertrauenswürdig; gemessen wird es erst im Live-Lauf.

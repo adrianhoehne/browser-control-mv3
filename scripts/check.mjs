@@ -31,6 +31,12 @@ const CHECKED_EXTENSIONS = new Set([".js", ".mjs"]);
 
 // `node --check` prints `<path>:<line>` first and the actual diagnosis second,
 // so the line worth reporting is the one naming the error, not the first one.
+//
+// The list is ordered and the first pattern with a matching line wins: a line with
+// `SyntaxError` therefore always decides, and `\bError\b` only comes up for a
+// failure that carries no syntax error — a file node cannot load, say, where it
+// prefers `Error: Cannot find module ...` over the loader frame above it. (`\b`
+// keeps `SyntaxError` itself from matching the second pattern.)
 const DIAGNOSIS_PATTERNS = [/SyntaxError/, /\bError\b/];
 
 export function collectFiles(root) {

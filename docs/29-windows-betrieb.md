@@ -14,7 +14,8 @@ in `cmd.exe` gibt es beides nicht, und `find` ist dort ein anderes Programm
 **Gebaut und abgenommen am 2026-11-06.** `npm run check` ruft `node
 scripts/check.mjs`; der Befehl meldet `checked 28 files` und endet mit 0, die
 Abnahme steht bei **658 Tests**, `# fail 0`, `# cancelled 0`, `# skipped 0`. Die
-sechs Kriterien sind einzeln geprüft, das Prüfskript läuft in 3,0–3,2 s (die alte
+sechs Kriterien sind einzeln geprüft, das Prüfskript läuft in 1,4 s (am 2026-11-23
+dreimal gemessen mit `/usr/bin/time -f "%e" npm run check`: 1,40, 1,41, 1,41; die alte
 `find`/`xargs`-Kette brauchte 2,8 s). **Die Zahl ist ein Messwert und wandert:** nach
 dem Schnitt von `docs/38` (Node-Bridge gelöscht, Stufe 4b, 2026-11-17) meldet
 derselbe Befehl `checked 14 files` — 19 der 33 Dateien waren Bridge-Code und
@@ -241,7 +242,8 @@ Wahrheit, und `CONTRIBUTING.md` soll auf beiden Plattformen denselben Text trage
 
 - `package.json` (nur die Zeile `check`), `scripts/check.mjs` (neu),
   `test/check.test.js` (neu), diese Spec, `docs/README.md`, `docs/ROADMAP.md`,
-  `docs/PROJECT-STATE.md`.
+  `docs/PROJECT-STATE.md`, `docs/30-prozess-und-konsole.md` (die Folgespec der
+  Teilung, 2026-11-23 nachgetragen).
 - **Nicht anfassen:** `CONTRIBUTING.md`, `INSTALL.md`, `bridge/*`, `extension/*`,
   `deploy/*`, `docs/18-dienst-und-http-mcp.md` (alles Spec 30 oder Teil 2).
 - Keine neue Abhängigkeit, kein Token, kein Geheimnis.
@@ -389,3 +391,11 @@ eine Zeile hierher.
   wiederverwenden: zwei getrennte Läufe prüfen mehr als einer, und 4 s in einer
   90-Sekunden-Abnahme sind kein Problem.
 - **Nicht übernommen: nichts.**
+
+- **2026-11-23, drei Nachzieher aus dem Code-Review.** (a) Die Laufzeit ist neu
+  gemessen: **1,4 s** statt 3,0–3,2 s (drei Läufe mit `/usr/bin/time`, s. oben);
+  `docs/PROJECT-STATE.md` ist mitgezogen. (b) `docs/30-prozess-und-konsole.md` steht
+  jetzt in der Touch boundary — es ist die Folgespec der Teilung. (c) Die Befunde
+  **B1, C9 und C10** bekommen keine Zeile im Log: der Review-Text liegt nicht im
+  Repo, und aus dem Code sind sie nicht mehr zuzuordnen. Der Punkt wird damit
+  geschlossen, weil er nicht mehr prüfbar ist — wer die Befunde kennt, trägt sie nach.

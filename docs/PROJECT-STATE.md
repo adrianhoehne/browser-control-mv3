@@ -563,7 +563,7 @@ Teile gehen je **eigen** durch das Gate.
 **658 Tests grün** (`# fail 0`, `# cancelled 0`, `# skipped 0`). **Spec 29 ist
 `active` und abgenommen**: `npm run check` prüft die Syntax mit
 `scripts/check.mjs` statt mit `find`/`xargs`, meldet `checked 28 files` und läuft in
-3,0–3,2 s. Damit ist die Abnahme aus `CONTRIBUTING.md` auf jedem Wirt tippbar, auf dem
+1,4 s (dreimal gemessen am 2026-11-23). Damit ist die Abnahme aus `CONTRIBUTING.md` auf jedem Wirt tippbar, auf dem
 Node läuft — der Windows-Lauf selbst ist Kriterium 2 von Spec 30.
 
 **Spec 30 (`docs/30-prozess-und-konsole.md`) ist `proposed` und nicht begonnen:**
