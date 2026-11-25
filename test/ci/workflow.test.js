@@ -57,6 +57,31 @@ function runCommands(block) {
     .filter(Boolean);
 }
 
+test("workflow_coverageJob_shouldRunTheCoverageCommand", () => {
+  // GIVEN the coverage job,
+  const block = jobBlock("coverage");
+
+  // WHEN its runner, its commands and its Node version are read,
+  const commands = runCommands(block);
+
+  // THEN it runs the command from `docs/64` on the standard runner with Node 22,
+  // the same version as the unit job — without the command the job is green and
+  // measures nothing:
+  assert.match(block, /^\s{4}runs-on: ubuntu-latest$/m);
+  assert.ok(commands.includes("npm run test:coverage"), commands.join("\n"));
+  assert.match(block, /^\s+node-version: 22$/m);
+});
+
+test("workflow_coverageJob_shouldNotDependOnAnotherJob", () => {
+  // GIVEN the coverage job,
+  const block = jobBlock("coverage");
+
+  // WHEN the block is searched for a `needs:` line,
+  // THEN there is none: the job stays independent, so a coverage drop turns the
+  // pull request red without adding time to the Rust job it would wait for:
+  assert.doesNotMatch(block, /^\s{2,}needs:/m);
+});
+
 test("workflow_unitJob_shouldBuildBothTargetsInRelease", () => {
   // GIVEN the unit job,
   const commands = runCommands(jobBlock("unit"));

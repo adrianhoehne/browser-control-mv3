@@ -21,6 +21,19 @@ jobs:
       - run: npm run check
       - run: npm test
 
+  # Die Abdeckung aus `docs/64`. Der Job hängt an nichts (`needs` fehlt mit
+  # Absicht): ein Rückgang macht die PR rot, ohne auf den Rust-Job zu warten und
+  # ohne ihn zu verlängern.
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # Keine Abhängigkeiten: kein `npm install` nötig.
+      - run: npm run test:coverage
+
   unit:
     runs-on: ubuntu-latest
     steps:
