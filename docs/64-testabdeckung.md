@@ -134,7 +134,8 @@ Beweis: `npm run check` ⇒ 0 und `grep -n 'test:coverage' CONTRIBUTING.md` ⇒ 
 - **Mehrere Prozesse.** `npm test` startet je Datei einen Prozess; die Vereinigung
   „ausgeführt gewinnt" ist die einzige sinnvolle Regel, kann aber eine Zeile decken,
   die nur in einem Testfall lief, während ein anderer sie verfehlte (2026-11-23).
-- **`bridge-rs` bleibt ohne Zahl**, solange `cargo-llvm-cov` fehlt (2026-11-23).
+- **`bridge-rs` war ohne Zahl**, bis `docs/66` sie nachzog: `npm run test:coverage:rust`
+  misst 92,92 % Zeilen über `cargo-llvm-cov` (2026-11-23).
 - **Die Vereinigung über Prozesse hat keinen eigenen Fall.** Sie ist die riskanteste
   Stelle im Skript; geprüft ist sie nur von Hand (Code-Review 2026-11-23).
 - **Ohne Quellen liefert `coverageReport` `0/0 = 100 %` und Exit 0.** Aus `main` nicht

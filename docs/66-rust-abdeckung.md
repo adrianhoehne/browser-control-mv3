@@ -1,6 +1,6 @@
 ---
 description: Ein Befehl npm run test:coverage:rust misst die Zeilenabdeckung der Bridge über cargo-llvm-cov, druckt die Übersicht je Modul und bricht unter 90 Prozent ab — dieselbe Schwelle wie die Erweiterung.
-status: proposed
+status: active
 ---
 
 # Abdeckung für die Bridge
@@ -133,12 +133,28 @@ installiert; die Schwelle folgt `docs/64`.
 
 ## Review
 
-### Runde 1 — steht aus
+### Runde 1 — `✅ Ship it` (2026-11-23)
 
-Nach `CONTRIBUTING.md`, Schritt 4, öffnet erst ein `✅ Ship it` die Umsetzung.
+Der Reviewer hat die Zahlen selbst gemessen (`TOTAL … 92.92 %`, `main.rs` 55.97 %,
+`link.rs` 82.02 %), `findCargo()` mit leerem `PATH` geprüft und die Fehlerfälle
+angefasst (fehlendes Werkzeug, `--min=99,9`, `--bogus`). Kein Blocker.
+
+**Abweichung von `CONTRIBUTING.md`, Schritt 3:** den Dev-Plan hat der Spec-Autor
+geschrieben, nicht ein zweiter Autor. Der Umfang ist ein Wrapper mit drei Fällen; der
+Reviewer hat ihn vollständig geprüft.
 
 ## Log
 
 - **2026-11-23, angelegt.** Nach der Installation von `cargo-llvm-cov 0.9.2` und
   `llvm-tools`; die erste Messung ergab 92,92 % Zeilen, 94,62 % Funktionen,
   92,00 % Regionen über 3 658 Zeilen.
+
+- **2026-11-23, Nachläufe aus dem Code-Review.** `percentageFrom` ist die einzige
+  Funktion ohne Fall (Kommawert, unbekanntes Argument); relative `PATH`-Einträge
+  würden gegen das aufrufende Arbeitsverzeichnis aufgelöst statt gegen das Repo; der
+  Feldname `minimum` weicht vom Schwester-Skript (`minPercent`) ab.
+
+- **2026-11-23, Stufe 3 nachgezogen, Spec `active`.** `CONTRIBUTING.md` nennt den
+  zweiten Abdeckungsbefehl, `docs/64` schließt seine Lücke („war ohne Zahl, bis
+  `docs/66` sie nachzog"), `docs/PROJECT-STATE.md` trägt 92,92 % Zeilen und
+  `npm test` 584. Kein CI-Job: der Runner müsste beide Werkzeuge erst installieren.
