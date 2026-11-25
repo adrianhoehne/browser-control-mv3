@@ -11,6 +11,7 @@
     "test:bundle": "node --test test/bundle/*.test.js",
     "test:ci": "node --test test/ci/*.test.js",
     "test:coverage": "node scripts/coverage.mjs",
+    "test:coverage:rust": "node scripts/coverage-rust.mjs",
     "check": "node scripts/check.mjs"
   },
   "license": "MIT",
