@@ -1,6 +1,6 @@
 ---
 description: Ein Befehl npm run test:coverage misst die Zeilenabdeckung der Erweiterung aus den V8-Rohdaten des Testlaufs, druckt eine Tabelle je Datei und bricht unter einer Schwelle ab — ohne neue Abhängigkeit.
-status: proposed
+status: active
 ---
 
 # Testabdeckung messen
@@ -179,3 +179,7 @@ Betreiber kann einen zweiten Autor nachziehen, wenn er das für nötig hält.
 
 - **2026-11-23, angelegt.** Aus der Frage des Betreibers nach der Testabdeckung und
   der ad-hoc-Messung mit `NODE_V8_COVERAGE` (92,2 % Zeilen über 8 250 Zeilen).
+
+- **2026-11-23, Stufe 3 nachgezogen, Spec `active`.** `CONTRIBUTING.md` nennt den
+  Befehl, `docs/PROJECT-STATE.md` trägt die Zahl (92,2 %, 7 604 / 8 250, `npm test` 581).
+  `docs/README.md` steht auf `active`. Kein neues Feld in `dependencies`.

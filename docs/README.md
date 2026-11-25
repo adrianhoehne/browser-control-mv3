@@ -154,7 +154,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `61-klick-seite-danach.md` | **Teil b** von `docs/56`: ein Klick, der auf einer nicht lesbaren Seite landet, antwortet `not_readable_after_click` statt `not_readable` — Satz mit Rückweg `browser_navigate`, `read` bleibt unberührt. **`active`:** Stufen 1–2 gebaut (`a78e2fc`), Doku nachgezogen | `active` |
 | `62-inspect-offscreen.md` | **Teil b** von `docs/57`: jedes Element aus `browser_inspect` trägt `offscreen`, in beiden Quellen; flächenlose Elemente bleiben `false`. **`active`:** Stufen 1–2 gebaut (`6b24115`), Doku nachgezogen | `active` |
 | `63-klick-ohne-antwort.md` | Ein Klick, dessen Anfrage keine Antwort bekommt, antwortet `click_outcome_unknown` statt `not_readable` — der Satz sagt, dass er durchgegangen sein kann, und der Agent prüft die Seite vor dem nächsten Klick. **`active`:** Stufen 1–3 gebaut (`6683373`), Doku nachgezogen | `active` |
-| `64-testabdeckung.md` | Ein Befehl `npm run test:coverage` misst die Zeilenabdeckung der Erweiterung aus den V8-Rohdaten des Testlaufs, druckt eine Tabelle je Datei und bricht unter 90 % ab — ohne neue Abhängigkeit | `proposed` |
+| `64-testabdeckung.md` | Ein Befehl `npm run test:coverage` misst die Zeilenabdeckung der Erweiterung aus den V8-Rohdaten des Testlaufs, druckt eine Tabelle je Datei und bricht unter 90 % ab — ohne neue Abhängigkeit. **`active`:** Stufen 1–3 gebaut (`9355474`), Doku nachgezogen | `active` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.
