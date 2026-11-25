@@ -10,6 +10,7 @@
     "test": "node --test --test-concurrency=1 --test-timeout=90000 test/*.test.js",
     "test:bundle": "node --test test/bundle/*.test.js",
     "test:ci": "node --test test/ci/*.test.js",
+    "test:coverage": "node scripts/coverage.mjs",
     "check": "node scripts/check.mjs"
   },
   "license": "MIT",

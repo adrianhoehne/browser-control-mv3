@@ -22,6 +22,7 @@ write a spec in `docs/` first.
 ```bash
 npm test; echo $?       # 0; the output contains "^# fail 0" AND "^# cancelled 0"
 npm run check; echo $?  # 0 — node --check over every .js/.mjs
+npm run test:coverage; echo $?   # 0 — Zeilenabdeckung der Erweiterung, Schwelle 90 %
 cargo test --manifest-path bridge-rs/Cargo.toml -- --test-threads=1; echo $?   # 0
 ```
 
