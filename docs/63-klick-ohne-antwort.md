@@ -345,7 +345,11 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 Neun Befunde, alle eingearbeitet; sie stehen im `## Log`. Der wichtigste war das
 fehlende `!clicked` am neuen Arm.
 
-### Runde 2 — steht aus
+### Runde 2 — `🔧 Fix these` (2026-11-23)
+
+Fünf Punkte (Satz in Stufe 1, Einfügestelle, `sendMessage`-Zeilen, `docs/06`,
+beide Textzahlen) — alle eingearbeitet, danach gebaut. Ein dritter Durchgang fand
+nicht statt; der Gate hatte den Abschluss an diese Korrekturen gebunden.
 
 Nach `CONTRIBUTING.md`, Schritt 4, öffnet erst ein `✅ Ship it` die Umsetzung.
 

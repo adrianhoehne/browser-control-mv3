@@ -352,7 +352,13 @@ vollzogen: diese Spec endet an der Extension, `docs/60` trägt die MCP-Naht. Die
 Befunde der Runden 1 bis 3 sind eingearbeitet; die Runde-Protokolle stehen in
 `docs/60`, soweit sie die MCP-Seite betreffen.
 
-### Runde 5 — steht aus
+### Runde 5 und 6 — `🔧 Fix these` (2026-11-23)
+
+Runde 5: der Stufe-1-Beweis hing an Stufe 2/3, und die Einheit von 1 bis 3 fehlte.
+Runde 6: ein Satz in `docs/58` blieb widersprüchlich. Beide eingearbeitet. Ein
+abschließendes Gate-`✅` gibt es für diese Spec **nicht** — die letzten zwei Zeilen
+hat der Orchestrator von Hand eingearbeitet und mit `grep` geprüft; der Code-Review
+für dieselbe Spec gab `✅`.
 
 ## Log
 

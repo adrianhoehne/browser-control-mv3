@@ -286,7 +286,12 @@ in `texts.rs`. Die vierte Lesestelle `has_declared_inspect_argument_types`
 allein lässt `--check` rot — Stufe 0 und 1 gehen in einem Auftrag. Dazu `help.rs`
 von „Doku" nach Stufe 1 verschoben: es ist Produktivcode.
 
-### Runde 3 — steht aus
+### Runde 3 — `✅ Ship it` (2026-11-23)
+
+Alle Runde-2-Blocker geschlossen: der `inspect`-Draht wandert über
+`declared_keys_of` und braucht die Abbildung, die Sätze stehen in
+`unexpected_arguments`, die vierte Lesestelle `:916` war ergänzt, und ein Test
+pinnt die Leitung. Die Buchhaltung hier fehlte bis zum 2026-11-23.
 
 ## Log
 

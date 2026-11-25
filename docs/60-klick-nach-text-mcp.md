@@ -284,7 +284,11 @@ Tabelle und im Plan; und der Verweis auf einen nicht existierenden Abschnitt in
 `tools.rs:392`, die dem neuen Schema widersprach, ein Auftrag für die Stufen 0 bis
 2 und der lauffähige `clippy`-Befehl.
 
-### Runde 5 — steht aus
+### Runde 5 und 6 — `✅ Ship it` (2026-11-23)
+
+Runde 5 nannte die drei bestehenden Pins (`:722`, `:1075-1088`, `:2214-2226`) und
+den toten Verweis; Runde 6 gab `✅` für die geteilte Spec. Die Buchhaltung hier
+fehlte bis zum 2026-11-23.
 
 Nach `CONTRIBUTING.md`, Schritt 4, öffnet erst ein `✅ Ship it` die Umsetzung.
 

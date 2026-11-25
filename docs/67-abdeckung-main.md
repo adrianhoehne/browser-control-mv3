@@ -160,7 +160,12 @@ drei Kleinigkeiten im selben Zug: die zwei `free_port()`-Aufrufe konnten kollidi
 `without_token_file()` räumte nicht auf, und der Dateikopf zählte drei statt zwölf
 Fälle.
 
-### Runde 2 — steht aus
+### Runde 2 — `🔧 Fix these` (2026-11-23)
+
+Drei Blocker in dieser Spec: die Umgebungsvariablen heißen `BC_BIND` und
+`BC_HTTP_PORT`, der `pgrep`-Beleg war vakuum-grün, und „neun Zeilen" widersprach der
+Tabelle. Alle eingearbeitet; der Code-Review für dieselben Tests gab `✅` bis auf
+die zwei Nachläufe, die danach abgearbeitet wurden.
 
 ## Log
 

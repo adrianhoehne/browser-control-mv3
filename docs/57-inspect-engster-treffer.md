@@ -277,7 +277,10 @@ Beweis, der Widerspruch zwischen Ziel 6 und Vertrag bei flächenlosen Elementen,
 die fehlenden Fallzahlen in `docs/54`/`PROJECT-STATE`. Kriterien und Beweise sind
 nachgezogen; der Punkt `offscreen` ist nach `docs/62` gewandert.
 
-### Runde 1 nach der Teilung — steht aus
+### Runde 1 nach der Teilung — `✅ Ship it` (2026-11-23)
+
+Geprüft in den Gate-Runden 5 und 6: Runde 5 nannte die falsch gezeigten Fälle in
+Kriterium 3 und 4, Runde 6 gab `✅`. Die Buchhaltung hier fehlte bis zum 2026-11-23.
 
 ## Log
 

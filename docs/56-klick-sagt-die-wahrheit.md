@@ -341,7 +341,11 @@ widersprach sich bei der Fake-Extension — entschieden. Weil das der vierte Blo
 war, ist die Spec an der Frage geteilt: die Lage bleibt hier, die Seite nach dem
 Klick steht in `docs/61`.
 
-### Runde 1 nach der Teilung — steht aus
+### Runde 1 nach der Teilung — `✅ Ship it` (2026-11-23)
+
+Geprüft in den Gate-Runden 5 und 6: Runde 5 nannte die drei Blocker (`:107` zeigte
+auf `docs/57` statt `docs/62`, zwei Fallnamen stimmten nicht, `:7225` war ein `});`),
+Runde 6 gab `✅`. Die Buchhaltung hier fehlte bis zum 2026-11-23.
 
 ## Log
 
