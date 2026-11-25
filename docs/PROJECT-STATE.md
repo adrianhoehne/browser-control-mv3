@@ -33,7 +33,8 @@ Logzeilen `bc: …`, die Kommentare und die Dokumentation bleiben deutsch.
 - **Beweise:** `cargo test` 305 Fälle grün (134 in `mcp.rs`), `clippy -D warnings`
   auf `x86_64-unknown-linux-musl` und `x86_64-pc-windows-gnu`, `npm test` 584,
   `npm run test:coverage` 92,2 % Zeilen (7 604 / 8 250),
-  `npm run test:coverage:rust` 92,92 % Zeilen (3 658, 259 nicht gedeckt)
+  `npm run test:coverage:rust` 94,53 % Zeilen (3 658, 200 nicht gedeckt; `main.rs`
+  88,05 %)
   Fälle, `npm run check` 0, `parity.sh --impl rust --check` 7/7, `--self-test` 7/7.
 - **Review Runde 1 (2026-11-22):** `🔧 Fix these and I'll sign off`; alle Befunde
   eingearbeitet. `docs/53` und `CONTRIBUTING.md` sind nachgezogen. Ein deutscher

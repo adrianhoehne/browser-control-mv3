@@ -1,7 +1,8 @@
 //! The life cycle of the real process: what the end of stdin means, and what it must not
 //! mean.
 //!
-//! Stage 2f of `docs/38`. Three cases, and each one is a rule the service depends on:
+//! Stage 2f of `docs/38`. Twelve cases. The first three are the stdio contract, and each one
+//! is a rule the service depends on:
 //!
 //! - a pipe that ends is a client saying goodbye: exit `0`, exactly one line
 //!   `stdin closed, shutting down`, and nothing but JSON-RPC on stdout, without a fragment
@@ -15,6 +16,14 @@
 //!
 //! The three names are the Node ones (`test/mcp.test.js`), so the mapping stays readable;
 //! `docs/38`, `### What could go wrong` names the allow for the missing snake case.
+//!
+//! The remaining nine measure the *start* path, which `main.rs` owns and nothing else reaches:
+//! the two exit codes the unit's `RestartPreventExitStatus=2` distinguishes (a token that is
+//! missing, a token file that cannot be read), the two ports that can already be held (the
+//! extension one and `/mcp`), the two signals, `--http` itself, the end of one extension
+//! session, and an stdin that fails instead of ending. `--http` is the second surface and only
+//! runs behind the flag, so a suite that never passes the flag leaves half of `main.rs`
+//! unmeasured.
 //!
 //! **Ports.** `BC_BIND=127.0.0.1:0` is not usable here: `config::parse_bind` maps port `0`
 //! to `8110` (the documented silent lie, ported and not fixed), and `8110` is the
@@ -69,6 +78,13 @@ const POLL_INTERVAL: Duration = Duration::from_millis(10);
 /// A single blocking socket operation may not hold the case past its own deadline.
 const SOCKET_TIMEOUT: Duration = Duration::from_secs(1);
 
+/// The exit codes `main.rs` promises, mirrored here because the binary's constants are private
+/// to it. `1` is "a start that failed" (the unit restarts), `2` is "no usable token" (no
+/// restart heals that).
+const EXIT_OK: i32 = 0;
+const EXIT_FAILURE: i32 = 1;
+const EXIT_CONFIGURATION: i32 = 2;
+
 /// The token, built at runtime instead of written as a literal: a 32-character hex string in
 /// the tree would be a finding for the secret grep (`CONTRIBUTING.md`).
 fn token() -> String {
@@ -77,13 +93,156 @@ fn token() -> String {
 
 /* --------------------------------------------------------------------- bridge */
 
-/// Which stdin the child gets. The two variants are the two contracts.
+/// Which stdin the child gets. The first two variants are the two contracts; the third is the
+/// one channel that fails instead of ending.
 #[derive(Clone, Copy)]
 enum Stdin {
     /// A pipe: a client that speaks stdio, and whose EOF is a goodbye.
     Pipe,
     /// `/dev/null`: what the service gets under systemd, and what must never end it.
     Null,
+    /// A directory: openable, and unreadable as a stream. The one stdin whose read *fails*
+    /// instead of ending, which is the other arm of the stdio task — an unusable channel, not a
+    /// client saying goodbye.
+    #[cfg(unix)]
+    Unreadable,
+}
+
+/// The child's environment and arguments.
+///
+/// [`Bridge::start`] is `Launch::new().spawn(stdin)` plus the wait for the listener line. A case
+/// that judges a start which is meant to fail — or that needs `--http` — builds its own launch
+/// and spawns without that wait, because there is no line to wait for.
+struct Launch {
+    directory: PathBuf,
+    token_file: TokenFile,
+    port: u16,
+    http_port: Option<u16>,
+    arguments: Vec<String>,
+}
+
+/// What sits at the child's token path. Three filesystem states, because the start path answers
+/// each of them with a different exit code.
+#[derive(Clone, Copy)]
+enum TokenFile {
+    /// A usable token, written before the spawn.
+    Written,
+    /// Nothing at all: the file does not exist.
+    Missing,
+    /// A directory where the file belongs. `read` fails with `EISDIR`, which is *not* the
+    /// "missing" state and must not end with the configuration code.
+    Directory,
+}
+
+impl Launch {
+    /// The environment [`Bridge::start`] uses: a fresh token file, a free port, no arguments.
+    fn new() -> Launch {
+        Launch {
+            directory: temporary_directory(),
+            token_file: TokenFile::Written,
+            port: free_port(),
+            http_port: None,
+            arguments: Vec::new(),
+        }
+    }
+
+    /// Leaves the token path empty — the state `openssl rand -hex 32 > token` should prevent.
+    fn without_token_file(mut self) -> Launch {
+        self.token_file = TokenFile::Missing;
+        // The directory name carries the PID, and a PID comes back eventually: without this
+        // the case would find a token from an earlier run and wait out its whole timeout for
+        // an exit that cannot come. Both removals are best effort — the path is usually empty,
+        // and a leftover file or directory is exactly what has to go.
+        let path = self.token_path();
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_dir_all(&path);
+        self
+    }
+
+    /// Puts a directory at the token path: readable name, unreadable file.
+    fn with_a_directory_as_token_file(mut self) -> Launch {
+        self.token_file = TokenFile::Directory;
+        self
+    }
+
+    fn on_port(mut self, port: u16) -> Launch {
+        self.port = port;
+        self
+    }
+
+    /// Adds the `--http` flag and the port it has to bind.
+    fn with_http(mut self, http_port: u16) -> Launch {
+        self.http_port = Some(http_port);
+        self.arguments.push("--http".to_string());
+        self
+    }
+
+    fn token_path(&self) -> PathBuf {
+        self.directory.join("token")
+    }
+
+    /// Starts the child and drains both pipes, without waiting for anything: a case about a
+    /// failed start has no line to wait for, only an exit code to read.
+    fn spawn(self, stdin: Stdin) -> Bridge {
+        let token_file = self.token_path();
+        match self.token_file {
+            TokenFile::Written => {
+                std::fs::write(&token_file, token()).expect("the token file could not be written");
+            }
+            TokenFile::Missing => {}
+            TokenFile::Directory => {
+                std::fs::create_dir(&token_file)
+                    .expect("the directory at the token path could not be created");
+            }
+        }
+
+        let mut command = Command::new(BRIDGE_BINARY);
+        command
+            .env("BC_BIND", format!("127.0.0.1:{}", self.port))
+            .env("BC_TOKEN_FILE", &token_file)
+            .env("BC_LOG", "info")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if let Some(http_port) = self.http_port {
+            command.env("BC_HTTP_PORT", http_port.to_string());
+        }
+        command.args(&self.arguments);
+        match stdin {
+            Stdin::Pipe => command.stdin(Stdio::piped()),
+            // `Stdio::null()` is `/dev/null`, not a pipe to nowhere: `stdin: "ignore"` in the
+            // Node suite, and the file type the shutdown rule has to read as "not a client".
+            Stdin::Null => command.stdin(Stdio::null()),
+            // The system temp directory is the portable "open, but not readable as a stream":
+            // every platform has one, and none of them lets a `read` on it return EOF.
+            #[cfg(unix)]
+            Stdin::Unreadable => {
+                let directory = std::fs::File::open(std::env::temp_dir())
+                    .expect("the temp directory could not be opened as stdin");
+                command.stdin(Stdio::from(directory))
+            }
+        };
+
+        let mut process = command.spawn().expect("the bridge binary could not be started");
+        let stdout = Arc::new(Mutex::new(String::new()));
+        let stderr = Arc::new(Mutex::new(String::new()));
+        let mut readers = Vec::new();
+        if let Some(pipe) = process.stdout.take() {
+            readers.push(spawn_reader(pipe, Arc::clone(&stdout)));
+        }
+        if let Some(pipe) = process.stderr.take() {
+            readers.push(spawn_reader(pipe, Arc::clone(&stderr)));
+        }
+
+        Bridge {
+            stdin: process.stdin.take(),
+            process,
+            port: self.port,
+            directory: self.directory,
+            stdout,
+            stderr,
+            readers,
+        }
+    }
 }
 
 /// One running bridge, plus everything a case needs to judge it.
@@ -104,47 +263,28 @@ struct Bridge {
 
 impl Bridge {
     fn start(stdin: Stdin) -> Bridge {
-        let directory = temporary_directory();
-        let token_file = directory.join("token");
-        std::fs::write(&token_file, token()).expect("the token file could not be written");
-
-        let port = free_port();
-        let mut command = Command::new(BRIDGE_BINARY);
-        command
-            .env("BC_BIND", format!("127.0.0.1:{port}"))
-            .env("BC_TOKEN_FILE", &token_file)
-            .env("BC_LOG", "info")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        match stdin {
-            Stdin::Pipe => command.stdin(Stdio::piped()),
-            // `Stdio::null()` is `/dev/null`, not a pipe to nowhere: `stdin: "ignore"` in the
-            // Node suite, and the file type the shutdown rule has to read as "not a client".
-            Stdin::Null => command.stdin(Stdio::null()),
-        };
-
-        let mut process = command.spawn().expect("the bridge binary could not be started");
-        let stdout = Arc::new(Mutex::new(String::new()));
-        let stderr = Arc::new(Mutex::new(String::new()));
-        let mut readers = Vec::new();
-        if let Some(pipe) = process.stdout.take() {
-            readers.push(spawn_reader(pipe, Arc::clone(&stdout)));
-        }
-        if let Some(pipe) = process.stderr.take() {
-            readers.push(spawn_reader(pipe, Arc::clone(&stderr)));
-        }
-
-        let mut bridge = Bridge {
-            stdin: process.stdin.take(),
-            process,
-            port,
-            directory,
-            stdout,
-            stderr,
-            readers,
-        };
+        let mut bridge = Launch::new().spawn(stdin);
         bridge.wait_for_listener();
         bridge
+    }
+
+    /// Sends one signal to this child.
+    ///
+    /// Through the POSIX `kill` utility: `std` has no way to signal another process and this
+    /// tree takes no new dependency for a test. By PID from the handle we spawned, never by
+    /// pattern — the operator's own bridge has the same command line.
+    #[cfg(unix)]
+    fn signal(&self, name: &str) {
+        let status = Command::new("kill")
+            .arg(format!("-{name}"))
+            .arg(self.process.id().to_string())
+            .status()
+            .unwrap_or_else(|error| panic!("the kill utility could not be started: {error}"));
+        assert!(
+            status.success(),
+            "`kill -{name} {}` was refused: {status:?}",
+            self.process.id(),
+        );
     }
 
     /// Waits for the line that proves *this* child bound *this* port.
@@ -233,7 +373,7 @@ impl Bridge {
             }
             if Instant::now() >= deadline {
                 panic!(
-                    "the bridge was still running {} ms after its stdin ended\n\
+                    "the bridge was still running {} ms after the case expected it to end\n\
                      --- bridge stderr ---\n{}",
                     timeout.as_millis(),
                     self.stderr_text(),
@@ -422,6 +562,41 @@ fn free_port() -> u16 {
         .port()
 }
 
+/// Two ports the OS handed out while both were held.
+///
+/// [`free_port`] binds and drops in one step, so two calls can return the same number: the
+/// kernel may hand the second bind the port the first just released, and a case that needs two
+/// ports would then die on `EADDRINUSE`. Holding both listeners until both numbers are in hand
+/// makes the two distinct, and both are free again once this returns.
+fn free_ports() -> (u16, u16) {
+    let first = TcpListener::bind("127.0.0.1:0").expect("no ephemeral port to test with");
+    let second = TcpListener::bind("127.0.0.1:0").expect("no second ephemeral port to test with");
+    let first_port = first
+        .local_addr()
+        .expect("the first bound port has no address")
+        .port();
+    let second_port = second
+        .local_addr()
+        .expect("the second bound port has no address")
+        .port();
+    (first_port, second_port)
+}
+
+/// A port this process holds, and the holder that has to outlive the child's attempt.
+///
+/// The counterpart of [`free_port`]: the number is taken on purpose, so the child's bind fails
+/// with `EADDRINUSE` instead of finding a number nobody wanted. The listener stays open until
+/// the case drops it — otherwise the port would be free again before the child gets there, and
+/// the case would measure the wrong thing while looking green.
+fn occupied_port() -> (TcpListener, u16) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("no ephemeral port to occupy");
+    let port = listener
+        .local_addr()
+        .expect("the occupied port has no address")
+        .port();
+    (listener, port)
+}
+
 fn can_connect(port: u16) -> bool {
     TcpStream::connect_timeout(
         &format!("127.0.0.1:{port}")
@@ -430,6 +605,93 @@ fn can_connect(port: u16) -> bool {
         SOCKET_TIMEOUT,
     )
     .is_ok()
+}
+
+/// One `POST /mcp`, written by hand: there is no HTTP client in this tree, and the transport's
+/// answer is a status line plus one JSON body — both readable without one.
+///
+/// Unix-only because the one case that uses it ends the child with a signal.
+///
+/// Returns head and body separately, so a case can look at the status the answer claims and at
+/// the only bytes that are the message. The head is read first — it carries the one number that
+/// says where the body ends — and the body is then read up to `Content-Length` instead of to the
+/// server's close: a read to the close would hang on any answer that keeps the connection, and
+/// whatever the socket delivered past the declared length is not part of this message.
+#[cfg(unix)]
+fn post_mcp(port: u16, token: &str, body: &str) -> (String, String) {
+    let mut stream = TcpStream::connect(("127.0.0.1", port))
+        .unwrap_or_else(|error| panic!("the /mcp port {port} refused a connection: {error}"));
+    stream
+        .set_read_timeout(Some(SOCKET_TIMEOUT))
+        .expect("the socket refused a read timeout");
+    stream
+        .set_write_timeout(Some(SOCKET_TIMEOUT))
+        .expect("the socket refused a write timeout");
+
+    let request = format!(
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\n\
+         Content-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len(),
+    );
+    stream
+        .write_all(request.as_bytes())
+        .expect("the /mcp socket refused the request");
+
+    let mut chunk = [0_u8; 1024];
+    let mut received = Vec::new();
+    let head_end = loop {
+        match stream.read(&mut chunk) {
+            Ok(0) => panic!(
+                "the /mcp answer ended before its head was complete: {:?}",
+                String::from_utf8_lossy(&received),
+            ),
+            Ok(read) => {
+                received.extend_from_slice(&chunk[..read]);
+                if let Some(end) = find_end_of_head(&received) {
+                    break end;
+                }
+            }
+            Err(error) => panic!("the /mcp socket failed while reading the head: {error}"),
+        }
+    };
+
+    let head = String::from_utf8_lossy(&received[..head_end]).into_owned();
+    let length = content_length(&head);
+    let mut body_bytes = received[head_end..].to_vec();
+    while body_bytes.len() < length {
+        match stream.read(&mut chunk) {
+            Ok(0) => panic!(
+                "the /mcp body ended after {} of {length} declared bytes: {:?}",
+                body_bytes.len(),
+                String::from_utf8_lossy(&body_bytes),
+            ),
+            Ok(read) => body_bytes.extend_from_slice(&chunk[..read]),
+            Err(error) => panic!("the /mcp socket failed while reading the body: {error}"),
+        }
+    }
+    body_bytes.truncate(length);
+    (head, String::from_utf8_lossy(&body_bytes).into_owned())
+}
+
+/// The body length an answer declares.
+///
+/// Every answer this transport writes carries `Content-Length` (`respond_json`, `rejection`,
+/// `respond_empty` in `http.rs`), so a missing or unreadable one is a finding about the answer
+/// and not a reason to fall back to reading until the socket closes.
+#[cfg(unix)]
+fn content_length(head: &str) -> usize {
+    let declared = head
+        .lines()
+        .find_map(|line| {
+            let (name, value) = line.split_once(':')?;
+            name.trim()
+                .eq_ignore_ascii_case("content-length")
+                .then(|| value.trim())
+        })
+        .unwrap_or_else(|| panic!("the /mcp answer declares no Content-Length: {head:?}"));
+    declared.parse::<usize>().unwrap_or_else(|error| {
+        panic!("the /mcp answer declares an unusable Content-Length {declared:?}: {error}")
+    })
 }
 
 /* ------------------------------------------------------------- fake extension */
@@ -879,4 +1141,420 @@ fn mcp_withAnIgnoredStdin_shouldKeepRunningAndListeningAfterTheEof() {
     // The child is still running here on purpose — `Drop` kills it by PID, which is also the
     // proof that no case leaks a process onto the operator's machine.
     assert!(bridge.is_running(), "the bridge left the case on its own");
+}
+
+#[test]
+fn bridge_withoutATokenFile_shouldExitWithTheConfigurationCode() {
+    // GIVEN a start whose token path is empty — the state `openssl rand -hex 32 > token` is
+    // supposed to prevent, and the one no restart heals:
+    let launch = Launch::new().without_token_file();
+    let token_file = launch.token_path();
+
+    // WHEN the bridge starts,
+    let mut bridge = launch.spawn(Stdin::Null);
+    let exit_code = bridge.exit_within(EXIT_TIMEOUT);
+
+    // THEN it ends with 2 — the code `RestartPreventExitStatus=2` in the unit is written for,
+    assert_eq!(
+        exit_code,
+        Some(EXIT_CONFIGURATION),
+        "the bridge ended with {exit_code:?} instead of {EXIT_CONFIGURATION}\n{}",
+        bridge.stderr_text(),
+    );
+
+    let stderr = bridge.stderr_text();
+
+    // ... says what is missing and names the exact file the operator has to write,
+    let expected = format!("token file missing or too short: {}", token_file.display());
+    assert!(
+        stderr.contains(&expected),
+        "the line {expected:?} is missing from:\n{stderr}",
+    );
+
+    // ... and bound nothing on the way: the token is read before the listener, so a bridge
+    // without one never sits on the extension's port refusing every extension.
+    assert!(
+        !stderr.contains("listening on"),
+        "the bridge bound a port without a token:\n{stderr}",
+    );
+}
+
+#[test]
+fn bridge_withAnUnreadableTokenFile_shouldExitWithTheFailureCode() {
+    // GIVEN a token path that exists but cannot be read as a file — a directory, which is what
+    // a mistaken `mkdir -p ~/.config/browser-control/token` leaves behind:
+    let launch = Launch::new().with_a_directory_as_token_file();
+
+    // WHEN the bridge starts,
+    let mut bridge = launch.spawn(Stdin::Null);
+    let exit_code = bridge.exit_within(EXIT_TIMEOUT);
+
+    // THEN it ends with 1, the code the unit restarts for: this is a broken installation, not a
+    // missing configuration,
+    assert_eq!(
+        exit_code,
+        Some(EXIT_FAILURE),
+        "the bridge ended with {exit_code:?} instead of {EXIT_FAILURE}\n{}",
+        bridge.stderr_text(),
+    );
+
+    let stderr = bridge.stderr_text();
+
+    // ... and the failure is reported as one, with the OS error behind it,
+    assert!(
+        stderr.contains("bridge failed:"),
+        "the line \"bridge failed:\" is missing from:\n{stderr}",
+    );
+
+    // ... and not as the missing-token case: `EISDIR` is not `ENOENT`, and the two exit codes
+    // exist to keep them apart.
+    assert!(
+        !stderr.contains("token file missing or too short:"),
+        "an unreadable token file was reported as a missing one:\n{stderr}",
+    );
+    assert!(
+        !stderr.contains("listening on"),
+        "the bridge bound a port with an unreadable token:\n{stderr}",
+    );
+}
+
+#[test]
+fn bridge_onATakenPort_shouldExitWithTheFailureCodeAndNameTheOwner() {
+    // GIVEN an extension port this process already holds — a second start, which
+    // `Restart=on-failure` is meant to survive:
+    let (holder, port) = occupied_port();
+
+    // WHEN the bridge tries to bind it,
+    let mut bridge = Launch::new().on_port(port).spawn(Stdin::Null);
+    let exit_code = bridge.exit_within(EXIT_TIMEOUT);
+
+    // THEN it ends with 1,
+    assert_eq!(
+        exit_code,
+        Some(EXIT_FAILURE),
+        "the bridge ended with {exit_code:?} instead of {EXIT_FAILURE}\n{}",
+        bridge.stderr_text(),
+    );
+
+    let stderr = bridge.stderr_text();
+
+    // ... naming the bind that failed, the address and the symbolic error — the shape the
+    // parity yardstick records (`EADDRINUSE`, not "Address already in use"),
+    let failed = format!("listener failed on 127.0.0.1:{port}: EADDRINUSE");
+    assert!(
+        stderr.contains(&failed),
+        "the line {failed:?} is missing from:\n{stderr}",
+    );
+
+    // ... and with the second line that makes the failure actionable: who holds the port. The
+    // owner is this process, when the platform can name one at all — a kernel without `/proc`
+    // (or a hardened container) legitimately says so instead.
+    let in_use = format!("port 127.0.0.1:{port} in use, ");
+    let owner_line = stderr
+        .lines()
+        .find(|line| line.contains(&in_use))
+        .unwrap_or_else(|| panic!("no line {in_use:?} in:\n{stderr}"));
+    assert!(
+        owner_line.contains("owner pid=") || owner_line.contains("Besitzer nicht ermittelbar"),
+        "the owner line names no owner: {owner_line:?}",
+    );
+    if let Some(pid) = owner_line
+        .split("owner pid=")
+        .nth(1)
+        .and_then(|rest| rest.split(' ').next())
+    {
+        assert_eq!(
+            pid,
+            std::process::id().to_string(),
+            "the owner line names another process than this one: {owner_line:?}",
+        );
+    }
+
+    drop(holder);
+}
+
+#[cfg(unix)]
+#[test]
+fn bridge_onSigterm_shouldExitZeroWithTheTerminationLine() {
+    // GIVEN a running bridge — stdin on `/dev/null`, so nothing but the signal can end it,
+    let mut bridge = Bridge::start(Stdin::Null);
+
+    // WHEN the service manager stops it,
+    bridge.signal("TERM");
+    let exit_code = bridge.exit_within(EXIT_TIMEOUT);
+
+    // THEN the exit is 0: being stopped is not a failure, and a 1 here would make
+    // `Restart=on-failure` restart a service that was asked to stop,
+    assert_eq!(
+        exit_code,
+        Some(EXIT_OK),
+        "the bridge ended with {exit_code:?} instead of {EXIT_OK}\n{}",
+        bridge.stderr_text(),
+    );
+
+    // ... with exactly one shutdown line, spelled the way the Node bridge spells it,
+    let shutdown = bridge.shutdown_lines();
+    assert_eq!(
+        shutdown.len(),
+        1,
+        "one shutdown line expected, got {shutdown:?}:\n{}",
+        bridge.stderr_text(),
+    );
+    assert!(
+        shutdown[0].ends_with(" received SIGTERM, shutting down"),
+        "the shutdown line says something else: {:?}",
+        shutdown[0],
+    );
+
+    // ... and stdout stayed protocol-only: the end of a session is a log line, never a message.
+    assert_eq!(
+        bridge.stdout_text(),
+        "",
+        "the bridge wrote to the protocol channel on its way out",
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bridge_onSigint_shouldExitZeroWithTheInterruptLine() {
+    // GIVEN a running bridge,
+    let mut bridge = Bridge::start(Stdin::Null);
+
+    // WHEN it is interrupted — the Ctrl+C of a foreground run,
+    bridge.signal("INT");
+    let exit_code = bridge.exit_within(EXIT_TIMEOUT);
+
+    // THEN it ends with 0 as well: both signals are one contract, not two,
+    assert_eq!(
+        exit_code,
+        Some(EXIT_OK),
+        "the bridge ended with {exit_code:?} instead of {EXIT_OK}\n{}",
+        bridge.stderr_text(),
+    );
+
+    // ... and the line names the signal that actually arrived. A handler that logs the wrong
+    // one sends the operator looking for a signal nobody sent.
+    let shutdown = bridge.shutdown_lines();
+    assert_eq!(
+        shutdown.len(),
+        1,
+        "one shutdown line expected, got {shutdown:?}:\n{}",
+        bridge.stderr_text(),
+    );
+    assert!(
+        shutdown[0].ends_with(" received SIGINT, shutting down"),
+        "the shutdown line says something else: {:?}",
+        shutdown[0],
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bridge_withTheHttpFlag_shouldServeMcpUntilASigterm() {
+    // GIVEN a start with `--http` and a `/mcp` port of its own — the second surface exists only
+    // behind this flag, so this case is the only thing that measures it. Both numbers come from
+    // one call, so the extension port and the `/mcp` port cannot turn out to be the same:
+    let (extension_port, http_port) = free_ports();
+    let mut bridge = Launch::new()
+        .on_port(extension_port)
+        .with_http(http_port)
+        .spawn(Stdin::Null);
+    bridge.wait_for_listener();
+
+    // WHEN the transport has reported itself,
+    let listening = format!("listening on 127.0.0.1:{http_port} for POST /mcp");
+    bridge.wait_for_stderr(&listening, "the /mcp listener line");
+
+    // THEN it really accepts connections on that port — the line is a claim, this is the proof,
+    assert!(
+        can_connect(http_port),
+        "the /mcp port {http_port} does not accept a connection:\n{}",
+        bridge.stderr_text(),
+    );
+
+    // ... the extension port kept working beside it, which is the whole reason the second
+    // surface got its own listener,
+    assert!(
+        can_connect(bridge.port),
+        "the extension port {} stopped accepting connections:\n{}",
+        bridge.port,
+        bridge.stderr_text(),
+    );
+
+    // ... a request is answered: the tool seam `main.rs` wires into the transport is where the
+    // protocol layer and the second surface meet, and a `/mcp` that accepts but cannot answer
+    // would pass every check above,
+    let (head, body) = post_mcp(http_port, &token(), &ping_message(41).to_string());
+    assert!(
+        head.starts_with("HTTP/1.1 200"),
+        "the /mcp answer is not a 200: {head:?}",
+    );
+    let message: Value = serde_json::from_str(body.trim())
+        .unwrap_or_else(|error| panic!("the /mcp body is not JSON: {body:?} ({error})"));
+    assert_eq!(
+        message["id"],
+        json!(41),
+        "the /mcp answer carries another id: {message}",
+    );
+    assert_eq!(
+        message["jsonrpc"],
+        json!("2.0"),
+        "the /mcp answer is not JSON-RPC: {message}",
+    );
+
+    // ... with a *result*, not merely an envelope: `ping` answers the empty object
+    // (`mcp::respond_to`), and an envelope carrying `-32601` instead would pass every check
+    // above while proving that nothing behind the transport works at all,
+    assert_eq!(
+        message["result"],
+        json!({}),
+        "the /mcp answer carries no result: {message}",
+    );
+    assert!(
+        message.get("error").is_none(),
+        "the /mcp answer is an error instead of a result: {message}",
+    );
+
+    // ... and the stop still ends the process through the one signal path, with 0.
+    bridge.signal("TERM");
+    let exit_code = bridge.exit_within(EXIT_TIMEOUT);
+    assert_eq!(
+        exit_code,
+        Some(EXIT_OK),
+        "the bridge ended with {exit_code:?} instead of {EXIT_OK}\n{}",
+        bridge.stderr_text(),
+    );
+    let shutdown = bridge.shutdown_lines();
+    assert_eq!(
+        shutdown.len(),
+        1,
+        "one shutdown line expected, got {shutdown:?}:\n{}",
+        bridge.stderr_text(),
+    );
+}
+
+#[test]
+fn bridge_withTheHttpFlagOnATakenPort_shouldExitWithTheFailureCode() {
+    // GIVEN a `/mcp` port this process already holds,
+    let (holder, http_port) = occupied_port();
+
+    // WHEN the bridge starts with `--http`,
+    let mut bridge = Launch::new().with_http(http_port).spawn(Stdin::Null);
+    let exit_code = bridge.exit_within(EXIT_TIMEOUT);
+
+    // THEN the start is over instead of half alive: the extension served but `/mcp` not is the
+    // "looks healthy in `systemctl status`" failure the failure code prevents,
+    assert_eq!(
+        exit_code,
+        Some(EXIT_FAILURE),
+        "the bridge ended with {exit_code:?} instead of {EXIT_FAILURE}\n{}",
+        bridge.stderr_text(),
+    );
+
+    let stderr = bridge.stderr_text();
+
+    // ... the failing bind is named as the `/mcp` one, not as the extension one,
+    let failed = format!("http listener failed on 127.0.0.1:{http_port}: EADDRINUSE");
+    assert!(
+        stderr.contains(&failed),
+        "the line {failed:?} is missing from:\n{stderr}",
+    );
+    assert!(
+        stderr.contains(&format!("port 127.0.0.1:{http_port} in use, ")),
+        "no owner line for the /mcp port in:\n{stderr}",
+    );
+
+    // ... and the extension port went with the process. A listener left behind here would be a
+    // bridge that answers the extension while `/mcp` is dead.
+    assert!(
+        !can_connect(bridge.port),
+        "the extension port {} still accepts connections after the failed start",
+        bridge.port,
+    );
+
+    drop(holder);
+}
+
+#[test]
+fn bridge_whenTheExtensionSocketCloses_shouldKeepListening() {
+    // GIVEN a bridge with a session that ends — a browser tab closed, a socket lost, the
+    // ordinary way an extension disconnects. stdin is a pipe the case holds open, so nothing
+    // but the closed socket can end anything here:
+    let mut bridge = Bridge::start(Stdin::Pipe);
+    {
+        let mut extension = FakeExtension::connect(bridge.port, &token());
+        extension.wait_for_welcome();
+    }
+    std::thread::sleep(IGNORED_STDIN_SETTLE);
+
+    // WHEN the end of that session has been handled,
+    // THEN the process is still there. A bridge that ended with its last socket would leave the
+    // stdio client of a shared process without a tool layer,
+    assert!(
+        bridge.is_running(),
+        "the bridge ended with its extension session:\n{}",
+        bridge.stderr_text(),
+    );
+
+    // ... and the next extension finds a listener again.
+    assert!(
+        can_connect(bridge.port),
+        "the extension port {} does not accept a connection any more",
+        bridge.port,
+    );
+    let mut extension = FakeExtension::connect(bridge.port, &token());
+    extension.wait_for_welcome();
+
+    // ... and the client's own goodbye still ends the process the way it always does — the end
+    // of a session changes nothing about the life cycle.
+    bridge.close_stdin();
+    assert_eq!(
+        bridge.exit_within(EXIT_TIMEOUT),
+        Some(EXIT_OK),
+        "the bridge ended with another code than 0 after the session's end\n{}",
+        bridge.stderr_text(),
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn bridge_withAnUnreadableStdin_shouldKeepServingAndLogTheFailure() {
+    // GIVEN a bridge whose stdin cannot be read at all — a directory descriptor, which is the
+    // one stdin that fails the read instead of ending it:
+    let mut bridge = Bridge::start(Stdin::Unreadable);
+
+    // WHEN the failed read has been reported,
+    bridge.wait_for_stderr("mcp stdin failed:", "the failed read on stdin");
+
+    // THEN the extension listener keeps serving. An unusable stdio channel is not a bridge that
+    // failed: the client of a shared process may lose its pipe while the browser keeps talking.
+    assert!(
+        bridge.is_running(),
+        "the bridge ended on a failed read of its stdin:\n{}",
+        bridge.stderr_text(),
+    );
+    assert!(
+        can_connect(bridge.port),
+        "the extension port {} does not accept a connection any more",
+        bridge.port,
+    );
+
+    // ... and the failure was not dressed up as a shutdown: the operator greps two different
+    // lines for two different things.
+    assert_eq!(
+        bridge.shutdown_lines(),
+        Vec::<String>::new(),
+        "the bridge logged a shutdown for an unusable stdin:\n{}",
+        bridge.stderr_text(),
+    );
+
+    // ... and the case ends the child the way a service is ended, not with the harness's
+    // SIGKILL: the one path out of this process is the signal path.
+    bridge.signal("TERM");
+    assert_eq!(
+        bridge.exit_within(EXIT_TIMEOUT),
+        Some(EXIT_OK),
+        "the bridge ended with another code than 0 on SIGTERM\n{}",
+        bridge.stderr_text(),
+    );
 }

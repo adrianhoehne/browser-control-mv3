@@ -116,9 +116,9 @@ Beweis: `npm run check` ⇒ 0 und `grep -n 'test:coverage:rust' CONTRIBUTING.md`
 
 ## Bekannte Lücken
 
-- **`main.rs` liegt bei 55,97 % Zeilen.** Einstiegspunkt, Argumente, Signale — die
-  Fälle starten die Bridge als Prozess, statt `main` zu rufen. Eine eigene Spec wäre
-  der Weg, keine Zeile in dieser (2026-11-23).
+- **`main.rs` lag bei 55,97 % Zeilen** und steht seit `docs/67` bei **88,05 %** (19 von
+  159 Zeilen offen, mit Begründung dort). Einstiegspunkt, Argumente, Signale — die
+  Startpfade werden jetzt als Prozess geprüft (2026-11-23).
 - **Die Werkzeuge sind eine Installation außerhalb des Repos.** Ein frischer Rechner
   braucht `rustup component add llvm-tools-preview` und `cargo install
   cargo-llvm-cov`; der Wrapper nennt beide, installiert sie aber nicht (2026-11-23).

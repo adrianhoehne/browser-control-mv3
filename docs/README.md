@@ -157,6 +157,7 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `64-testabdeckung.md` | Ein Befehl `npm run test:coverage` misst die Zeilenabdeckung der Erweiterung aus den V8-Rohdaten des Testlaufs, druckt eine Tabelle je Datei und bricht unter 90 % ab — ohne neue Abhängigkeit. **`active`:** Stufen 1–3 gebaut (`9355474`), Doku nachgezogen | `active` |
 | `65-coverage-in-der-ci.md` | Die Zeilenabdeckung aus `docs/64` läuft als eigener, unabhängiger Job `coverage` in der CI; Schwelle 90 %, kein `needs:`. **`active`:** Stufen 1–3 gebaut (`0ab43ff`), Doku nachgezogen | `active` |
 | `66-rust-abdeckung.md` | `npm run test:coverage:rust` misst die Zeilenabdeckung der Bridge über `cargo-llvm-cov`, druckt die Übersicht je Modul und bricht unter 90 % ab; kein CI-Job. **`active`:** Stufen 1–3 gebaut (`fe2cb7e`), Doku nachgezogen | `active` |
+| `67-abdeckung-main.md` | Neun Prozessfälle heben `main.rs` von 55,97 auf 88,05 % Zeilen und die Gesamtabdeckung auf 94,53 — Start-, Signal- und Fehlerpfade. **`active`:** gebaut und abgenommen (2026-11-23) | `active` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.
