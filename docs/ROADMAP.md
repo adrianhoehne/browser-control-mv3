@@ -74,7 +74,6 @@ prüfbar geschlossen, das Diagnose-Muster erklärt); und die drei Restlöcher im
 | Vorhaben | Größe |
 |---|---|
 | **`click` erreicht die Ruhe auf Seiten mit Timern nicht** — sechster Live-Versuch am 2026-11-23: `settled: false, waitedMs: 3937` auf einem Wikipedia-`#`-Anker. Der Guard (4 s) greift, der Rückfall trägt, aber jeder Klick auf einer solchen Seite kostet vier Sekunden und die Antwort unterscheidet „nicht still" nicht von „keine Reaktion" (`docs/15`, `## Bekannte Lücken`) | klein |
-| ~~**Windows-Installationsanleitung fehlt.**~~ **Erledigt:** `INSTALL.md`, Abschnitt 10 (Binary, Token, Task Scheduler, Prüfung) — der Weg ist mit `docs/38`, Stufe 3 gebaut; offen bleibt nur die Betreiber-Messung auf einem Windows-Rechner | winzig |
 
 ## Funktionalität
 
