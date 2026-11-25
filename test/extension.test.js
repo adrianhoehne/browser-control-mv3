@@ -7760,9 +7760,13 @@ test("click_onATabThatIsUnreadableBeforeTheClick_shouldAnswerNotReadable", async
     tabs: [createAgentTabFixture({ status: "complete" })],
     pageAgent: { frames: [{ href: page.url, page }], refuseInjection: true },
   });
+  // A server that *would* answer, so the count below is a statement and not a stub that
+  // happens to say nothing:
+  const headFetch = createHeadFetchStub(() => headReply(true, "application/pdf"));
   const { socket, consoleLines } = await connectedBackground({
     tabs,
     settings: STORED_TAB_SETTINGS,
+    headFetch,
   });
 
   // WHEN we click,
@@ -7786,6 +7790,18 @@ test("click_onATabThatIsUnreadableBeforeTheClick_shouldAnswerNotReadable", async
   assert.equal(tabs.scriptCalls.length, 1);
   assert.deepStrictEqual(tabs.channel.ops(), []);
   assert.equal(answer.error.url, "https://before.example/");
+
+  // ... and the click's own request pays no HEAD: its `kind`/`contentType` would have no
+  // reader — the address the caller needs stands in the answer already — so the frame
+  // says `null` instead of waiting up to 1,5 s for a server
+  // (`settleAgentTab` skips the request for the same reason):
+  assert.equal(answer.error.contentType, null);
+  assert.equal(
+    headFetch.calls.length,
+    0,
+    "the click's own refusal must not cost a HEAD request",
+  );
+
   assert.ok(
     !consoleLines.some((line) => line.includes("click result without a known outcome")),
     "a refusal of the page is not a warning of ours",

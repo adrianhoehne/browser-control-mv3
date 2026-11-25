@@ -321,11 +321,11 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
 - **Für einen abgelehnten `sendMessage` beim Klick gibt es keinen eigenen Fall.** Der Weg
   ist derselbe (`markSilent` → null Antworten → `NoAnswerError`), aber gepinnt ist nur die
   Frist (Code-Review 2026-11-23).
-- **Die eigene Klick-Anfrage holt weiter `head: true`** (`pageRefusalFor(tabId, { head })`)
-  und verwirft `kind`/`contentType` danach; `head: false` wäre billiger. Vorbestehend, aber
-  jetzt erstmals beweisbar sinnlos (Code-Review 2026-11-23).
-- **Der Doc-Kommentar von `clickAgentTab` nennt die Box noch `clicked`**, der Parameter
-  heißt seit diesem Inkrement `attempt` (Code-Review 2026-11-23).
+- ~~Die eigene Klick-Anfrage holt `head: true`~~ **erledigt am 2026-11-23:** sie reicht
+  `head: false` durch; die Nachlese behält `true`, weil sie `details.url` liest. Der
+  Vorher-Fall pinnt null HEAD-Anfragen und `contentType: null`.
+- ~~Der Doc-Kommentar von `clickAgentTab` nennt die Box `clicked`~~ **erledigt am
+  2026-11-23:** er spricht von `attempt.done` und `attempt.url`.
 
 ## Open questions
 

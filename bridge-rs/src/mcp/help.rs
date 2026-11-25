@@ -68,13 +68,13 @@ Reads the **current agent tab**. It opens nothing and takes **no URL**. Order: `
 | `tab` | no | an agent tab by id |
 
 ## Returns
-`tabId`, `url`, `title`, `text`, `chars`, `totalChars`, `via`, `settled`, `waitedMs`.
+`tabId`, `url`, `title`, `text`, `offset`, `chars`, `totalChars`, `truncated`, `via`, `mode`, `root`, `fellBack`, `settled`, `waitedMs`. `root` and `fellBack` come only in `mode: "article"`: `root` names the rule that found the article or is `null` when the whole page was read instead, and `fellBack: true` says that fallback happened.
 
 ## Example
 `browser_read({"maxChars":200})` answers `{"title":"Example Domain","text":"This domain is for use in documentation…","chars":200,"totalChars":917}`.
 
 ## Pitfalls
-There is no `url` argument — passing one is refused before anything is injected. `chars` and `totalChars` tell you where you are in a long page. A page that refuses injection answers with a named error instead of text.
+There is no `url` argument — passing one is refused before anything is injected. `offset`, `chars`, `totalChars` and `truncated` tell you where you are in a long page. A page that refuses injection answers with a named error instead of text.
 
 ## Related
 `browser_navigate`, `browser_inspect`"#;

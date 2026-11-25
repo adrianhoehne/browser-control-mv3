@@ -4759,6 +4759,58 @@ async fn help_forRead_shouldSayThatItTakesNoUrl() {
     assert!(text.contains("browser_navigate"));
 }
 
+/// Die Anleitung nennt jedes Feld der Leseantwort, in der Reihenfolge, in der es kommt:
+/// `offset`, `truncated`, `mode` und die beiden Artikel-Felder standen lange nicht darin,
+/// obwohl `readPageSource` (`extension/page-agent.js`) und `isUsablePageResult`
+/// (`extension/bridge.js`) sie immer liefern. Ein Feld, das die Anleitung vergisst, ist
+/// fuer den Agenten nicht vorhanden — dieselbe Luecke, die `docs/62` fuer `inspect`
+/// geschlossen hat.
+#[tokio::test]
+async fn help_forRead_shouldNameEveryPageField() {
+    // GIVEN a bridge with nobody connected — a manual needs no browser (`docs/53`):
+    let mut seam = Seam::nobody(config());
+
+    // WHEN the manual of `browser_read` is asked for,
+    let answer = seam.call(help_call(37, "browser_read")).await;
+    let text = answer["result"]["content"][0]["text"].as_str().unwrap_or_default();
+
+    // THEN the returns section names every field — checked inside that section, because a
+    // word anywhere in the manual would not be the field list,
+    let returns = text
+        .split("## Returns")
+        .nth(1)
+        .expect("the manual has a Returns section");
+    let returns = returns.split("## ").next().unwrap_or(returns);
+
+    // ... in the order the answer has: the fields of `pageResultOf`
+    // (`extension/bridge.js`) and the settle pair behind them, `root`/`fellBack` between
+    // `mode` and `settled` because that is where the article fields ride.
+    let fields = [
+        "tabId",
+        "url",
+        "title",
+        "text",
+        "offset",
+        "chars",
+        "totalChars",
+        "truncated",
+        "via",
+        "mode",
+        "root",
+        "fellBack",
+        "settled",
+        "waitedMs",
+    ];
+    let mut cursor = 0;
+    for field in fields {
+        let quoted = format!("`{field}`");
+        let found = returns[cursor..]
+            .find(&quoted)
+            .unwrap_or_else(|| panic!("the returns section has to name `{field}`: {returns}"));
+        cursor += found + quoted.len();
+    }
+}
+
 /// Die Engste-Regel und ihre zwei Ausnahmen stehen in der Anleitung: wer `contains_text`
 /// sucht, bekommt das Ziel statt der Containerseite (`docs/57`, `## Ziel`, 4 und 5).
 #[tokio::test]
@@ -4793,12 +4845,32 @@ async fn help_forInspect_shouldNameTheInnermostRule() {
     );
 }
 
-/// Die Anleitung nennt das Lage-Feld: `browser_inspect` liefert `offscreen` in der
-/// Rueckgabe (`docs/62`, `## Ziel`, 1 und `## Amendments` zu `docs/53`). Und sie nennt
+/// Die zwoelf Elementfelder, in der Reihenfolge der Antwort — dieselbe Liste wie
+/// `ELEMENT_FIELDS` in `hub.rs`. Sie steht hier als eigener Wert, weil die Anleitung sonst
+/// nur gegen sich selbst geprueft wuerde: ein dreizehntes Feld, das sie vergisst, faellt
+/// gegen diese Liste auf.
+const ELEMENT_FIELDS: [&str; 12] = [
+    "index",
+    "selector",
+    "tag",
+    "id",
+    "classes",
+    "text",
+    "href",
+    "ariaLabel",
+    "visible",
+    "offscreen",
+    "disabled",
+    "rect",
+];
+
+/// Die Anleitung nennt jedes Elementfeld: `browser_inspect` liefert `offscreen` in der
+/// Rueckgabe (`docs/62`, `## Ziel`, 1 und `## Amendments` zu `docs/53`), und sie nennt
 /// die drei Felder, die sie lange verschwieg, obwohl das Werkzeug sie immer liefert
-/// (`docs/62`, `## Bekannte Luecken`: `index`, `ariaLabel`, `disabled`).
+/// (`docs/62`, `## Bekannte Luecken`: `index`, `ariaLabel`, `disabled`). Alle zwoelf, in
+/// der Reihenfolge der Antwort.
 #[tokio::test]
-async fn help_forInspect_shouldNameOffscreen() {
+async fn help_forInspect_shouldNameEveryElementField() {
     // GIVEN a bridge with nobody connected — a manual needs no browser (`docs/53`):
     let mut seam = Seam::nobody(config());
 
@@ -4824,31 +4896,24 @@ async fn help_forInspect_shouldNameOffscreen() {
         "the returns section lists fields, not error codes: {returns}"
     );
 
-    // ... and the three fields the answer always carried are named too, each in the
-    // place the wire order gives it — `index` first, `ariaLabel` behind `href`,
-    // `disabled` behind `visible` (`docs/62`: `offscreen` vor `disabled`):
-    let fields = [
-        "index",
-        "selector",
-        "tag",
-        "id",
-        "classes",
-        "text",
-        "href",
-        "ariaLabel",
-        "visible",
-        "offscreen",
-        "disabled",
-        "rect",
-    ];
-    let mut cursor = 0;
-    for field in fields {
-        let quoted = format!("`{field}`");
-        let found = returns[cursor..]
-            .find(&quoted)
-            .unwrap_or_else(|| panic!("the returns section has to name `{field}`: {returns}"));
-        cursor += found + quoted.len();
-    }
+    // ... and the whole list decides, not only this one field: exactly the twelve names
+    // of `ELEMENT_FIELDS`, in the wire order. An ordered-subsequence check would let a
+    // thirteenth field through that the manual forgets, and so would a bare count — the
+    // parsed list is compared as a whole, one name per place (`docs/62`: `offscreen`
+    // vor `disabled`).
+    let list = returns
+        .split("each with ")
+        .nth(1)
+        .and_then(|rest| rest.split(')').next())
+        .unwrap_or_else(|| panic!("the returns section lists the element fields: {returns}"));
+    let named: Vec<&str> = list
+        .split(',')
+        .map(|name| name.trim().trim_matches('`'))
+        .collect();
+    assert_eq!(
+        named, ELEMENT_FIELDS,
+        "the returns section has to name every element field once, in the wire order: {returns}"
+    );
 }
 
 /// Die Anleitung nennt dieselben Namen wie das Schema — sie ist Produktivcode, kein

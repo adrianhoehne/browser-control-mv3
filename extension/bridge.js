@@ -2987,11 +2987,11 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
    * and the slot stays the tab's, because two calls in one tab keep racing for one page
    * even when they aim at different frames.
    *
-   * `clicked` is the caller's box, flipped the moment the page reports a click. It is the
-   * only thing that tells the two `not_readable`s apart: one before the first injection
-   * (nothing was clicked) and one after the read (the click opened this page). The same
-   * box carries the address from before the click, for the frame of a click whose request
-   * stays silent (`docs/63`).
+   * `attempt` is the caller's box: `attempt.done` is flipped the moment the page reports a
+   * click. It is the only thing that tells the two `not_readable`s apart: one before the
+   * first injection (nothing was clicked) and one after the read (the click opened this
+   * page). The same box carries the address from before the click in `attempt.url`, for
+   * the frame of a click whose request stays silent (`docs/63`).
    */
   async function clickAgentTab(params, attempt = { done: false, url: "" }) {
     const target = clickRequestSelector(params);
@@ -3014,7 +3014,12 @@ const EVAL_RESULT_UNSERIALIZABLE_CODE = "eval_result_unserializable";
     supersedePageSlot(tab.id);
     const click = claimPageSlot(tab.id, () => settleWindow(tab.id, want));
     try {
+      // No HEAD for the click's own request: a refusal here is answered by the click's
+      // error frame, and its `kind`/`contentType` have no reader that acts on them — the
+      // address the caller needs is `attempt.url`. The read *after* the click keeps the
+      // HEAD, because `details.url` of a `not_readable_after_click` is read there.
       const { answers } = await askPageAgent(tab.id, clickPageRequest(target, want), {
+        head: false,
         allFrames: want !== null,
       });
       const reported = clickOutcomeOf(frameTargetOf(valuesOf(answers), want), target);

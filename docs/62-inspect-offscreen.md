@@ -59,7 +59,7 @@ und `visibility` — die Lage nicht. `described` liefert `rect`, aber keine Deut
 | `test/extension.test.js` | `inspect_withAnElementWithoutArea_shouldSetOffscreenFalse` | Fläche 0 ⇒ `false`, `visible: false` bleibt |
 | `test/extension.test.js` | `inspect_withASelectorOnTheLink_shouldAnswerEveryFieldOfTheContract` (bestehend, `:10199`) | der Feldvertrag **mit** `offscreen`, von elf auf zwölf Felder |
 | `test/extension.test.js` | `inspect_withAShadowHit_shouldDeliverTheSameFieldSetAsADocumentHit` (bestehend, `:10921`) | beide Quellen liefern dasselbe Feldset, `length` 11 → 12 (`:10940`) |
-| `bridge-rs/tests/mcp.rs` | `help_forInspect_shouldNameOffscreen` | die Anleitung nennt das Feld (Dateikonvention `help_…`) |
+| `bridge-rs/tests/mcp.rs` | `help_forInspect_shouldNameEveryElementField` | die Anleitung nennt das Feld (Dateikonvention `help_…`) |
 
 ## Acceptance criteria
 
@@ -123,7 +123,7 @@ Beweis: `inspect_withAnElementOutsideTheViewport_shouldSetOffscreenTrue` (`x = -
 INSPECT-Block `:148-171`: die `## Returns`-Zeile (`:161-162`) bekommt `offscreen` in
 die Feldaufzählung. Sie listet heute nur acht der elf Felder (`index`, `ariaLabel`,
 `disabled` fehlen) — nachgezogen wird **nur** `offscreen`; die drei anderen bleiben
-eine Lücke und stehen unten. Neuer Fall `help_forInspect_shouldNameOffscreen` (die
+eine Lücke und stehen unten. Neuer Fall `help_forInspect_shouldNameEveryElementField` (die
 Datei-Konvention ist `help_…`; `## Testing` nennt ihn `mcp_toolsCallBrowserHelp_…`).
 
 Beweis: `cargo test --manifest-path bridge-rs/Cargo.toml --test mcp
