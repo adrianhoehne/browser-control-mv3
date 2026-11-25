@@ -234,12 +234,14 @@ sagt die Wahrheit" (2026-11-23) festgelegt.
 
 ## Review
 
-### Runde 1 nach der Teilung — steht aus
+### Runde 1 nach der Teilung — `🔧 Fix these` (2026-11-23)
 
-Die Vorgänger-Spec hatte vier Runden; die Befunde, die dieses Thema betreffen,
-stehen dort (Runde 1: `not_readable` trägt kein `frame`; Runde 2/3: der Träger für
-`clicked`; Runde 4: die zwei bestehenden Fälle `:7492`, `:7528`). Alle sind hier
-eingearbeitet.
+Geprüft in den Gate-Runden 5 und 6 der Vorgänger-Spec, dort als „Teil b" der
+Teilung: Der erste Durchgang nannte den `read`-Fall falsch, den `grep`-Beleg als
+untauglich und die Stufen-Beweise verdreht; der zweite fand den `grep` wieder zu
+weit (`type_…shouldPassNotReadableThrough` lebt weiter). Alles eingearbeitet. Der
+Runde-2-Verdict lautete `✅` für den Code; die Buchhaltung hier fehlte bis zum
+2026-11-23.
 
 ## Log
 

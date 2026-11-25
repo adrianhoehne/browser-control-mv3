@@ -201,11 +201,12 @@ prüft nur die sechs Überschriften). Das Feld sagt nichts über Verdeckung
 
 ## Review
 
-### Runde 1 nach der Teilung — steht aus
+### Runde 1 nach der Teilung — `🔧 Fix these` (2026-11-23)
 
-Die Vorgänger-Spec hatte vier Runden. Dieses Thema war dort Runde 1 (der Treffer
-außerhalb des Sichtfelds, `visible: true`) und Runde 2/3 (die zweite Quelle, der
-Feldset-Fall, die Harmonie mit `docs/56`). Alle Befunde sind hier eingearbeitet.
+Geprüft in den Gate-Runden 5 und 6 der Vorgänger-Spec: Der Durchgang nannte die
+Fallzahlen, den Schatten-Feldset-Fall (`length` 11 → 12) und die fehlende
+Text-Faltung im Fixture-Bauer. Alles eingearbeitet; der Code-Review gab danach `✅`.
+Die Buchhaltung hier fehlte bis zum 2026-11-23.
 
 ## Log
 
