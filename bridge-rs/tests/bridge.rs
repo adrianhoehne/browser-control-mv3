@@ -116,7 +116,8 @@ enum Stdin {
 struct Launch {
     directory: PathBuf,
     token_file: TokenFile,
-    port: u16,
+    /// The extension port, or `None` for "let [`Launch::spawn`] pick a free one".
+    port: Option<u16>,
     http_port: Option<u16>,
     arguments: Vec<String>,
 }
@@ -135,27 +136,25 @@ enum TokenFile {
 }
 
 impl Launch {
-    /// The environment [`Bridge::start`] uses: a fresh token file, a free port, no arguments.
+    /// The environment [`Bridge::start`] uses: a fresh token file, no arguments.
+    ///
+    /// No port either: a case that names one with [`Launch::on_port`] would otherwise bind a
+    /// number it throws away, so the single number is bound in [`Launch::spawn`].
     fn new() -> Launch {
         Launch {
             directory: temporary_directory(),
             token_file: TokenFile::Written,
-            port: free_port(),
+            port: None,
             http_port: None,
             arguments: Vec::new(),
         }
     }
 
     /// Leaves the token path empty — the state `openssl rand -hex 32 > token` should prevent.
+    ///
+    /// The path itself is emptied in [`Launch::spawn`], which every variant goes through.
     fn without_token_file(mut self) -> Launch {
         self.token_file = TokenFile::Missing;
-        // The directory name carries the PID, and a PID comes back eventually: without this
-        // the case would find a token from an earlier run and wait out its whole timeout for
-        // an exit that cannot come. Both removals are best effort — the path is usually empty,
-        // and a leftover file or directory is exactly what has to go.
-        let path = self.token_path();
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_dir_all(&path);
         self
     }
 
@@ -166,7 +165,7 @@ impl Launch {
     }
 
     fn on_port(mut self, port: u16) -> Launch {
-        self.port = port;
+        self.port = Some(port);
         self
     }
 
@@ -184,7 +183,14 @@ impl Launch {
     /// Starts the child and drains both pipes, without waiting for anything: a case about a
     /// failed start has no line to wait for, only an exit code to read.
     fn spawn(self, stdin: Stdin) -> Bridge {
+        // The token path is emptied before it is written, for every variant. The directory name
+        // carries the PID, and a PID comes back eventually: a leftover file or directory from an
+        // aborted run would otherwise make `write` or `create_dir` fail on a path this very case
+        // chose — a panic instead of the exit code the case is about. Both removals are best
+        // effort; the path is usually empty.
         let token_file = self.token_path();
+        let _ = std::fs::remove_file(&token_file);
+        let _ = std::fs::remove_dir_all(&token_file);
         match self.token_file {
             TokenFile::Written => {
                 std::fs::write(&token_file, token()).expect("the token file could not be written");
@@ -196,9 +202,12 @@ impl Launch {
             }
         }
 
+        // The one bind: only a launch that named no port gets one from the OS here.
+        let port = self.port.unwrap_or_else(free_port);
+
         let mut command = Command::new(BRIDGE_BINARY);
         command
-            .env("BC_BIND", format!("127.0.0.1:{}", self.port))
+            .env("BC_BIND", format!("127.0.0.1:{port}"))
             .env("BC_TOKEN_FILE", &token_file)
             .env("BC_LOG", "info")
             .stdout(Stdio::piped())
@@ -236,7 +245,7 @@ impl Launch {
         Bridge {
             stdin: process.stdin.take(),
             process,
-            port: self.port,
+            port,
             directory: self.directory,
             stdout,
             stderr,

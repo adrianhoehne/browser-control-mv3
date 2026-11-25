@@ -145,14 +145,6 @@ trägt:
 | 279 | `join_stdio` → `pending()` | nur wenn stdin ein Terminal ist; ohne PTY nicht startbar |
 | 339 | `Besitzer nicht ermittelbar` | nur per Race (Halter zwischen Bind und `/proc`-Scan fallen lassen) |
 
-- **`with_a_directory_as_token_file()` räumt nicht auf** wie sein Nachbar
-  `without_token_file()`. Ein Restverzeichnis aus einem abgebrochenen Lauf plus eine
-  wiederverwendete PID lässt `create_dir` panicken — gleiche Fehlerklasse, eine Variante
-  weiter (Code-Review 2026-11-23).
-- **`Launch::new()` bindet einen Port und wirft ihn weg**, wenn `.on_port()` gleich
-  danach einen anderen setzt. Harmlos (der Listener fällt vor `spawn`), aber ein Bind,
-  den niemand braucht (Code-Review 2026-11-23).
-
 ## Open questions
 
 **Keine.** Der Betreiber hat am 2026-11-23 „erhöhe die Testabdeckung in main.rs"
@@ -183,3 +175,11 @@ Fälle.
   widersprach der Tabelle mit 14 Nummern. Alle drei sind eingearbeitet; die zwei
   Nachläufe stehen oben unter `## Bekannte Lücken`. Messung zur Abnahme: `main.rs`
   88,05 %, `TOTAL` 94,53 %, 12 Fälle in `bridge.rs`.
+
+- **2026-11-23, zwei Nachläufe abgearbeitet.** Das Aufräumen des Token-Pfads steht jetzt
+  in `spawn()` und wirkt für alle drei `TokenFile`-Varianten; `Launch` hält
+  `port: Option<u16>` und bindet erst in `spawn`, sodass `.on_port()` keinen Bind mehr
+  verwirft. Belegt mit einer Negativkontrolle: 21 Restverzeichnisse mit der PID des
+  Testprozesses stören die zwölf Fälle nicht; mit zurückgenommenem Aufräumen panickt
+  der Token-Fall sofort. **Kein eigener Review-Lauf** — der Befund stammt wörtlich aus
+  Runde 2, und die Negativkontrolle zeigt Ursache und Wirkung.
