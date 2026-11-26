@@ -46,8 +46,10 @@ paste its address and token into the extension, and you decide which switches ar
 on.
 
 WHAT IT DOES
-- the agent opens a tab of its own and drives only that tab: status, navigate,
-  read, inspect, click, type, screenshot, frames, transcript, help
+- the agent opens a tab of its own and drives only that tab: open_tab, navigate,
+  read, inspect, click, type, focus, screenshot, frames, transcript, eval, help
+- browser_status reports your windows and tabs (address and title only) and lets the
+  agent pick one of its own tabs
 - the extension keeps one pinned tab for the socket, because MV3 unloads the
   background page after 30 seconds of idle
 - four switches, all off by default: the toolbar on/off, password fields, code
@@ -66,11 +68,14 @@ WHAT IT DOES NOT DO
 - it does not change your search engine, your start page or your settings
 - it does not fetch or execute a script from any server
 
-TWO FETCHES THAT STAY ON THE PAGE'S OWN SERVER
-- a HEAD request for the content type of the page the agent already reads
+TWO FETCHES THAT CARRY NOTHING OUT
+- a HEAD request, without credentials, for the content type of a page the agent
+  could not read; it follows that page's own redirects, so the answer may come from
+  the redirect target
 - the caption file of a YouTube video it is reading
 
-Neither carries data anywhere; both go to the same server as the page itself.
+Neither sends data about you anywhere; the first names only the address the agent
+just failed to read, the second never leaves the page's own origin.
 ```
 
 ## 3. Begründung der Berechtigungen (Feld „Notes to reviewers")
@@ -92,8 +97,10 @@ storage: holds the bridge address, the bridge token, the toolbar on/off and the
 three feature switches, plus the list of agent tab ids.
 
 webRequest: read-only observation of one pattern, *://*.youtube.com/api/timedtext*,
-to capture the signed caption address for the transcript tool. Nothing is blocked,
-redirected or modified; webRequestBlocking is not requested.
+to capture the signed caption address for the transcript tool. The listener keeps
+the last such address per tab, capped, including for YouTube tabs you opened
+yourself; only the agent tab's address is ever read. Nothing is blocked, redirected
+or modified; webRequestBlocking is not requested.
 
 Data: the extension talks to one address that the operator enters — by default a
 loopback address, always with the operator's token. No data goes to the developer.
@@ -138,7 +145,7 @@ If you prefer a build without this switch for review, say so and I will submit o
 | Preis | kostenlos |
 | Einreichungsart | `unlisted` (Self-Distribution) |
 | Benötigt zusätzliche Software | **Ja** — das Bridge-Binary (Rust) und ein Token; ohne beide tut die Erweiterung nichts. `INSTALL.md` beschreibt die Einrichtung |
-| Support-Seite | `https://github.com/adrian/browser-control/issues` (`package.json`, `bugs`) |
+| Support-Seite | `https://github.com/adrianhoehne/browser-control-mv3/issues` (`package.json` → `bugs`) |
 | Support-Mail | nicht nötig: die Support-Seite genügt (Repository, `package.json` → `bugs`) |
 | Datenerhebung | `browser_specific_settings.gecko.data_collection_permissions.required = ["none"]` — die Erweiterung erhebt nichts. Was sie tut, ist eine Übertragung an die Bridge des Betreibers |
 | Versionsnotizen | aus dem CHANGELOG-Abschnitt der jeweiligen Version, englisch, gekürzt auf die sichtbaren Änderungen |
@@ -178,22 +185,33 @@ dabei.
 
 | Behauptung im Text | Prüfung | Soll |
 |---|---|---|
-| vier Schalter, alle aus | `grep -n 'allowPasswordFields\|allowEval\|allowScreenshot' extension/bridge.js \| head -3` und `grep -n 'bridgeEnabled' extension/background.js \| head -2` | je ein Treffer, Default `=== true` gelesen |
+| vier Schalter, alle aus | `grep -c 'const ALLOW_PASSWORD_FIELDS_KEY' extension/bridge.js` / `'const ALLOW_EVAL'` / `'const ALLOW_SCREENSHOT'` und `grep -c 'const BRIDGE_ENABLED_KEY' extension/background.js` | je `1`; die drei Feature-Schalter lesen `=== true`, der Toolbar-Schalter `DEFAULT_BRIDGE_ENABLED = false` |
 | gepinnter Tab für den Socket | `grep -n 'pinned: true' extension/background.js` | `tabs.create` mit `pinned: true` |
 | MV3 entlädt nach 30 Sekunden | `docs/02`, `docs/42` | belegt |
 | nur Agenten-Tabs sind adressierbar | `grep -n 'resolveAgentTab' extension/bridge.js` | Funktion vorhanden, liest die Agenten-Liste |
-| `browser_status` nennt Adresse und Titel aller Tabs | `grep -n 'windows.getAll' extension/bridge.js` | ein Treffer, `populate: true` |
+| `browser_status` nennt Adresse und Titel aller Tabs | `grep -c 'windows.getAll({ populate: true })' extension/bridge.js` | `1` |
 | `webRequest` beobachtet nur ein Muster | `grep -n 'timedtext' extension/bridge.js` | Muster `*://*.youtube.com/api/timedtext*` |
 | kein Skript aus dem Netz | `grep -c "script-src" extension/manifest.json` | `1`, Wert `'self'` |
-| Berechtigungen unverändert | `npm test 2>&1 \| grep -cE '^ok [0-9]+ - manifest_'` | so viele Fälle wie heute, keiner rot |
+| Berechtigungen unverändert | `npm test 2>&1 \| grep -cE '^ok [0-9]+ - manifest_'` | `10` (Stand 2026-11-26) |
 
 ## Acceptance criteria
 
-1. **Jede Behauptung hat eine Fundstelle:** die Testing-Tabelle ist vollständig, und
-   jede Zeile ist mit dem genannten Befehl geprüft.
-2. **Die vier Textfelder stehen auf Englisch und sind kopierbar:** Name,
-   Zusammenfassung, Beschreibung und Notes to reviewers stehen je in einem
-   Codeblock, ohne deutschen Fließtext darin.
+1. **Jede Behauptung hat eine Fundstelle:** die Testing-Tabelle hat für jede
+   Behauptung der Abschnitte 2 und 3 eine Zeile. Zählbar:
+
+   ```
+   grep -c '^| ' docs/52-amo-einreichung.md            # ⇒ 29 (Tabellenzeilen gesamt)
+   grep -c '^| .*| `' docs/52-amo-einreichung.md       # ⇒ 14 (davon mit Befehl)
+   ```
+2. **Die vier Textfelder stehen auf Englisch und sind kopierbar:** vier
+   Textblöcke, je von einem Fence-Paar umschlossen:
+
+   ```
+   grep -c '^```' docs/52-amo-einreichung.md            # ⇒ 10 (fünf Blöcke, je zwei Fences)
+   ```
+
+   Fünf, nicht vier: Name und Zusammenfassung sind zwei getrennte Felder, dazu
+   Beschreibung, Notes to reviewers und der `eval`-Absatz.
 3. **Kein Satz behauptet mehr, als der Code tut** (Abschnittsweise gezählt, damit
    das Kriterium sich nicht selbst mitzählt):
 
@@ -216,11 +234,18 @@ dabei.
 5. **Das Regelwerk-Fenster ist entscheidbar:**
    `grep -cF 'bis 2026-11-30' docs/52-amo-einreichung.md` ⇒ `1`, und
    `grep -cF '2026-12-01' docs/52-amo-einreichung.md` ⇒ mindestens `1`.
-6. **Die Formularliste ist vollständig:** `grep -cF 'Benötigt zusätzliche Software'
-   docs/52-amo-einreichung.md` ⇒ `1`, ebenso für `Support-Seite`, `Datenerhebung`
-   und `Versionsnotizen`.
-7. **Nichts anderes bewegt:** `git status --short` nennt nur diese Spec (und
-   `docs/README.md`, das der Orchestrator führt).
+6. **Die Formularliste ist vollständig** (auf die Zeilenform geschnitten, sonst
+   zählt das Kriterium sich selbst mit):
+
+   ```
+   sed -n '/^## 5\./,/^## 6\./p' docs/52-amo-einreichung.md \
+     | grep -cE '^\| (Support-Seite|Support-Mail|Datenerhebung|Versionsnotizen|Benötigt)'  # ⇒ 5
+   ```
+7. **Nichts anderes bewegt** (gegen den Commit, gegen den dieser Increment läuft):
+
+   ```
+   git status --short      # ⇒ genau eine Zeile: M docs/52-amo-einreichung.md
+   ```
 
 ## Dev plan
 
@@ -229,7 +254,7 @@ dabei.
    Beweis: Kriterium 1 und 3.
 2. **Die Texte korrigieren.** Beschreibung (vier Schalter, MV3-Grund, zwei
    Same-Origin-`fetch`, `browser_status`), Notes to reviewers (dieselben Punkte,
-   `resolveAgentTab`, `script-src 'self'`, `web_public_resources`), `eval`-Absatz
+   `resolveAgentTab`, `script-src 'self'`, `web_accessible_resources`), `eval`-Absatz
    (Policy-Zeile beantworten, `world: MAIN`, `eval_not_allowed`, Loopback mit
    Token). Beweis: Kriterium 2, 3 und 4.
 3. **Die Formularliste vervollständigen** (zusätzliche Software, Support-Seite,
@@ -250,8 +275,8 @@ Keine Stufe hängt von einer späteren ab. Stufe 4 ist erst vor dem Einreichen f
   Dokumente; ob der zitierte Satz bleibt und was sie zu `eval` und Datenerhebung
   sagen, weiß niemand in diesem Repo.
 - **Ein Endpunkt außerhalb von Loopback ist erlaubt.** Trägt der Betreiber einen
-  ein, verlässt Seitentext das Gerät. Die Erklärung muss das sagen, und das ist eine
-  Betreiberentscheidung (siehe `## Open questions`).
+  ein, verlässt Seitentext das Gerät. Der Betrieb bleibt Loopback
+  (Betreiberentscheidung vom 2026-11-26); die Erweiterung prüft die Adresse nicht.
 - **Die Manifest-Beschreibung ist deutsch und nennt einen „Server".** Sie braucht
   einen eigenen Nachtrag; `test/manifest.test.js` pinnt ihren Wortlaut heute nicht.
 - **Die Erweiterung prüft die Endpunktadresse nicht.** Loopback ist die Vorgabe und
@@ -271,7 +296,8 @@ deshalb auf `["none"]`.
 | Runde | Datum | Urteil | Kernpunkte |
 |---|---|---|---|
 | 1 | 2026-11-26 | `nicht bestanden` | „does not read or drive tabs you opened yourself" ist falsch (`browser_status` meldet Adresse und Titel aller Tabs); drei Pflichtabschnitte fehlten; der Zweck widersprach `docs/46` (`0.7.0` ist durch); das Regelwerk-Fenster war Prosa statt Kriterium; der vierte Schalter (Toolbar) fehlte; „survives Firefox sleeping" war der falsche Grund; zwei Same-Origin-`fetch` fehlten; Manifest-Beschreibung unerwähnt |
-| 2 | 2026-11-26 | im Review | Befunde eingearbeitet, siehe Log |
+| 2 | 2026-11-26 | `nicht bestanden` | die Support-Seite war eine 404 (das Repo heißt `adrianhoehne/browser-control-mv3`); Kriterium 6 zählte Wörter statt Tabellenzeilen; zwei Zeilen der Testing-Tabelle hatten ein Soll, das der Befehl widerlegt; „so viele Fälle wie heute" war keine Zahl; Kriterien 1, 2 und 7 hatten kein Kommando; die Notes verschwiegen, dass der `webRequest`-Mitschnitt alle YouTube-Tabs sieht; der HEAD-`fetch` beschrieb die falsche Seite; ein Verweis zeigte auf „Open questions: Keine"; `web_public_resources` heißt `web_accessible_resources`; die Werkzeugliste nannte 10 von 14 |
+| 3 | 2026-11-26 | im Review | Runde-2-Befunde eingearbeitet, siehe Log |
 
 ## Log
 
@@ -289,3 +315,16 @@ deshalb auf `["none"]`.
   Das Regelwerk-Fenster ist ein Kriterium mit Stichtag. Betreiberentscheidung vom
   2026-11-26: keine Support-Mail (die Support-Seite genügt), Betrieb bleibt Loopback;
   die Erweiterung erhebt keine Daten, der Entwickler bekommt keine.
+
+- **2026-11-26, Runde 2 eingearbeitet.** Die Support-Seite zeigt auf das echte
+  Repository (`adrianhoehne/browser-control-mv3`, HTTP 200 statt 404). Kriterium 6
+  schneidet den Formularabschnitt und zählt Zeilen (⇒ 5). Die Testing-Tabelle hat
+  echte Befehle und Soll-Werte (`const ALLOW_*`, `windows.getAll({ populate: true })` ⇒ 1,
+  `manifest_`-Fälle ⇒ 10). Kriterien 1, 2 und 7 sind zählbar: 29 Tabellenzeilen, davon
+  14 mit Befehl; 10 Fences für fünf Textblöcke; `git status --short` nennt genau eine
+  Datei. Die Notes sagen, dass der `webRequest`-Listener die Untertiteladresse **je
+  Tab** hält, auch für eigene YouTube-Tabs, und nur die des Agenten-Tabs liest. Der
+  HEAD-`fetch` gilt der Seite, die der Agent **nicht** lesen konnte, folgt deren
+  Umleitungen und trägt keine Cookies. Die Werkzeugliste nennt alle zwölf
+  Tab-Werkzeuge plus `status` in eigener Zeile. `web_accessible_resources` heißt
+  richtig.
