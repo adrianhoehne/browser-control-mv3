@@ -44,6 +44,10 @@ Logzeilen `bc: …`, die Kommentare und die Dokumentation bleiben deutsch.
   Projektregel geteilt. `docs/55-alte-zitate-in-specs.md` ist seit 2026-11-22
   `active`: 73 Inventarzeilen, 38 Vertragsstellen nachgezogen, 21 Belege
   markiert, 14 Ausschlüsse.
+- **Release `0.8.0` (2026-11-26):** Tag `v0.8.0`, signiert über AMO (`unlisted`).
+  Inhalt: Klicken nach Text, ehrliche Klick-Antworten, engster Treffer und
+  `offscreen` in `inspect`, getrennte Argumentnamen, Abdeckungsmessung, drei Sätze in
+  den Werkzeugbeschreibungen, Token nur beim Anlegen, Einreichungstexte.
 - **Release `0.7.0` (2026-11-22):** Tag gebaut, XPI signiert (AMO `unlisted`),
   Firefox nimmt sie an (`signedState 2`, 129 687 Bytes), Release und beide
   portablen Zips tragen das signierte XPI. `docs/54` steht weiter auf `proposed`, bis die nächste Runde zustimmt.

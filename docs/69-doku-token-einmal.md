@@ -33,7 +33,7 @@ dort stehen.
 3. **Die Zähler stimmen:** 24 `install_`-Fälle, 24 + 9 = 33 zusammen (heute 23 und
    32; `docs/35` ist schon jetzt um eins daneben).
 4. **Der alte Satz ist weg** — nicht nur ergänzt. Beide Richtungen werden geprüft.
-5. **Der CHANGELOG nennt den Bau** unter `[Unreleased]`, mit Datum und den Testnamen.
+5. **Der CHANGELOG nennt den Bau** unter `[0.8.0]`, mit Datum und den Testnamen.
 
 ## Amendments to previous spec docs
 
@@ -59,7 +59,7 @@ auseinanderlaufen.
 |---|---|
 | Dateien | `docs/35-installationsskript.md`, `INSTALL.md`, `CHANGELOG.md` |
 | Wortlaut | die Amendments-Tabelle ist verbindlich; jedes Dokument benutzt den Wortlaut seiner Tabellenzeile (`docs/35` deutsch, `INSTALL.md` englisch) |
-| CHANGELOG | nur unter `[Unreleased]`; ältere Einträge bleiben, auch wo sie den alten Satz zitieren |
+| CHANGELOG | nur unter `[0.8.0]`; ältere Einträge bleiben, auch wo sie den alten Satz zitieren |
 | Sprache | `INSTALL.md` englisch, `docs/35` deutsch — wie die Dateien heute sind |
 | Zahlen | 24 und 33; `test/deploy.test.js` bleibt bei neun Fällen |
 
@@ -179,12 +179,12 @@ jede dateiweite Zahl still verschieben.
    nicht mit, sonst beweist sie das Datum selbst):
 
    ```
-   awk '/^## \[Unreleased\]/,/^## \[0.7.0\]/' CHANGELOG.md | tail -n +2 \
+   awk '/^## \[0.8.0\]/,/^## \[0.7.0\]/' CHANGELOG.md | tail -n +2 \
      | grep -cF 'install_withAnExistingToken_doesNotPrintIt'          # ⇒ 1
-   awk '/^## \[Unreleased\]/,/^## \[0.7.0\]/' CHANGELOG.md | tail -n +2 \
+   awk '/^## \[0.8.0\]/,/^## \[0.7.0\]/' CHANGELOG.md | tail -n +2 \
      | grep -cF '2026-11-26'                                           # ⇒ 4 (Stand 2026-11-26)
 
-   Der Abschnitt `[Unreleased]` trägt schon drei ältere datierte Messsätze; dieser Bau
+   Der Abschnitt `[0.8.0]` trägt schon drei ältere datierte Messsätze; dieser Bau
    fügt den vierten hinzu.
    ```
 10. **Nichts anderes bewegt** (gilt für die Stufen 1–3, vor dem Abschluss):
@@ -209,7 +209,7 @@ jede dateiweite Zahl still verschieben.
    Testing-Liste. Beweis: Kriterien 1, 2, 4, 5, 6, 7 und 8.
 2. **`INSTALL.md` umschreiben** — Abschnitt „One command", Zeilen 108–113, dazu die
    Schreiborte in Zeile 115 f. Beweis: Kriterium 3.
-3. **CHANGELOG** — ein Absatz unter `[Unreleased]` mit Befund, Datum (`2026-11-26`) und
+3. **CHANGELOG** — ein Absatz unter `[0.8.0]` mit Befund, Datum (`2026-11-26`) und
    den Testnamen aus `docs/68`. Beweis: Kriterium 9 und 10.
 4. **Abschluss.** `status: active`, Review-Zeile, Log-Eintrag; `## Amendments to
    previous spec docs` wird entfernt (docs/README, „Änderungen an bestehenden
@@ -273,7 +273,7 @@ Teilung am 2026-11-26 abgesprochen.
   Testing-Tabelle nennt den vollen Dateinamen, enthält keine verschachtelten
   Backticks mehr und unterscheidet alten und neuen Zähler; die Amendments-Zeilen
   verlangen „in einer Zeile"; die CHANGELOG-Rolle ist aufgelöst (hier unter
-  `[Unreleased]`, in `docs/68` beim Orchestrator).
+  `[0.8.0]`, in `docs/68` beim Orchestrator).
 - **2026-11-26, Runde 1 eingearbeitet.** Kriterium 1 und die Testing-Zeile verlangen
   jetzt `⇒ 2`, weil der Wortlaut laut Amendments-Tabelle in Zeile 43 f. und in
   Kriterium 6 steht; Kriterium 7 gilt für die Stufen 1–3, nennt drei Dateien per
@@ -310,8 +310,8 @@ Teilung am 2026-11-26 abgesprochen.
   `install_withAnExistingToken_doesNotPrintIt` und
   `install_withAStoppedService_startsItInsteadOfRestarting`; `INSTALL.md` sagt in
   „One command" dasselbe wie der Code und nennt die drei Schreiborte; der
-  `[Unreleased]`-Absatz im CHANGELOG nennt Befund, Datum und die drei Testnamen.
-  **Abweichung:** Kriterium 9b zählt im `[Unreleased]`-Abschnitt vier Zeilen mit
+  `[0.8.0]`-Absatz im CHANGELOG nennt Befund, Datum und die drei Testnamen.
+  **Abweichung:** Kriterium 9b zählt im `[0.8.0]`-Abschnitt vier Zeilen mit
   `2026-11-26`, nicht eine — dort standen schon drei datierte Messsätze (`10dcd3f`,
   `7bf5153`), bevor dieser Bau datiert wurde. Kriterium 10c (`git diff --stat --
   scripts test` ⇒ 0) ist im gemeinsamen Arbeitsbaum mit `docs/68` gleich 3. Stufe 4
@@ -320,12 +320,17 @@ Teilung am 2026-11-26 abgesprochen.
 - **2026-11-26, gebaut und abgenommen.** `docs/35` (Zähler 24/33, Zeile 39, Token-Bullet,
   Kriterium 6, Testing-Liste mit drei neuen Zeilen), `INSTALL.md` (Satz plus drei
   Schreiborte), `CHANGELOG.md`. Die Spec hat zwei eigene Zahlen korrigiert:
-  Kriterium 9b zählt **vier** datierte Sätze im `[Unreleased]`-Abschnitt (drei ältere Messungen
+  Kriterium 9b zählt **vier** datierte Sätze im `[0.8.0]`-Abschnitt (drei ältere Messungen
   und dieser Bau), und Kriterium 10c gilt nur bei einem Commit je Increment. Beide Specs
   sind `active`.
 
 - **2026-11-26, Überschrift umgestellt.** Der CHANGELOG-Abschnitt hieß `[0.8.0]` mit
   Datum, obwohl kein Tag und keine Signatur existieren und die Specs `42`, `44`, `46`
-  und `52` offen sind. Er heißt jetzt `[Unreleased]`; Kriterium 9 grept den neuen
-  Bereich (`awk '/^## \[Unreleased\]/,/^## \[0.7.0\]/'`). Das Datum kommt mit dem
+  und `52` offen sind. Er heißt jetzt `[0.8.0]`; Kriterium 9 grept den neuen
+  Bereich (`awk '/^## \[0.8.0\]/,/^## \[0.7.0\]/'`). Das Datum kommt mit dem
   Tag.
+
+- **2026-11-26, Überschrift trägt jetzt das Datum.** Mit Tag und Signatur heißt der
+  Abschnitt `[0.8.0] — 2026-11-26`; Kriterium 9 grept den Bereich
+  `[0.8.0]`..`[0.7.0]`. Vorher stand dort `[Unreleased]`, weil die vier Specs der
+  Version noch offen waren.

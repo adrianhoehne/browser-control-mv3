@@ -3,10 +3,10 @@
 Alle nennenswerten Änderungen. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
-## [Unreleased]
+## [0.8.0] — 2026-11-26
 
-Sammelt die Änderungen seit `0.7.0`. Ein Datum bekommt der Abschnitt erst mit dem Tag
-und der Signatur; bis dahin fehlen die Specs `42`, `44`, `46` und `52`.
+Alles seit `0.7.0`. Die Specs `42`, `44`, `46` und `52` sind `active`, die
+Einreichungstexte liegen fertig vor.
 
 **Klicken nach Text.** `browser_click` nimmt `contains_text` — allein oder zusammen
 mit `selector`, dann schränkt der Selektor ein. Der Klick trifft den engsten
