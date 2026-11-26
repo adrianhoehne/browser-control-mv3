@@ -12,8 +12,13 @@
 //! `waitMs` in the manual of `browser_navigate` and `active` in the manual of
 //! `browser_open_tab`, neither of which the schema declares — and those two rows are gone.
 //!
-//! What it cannot do is written down in the two cases below: the schema is checked for
-//! every tool, the return line only for the tools whose answer is pinned here.
+//! What it cannot do: no text check decides whether the extension still answers those
+//! fields. That part is a measurement, and the date and the page are written next to
+//! every list. The schema is checked for all fourteen tools, and so is the return line:
+//! five entries were pinned when this file was written, the nine remaining ones came with
+//! the second measurement of 2026-11-26. That run found one more gap of the same kind —
+//! `type` of a window was missing from the manual of `browser_status` — and it is now
+//! written there.
 
 #![allow(non_snake_case)]
 
@@ -106,6 +111,103 @@ const EXPECTED_RETURNS: [(&str, &[&str]); 5] = [
             "truncated",
         ],
     ),
+];
+
+/// The fields the nine remaining tools answer, as `Object.keys` reports them on the
+/// wire.
+///
+/// Measured live on 2026-11-26 against `127.0.0.1:8111/mcp` (`tools/call`, the JSON in
+/// `result.content[0].text`; no tool answered a `structuredContent` block). The comment
+/// above each entry says which page or branch produced it, so the list can be re-measured
+/// instead of guessed. Nested fields are flattened to their bare names — `type` of a
+/// window, `href`/`top` of a frame, the twelve names of an `elements` entry — the same
+/// way the manuals write them.
+const MEASURED_RETURNS: [(&str, &[&str]); 9] = [
+    // Firefox, one window, 4 → 2 tabs.
+    (
+        "browser_status",
+        &[
+            "extension",
+            "version",
+            "connectedAt",
+            "windows",
+            "id",
+            "focused",
+            "type",
+            "tabs",
+            "url",
+            "title",
+            "active",
+            "pinned",
+            "agent",
+        ],
+    ),
+    // Two agent tabs, once without `tab` and once with `tab:15`.
+    (
+        "browser_focus",
+        &["tabId", "windowId", "url", "title", "active", "focused"],
+    ),
+    // `selector:"a", limit:3` on www.wikipedia.org: count 378, truncated true. A
+    // selector with no hit answered the same six fields with count 0 and no error.
+    (
+        "browser_inspect",
+        &[
+            "tabId",
+            "url",
+            "title",
+            "count",
+            "truncated",
+            "elements",
+            "index",
+            "selector",
+            "tag",
+            "id",
+            "classes",
+            "text",
+            "href",
+            "ariaLabel",
+            "visible",
+            "offscreen",
+            "disabled",
+            "rect",
+        ],
+    ),
+    // example.com, then two YouTube watch tabs.
+    ("browser_open_tab", &["tabId", "url", "title"]),
+    // Once with `tab` and once without it.
+    ("browser_close_tab", &["tabId", "closed"]),
+    // `return document.title` on www.wikipedia.org: result "Wikipedia", elapsedMs 0.
+    (
+        "browser_eval",
+        &["tabId", "url", "title", "elapsedMs", "result"],
+    ),
+    // www.wikipedia.org at 1904×871: png, 219600 bytes, scaled false, plus an image
+    // block. A second run above the size limit answered jpeg, 1600×732, scaled true,
+    // with the same nine fields.
+    (
+        "browser_screenshot",
+        &[
+            "tabId",
+            "url",
+            "title",
+            "format",
+            "width",
+            "height",
+            "bytes",
+            "scaled",
+            "activated",
+        ],
+    ),
+    // www.wikipedia.org and en.wikipedia.org: count 1, the top frame only.
+    (
+        "browser_frames",
+        &["tabId", "url", "count", "frames", "href", "top"],
+    ),
+    // Not a JSON object: one markdown text block with six sections, so there was no
+    // `Object.keys` to read and the expected set is empty. This still guards the line:
+    // a hand that lists JSON fields here would be describing an answer that never comes.
+    // The six sections themselves are guarded in `tests/mcp.rs`.
+    ("browser_help", &[]),
 ];
 
 /// The one section of a manual with this heading, as its lines.
@@ -203,6 +305,13 @@ fn named(items: &BTreeSet<String>) -> String {
         .join(", ")
 }
 
+fn sorted(items: &BTreeSet<&str>) -> String {
+    if items.is_empty() {
+        return "none".to_string();
+    }
+    items.iter().copied().collect::<Vec<&str>>().join(", ")
+}
+
 /// The schema of one tool out of the real `tools/list`.
 fn schema_of(tool: &str) -> (BTreeSet<String>, BTreeSet<String>) {
     let tools = tool_list();
@@ -294,16 +403,16 @@ fn every_manual_argument_shouldMatchTheToolSchema() {
     }
 }
 
-/// The `## Returns` line against the fields the tool really answers, for the tools whose
-/// answer is pinned in [`EXPECTED_RETURNS`].
+/// The `## Returns` line against the fields the tool really answers, for every tool
+/// whose answer is pinned in [`EXPECTED_RETURNS`] or [`MEASURED_RETURNS`].
 ///
 /// Both directions again: a field the line leaves out (`truncated`, `via` for `click`,
-/// `typed`/`submitted` for `type`) and a field the line invents (`settled` and `waitedMs`
-/// for `type`, `videoId` and `language` for `transcript`) are the same mistake to a model
-/// that plans its next call from this line.
+/// `typed`/`submitted` for `type`, `type` of a window for `status`) and a field the line
+/// invents (`settled` and `waitedMs` for `type`, `videoId` and `language` for
+/// `transcript`) are the same mistake to a model that plans its next call from this line.
 #[test]
 fn every_pinned_manual_returnLine_shouldNameExactlyTheAnsweredFields() {
-    for (tool, expected) in EXPECTED_RETURNS {
+    for (tool, expected) in EXPECTED_RETURNS.into_iter().chain(MEASURED_RETURNS) {
         let manual = manual_for(tool).unwrap_or_else(|| panic!("{tool} has no manual"));
         let documented = return_fields(manual, tool);
         let expected: BTreeSet<String> = expected.iter().map(|field| field.to_string()).collect();
@@ -317,6 +426,38 @@ fn every_pinned_manual_returnLine_shouldNameExactlyTheAnsweredFields() {
             named(&expected.difference(&documented).cloned().collect()),
         );
     }
+}
+
+/// Every tool of the contract carries a pinned return line.
+///
+/// Without this, the guard above could shrink back: a tool whose table entry is dropped
+/// would simply stop being read, and a second tool added to the list would never be
+/// pinned. The two tables together must name exactly the fourteen tools of
+/// [`known_names`], each one once.
+#[test]
+fn the_pinnedTools_shouldBeEveryToolOfTheContract() {
+    let pinned: Vec<&str> = EXPECTED_RETURNS
+        .iter()
+        .chain(MEASURED_RETURNS.iter())
+        .map(|(tool, _)| *tool)
+        .collect();
+    let unique: BTreeSet<&str> = pinned.iter().copied().collect();
+
+    assert_eq!(
+        unique.len(),
+        pinned.len(),
+        "a tool is pinned twice in the return tables"
+    );
+
+    let contract: BTreeSet<&str> = known_names().into_iter().collect();
+    assert_eq!(
+        unique,
+        contract,
+        "the pinned return lines and the tool contract disagree: \
+         pinned but not a tool {}, a tool without a pinned return line {}",
+        sorted(&unique.difference(&contract).copied().collect()),
+        sorted(&contract.difference(&unique).copied().collect()),
+    );
 }
 
 /// The budget of `docs/53`: the tool list stays under 8 500 characters, because it is

@@ -22,7 +22,7 @@ Shows the operator's windows and tabs, the connection state of the extension, an
 None. This tool takes no arguments at all.
 
 ## Returns
-`extension` (`version`, `connectedAt`), and `windows` with `id`, `focused` and `tabs`; each tab carries `id`, `url`, `title`, `active`, `pinned` and `agent`.
+`extension` (`version`, `connectedAt`), and `windows` with `id`, `focused`, `type` and `tabs`; each tab carries `id`, `url`, `title`, `active`, `pinned` and `agent`.
 
 ## Example
 `browser_status({})` answers `{"extension":{"version":"0.6.1","connectedAt":"…"},"windows":[{"id":1,"focused":true,"tabs":[{"id":12,"url":"https://example.com/","agent":true}]}]}`.
@@ -136,7 +136,7 @@ Brings the agent tab to the front and its window into the foreground. The page i
 | `tab` | no | an agent tab by id |
 
 ## Returns
-`tabId`, `windowId`, `focused`.
+`tabId`, `windowId`, `url`, `title`, `active`, `focused`. `active` says whether the tab is the active tab of its window, `focused` whether that window is in the foreground.
 
 ## Example
 `browser_focus({})` answers `{"tabId":12,"windowId":1,"focused":true}`.
@@ -161,13 +161,13 @@ Lists elements of the **current agent tab** with tag, id, class, link, visible t
 | `tab` | no | an agent tab by id |
 
 ## Returns
-`count`, `truncated`, `elements` (each with `index`, `selector`, `tag`, `id`, `classes`, `text`, `href`, `ariaLabel`, `visible`, `offscreen`, `disabled`, `rect`).
+`tabId`, `url`, `title`, `count`, `truncated`, `elements` (each with `index`, `selector`, `tag`, `id`, `classes`, `text`, `href`, `ariaLabel`, `visible`, `offscreen`, `disabled`, `rect`).
 
 ## Example
 `browser_inspect({"contains_text":"Login","limit":5})` answers elements whose selector you can pass to `browser_click` unchanged.
 
 ## Pitfalls
-No `url` argument. The selector it returns is the value to hand to `click`/`type` — do not build your own from the tag. Shadow DOM paths appear as `my-card >>> button`.
+No `url` argument. A search with no hit is a regular answer, not an error: `count: 0`, `truncated: false` and an empty `elements` list. The selector it returns is the value to hand to `click`/`type` — do not build your own from the tag. Shadow DOM paths appear as `my-card >>> button`.
 
 With `contains_text` only the innermost match is answered: an element is left out when an element below it contains the text too, and `count` counts those innermost matches — so the hit you wanted is not pushed out of `limit` by the containers around it. Two cases keep the raw list instead: a `selector` without `contains_text`, where you asked for those elements and see their ancestors as well, and `includeHidden: true`, where an invisible descendant must not displace a visible ancestor.
 
@@ -245,7 +245,7 @@ Photographs the visible area of the **current agent tab** and returns it as an M
 | `tab` | no | an agent tab by id |
 
 ## Returns
-`tabId`, `url`, `format`, `width`, `height`, `bytes`, `scaled` — plus the image itself.
+`tabId`, `url`, `title`, `format`, `width`, `height`, `bytes`, `scaled`, `activated` — plus the image itself. `activated: false` means the snapshot worked without a foreground switch.
 
 ## Example
 `browser_screenshot({})` answers `{"format":"png","width":1708,"height":1214,"bytes":749023}` and the picture.
@@ -265,7 +265,7 @@ Lists the frames (iframes) of the agent tab with their address.
 | `tab` | no | an agent tab by id |
 
 ## Returns
-`count`, `frames` (each with `href` and `top`).
+`tabId`, `url`, `count`, `frames` (each with `href` and `top`).
 
 ## Example
 `browser_frames({})` answers `{"count":2,"frames":[{"href":"https://example.com/","top":true},{"href":"https://widget.example.net/kalender","top":false}]}`.
