@@ -577,6 +577,7 @@ fn free_port() -> u16 {
 /// kernel may hand the second bind the port the first just released, and a case that needs two
 /// ports would then die on `EADDRINUSE`. Holding both listeners until both numbers are in hand
 /// makes the two distinct, and both are free again once this returns.
+#[cfg(unix)]
 fn free_ports() -> (u16, u16) {
     let first = TcpListener::bind("127.0.0.1:0").expect("no ephemeral port to test with");
     let second = TcpListener::bind("127.0.0.1:0").expect("no second ephemeral port to test with");
