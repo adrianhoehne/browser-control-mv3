@@ -321,3 +321,13 @@ Wegwerfprofil genügt (siehe Kriterium 5).
   Betreiber. Beide portablen Zips tragen dasselbe XPI (gleicher Hash). Der Schlusssatz des Skripts
   prüfte die Assets ohne `--repo` und lief damit gegen `origin` (das eingefrorene
   Repo, „release not found"); er hat `--repo` jetzt.
+
+- **2026-11-26, `0.8.0` signiert und ausgeliefert.** Der erste Tag-Lauf
+  (`45890537557`) fiel im Windows-`clippy`: `free_ports` in
+  `bridge-rs/tests/bridge.rs` wird nur von einem `#[cfg(unix)]`-Fall gebraucht und war
+  auf dem Windows-Target toter Code — behoben in `2f53ba7` (`#[cfg(unix)]`), Tag
+  verschoben. Der zweite Lauf (`45890811558`) war grün: zwei Zips am Release.
+  `scripts/release-sign.sh v0.8.0 --fix-zips` lud `browser-control-0.8.0.xpi` hoch
+  (140 233 Bytes, `sha256 3a97d122c28621ba…`), Firefox 152.0.3 im Wegwerfprofil meldet
+  `signedState 2` (`active=true`, `version=0.8.0`), und beide Zips tragen jetzt die
+  signierte XPI.

@@ -44,7 +44,9 @@ Logzeilen `bc: …`, die Kommentare und die Dokumentation bleiben deutsch.
   Projektregel geteilt. `docs/55-alte-zitate-in-specs.md` ist seit 2026-11-22
   `active`: 73 Inventarzeilen, 38 Vertragsstellen nachgezogen, 21 Belege
   markiert, 14 Ausschlüsse.
-- **Release `0.8.0` (2026-11-26):** Tag `v0.8.0`, signiert über AMO (`unlisted`).
+- **Release `0.8.0` (2026-11-26):** Tag `v0.8.0`, signiert über AMO (`unlisted`),
+  XPI 140 233 Bytes, `signedState 2` (`sha256 3a97d122c28621ba…`), beide Zips tragen
+  die signierte Datei.
   Inhalt: Klicken nach Text, ehrliche Klick-Antworten, engster Treffer und
   `offscreen` in `inspect`, getrennte Argumentnamen, Abdeckungsmessung, drei Sätze in
   den Werkzeugbeschreibungen, Token nur beim Anlegen, Einreichungstexte.
