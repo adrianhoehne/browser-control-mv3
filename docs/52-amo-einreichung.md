@@ -139,7 +139,7 @@ If you prefer a build without this switch for review, say so and I will submit o
 | Einreichungsart | `unlisted` (Self-Distribution) |
 | Benötigt zusätzliche Software | **Ja** — das Bridge-Binary (Rust) und ein Token; ohne beide tut die Erweiterung nichts. `INSTALL.md` beschreibt die Einrichtung |
 | Support-Seite | `https://github.com/adrian/browser-control/issues` (`package.json`, `bugs`) |
-| Support-Mail | offen, siehe `## Open questions` |
+| Support-Mail | nicht nötig: die Support-Seite genügt (Repository, `package.json` → `bugs`) |
 | Datenerhebung | `browser_specific_settings.gecko.data_collection_permissions.required = ["none"]` — die Erweiterung erhebt nichts. Was sie tut, ist eine Übertragung an die Bridge des Betreibers |
 | Versionsnotizen | aus dem CHANGELOG-Abschnitt der jeweiligen Version, englisch, gekürzt auf die sichtbaren Änderungen |
 
@@ -149,7 +149,7 @@ If you prefer a build without this switch for review, say so and I will submit o
 |---|---|---|
 | Der Reviewer liest `eval` als „remote code" | Rückfrage oder Ablehnung | Absatz 4 mitschicken; Plan B ist ein Build ohne den Schalter |
 | `<all_urls>` gilt als zu weit | Rückfrage oder Ablehnung | die zwei tragenden Codezeilen nennen: `resolveAgentTab` (nur eine Id aus der Agenten-Liste ist adressierbar) und der `webRequest`-Filter — nicht nur behaupten |
-| Der Betreiber trägt einen Endpunkt außerhalb von Loopback ein | Seitentext verlässt das Gerät, „none" ist nicht mehr die ganze Wahrheit | Betreiberentscheidung: bleibt die Erweiterung auf Loopback beschränkt, oder sagt die Erklärung „an die Adresse, die der Betreiber einträgt" |
+| Der Betreiber trägt einen Endpunkt außerhalb von Loopback ein | Seitentext verlässt das Gerät | Bleibt Loopback (Entscheidung vom 2026-11-26). Die Erweiterung prüft die Adresse nicht — das steht als Lücke unten |
 
 ## 7. Plan B — der Build ohne `eval`
 
@@ -254,13 +254,17 @@ Keine Stufe hängt von einer späteren ab. Stufe 4 ist erst vor dem Einreichen f
   Betreiberentscheidung (siehe `## Open questions`).
 - **Die Manifest-Beschreibung ist deutsch und nennt einen „Server".** Sie braucht
   einen eigenen Nachtrag; `test/manifest.test.js` pinnt ihren Wortlaut heute nicht.
+- **Die Erweiterung prüft die Endpunktadresse nicht.** Loopback ist die Vorgabe und
+  der unterstützte Betrieb, aber ein Betreiber kann eine andere Adresse eintragen.
+  Wer das verhindern will, braucht eine Prüfung im Code — eine eigene Spec, nicht
+  diese.
 
 ## Open questions
 
-1. **Support-Mail:** soll eine Adresse ins Formular, oder genügt die Support-Seite?
-2. **Loopback:** bleibt die Erweiterung auf Loopback beschränkt (dann ist
-   „none" eindeutig), oder bleibt jeder Endpunkt erlaubt (dann sagt die Erklärung
-   „an die Adresse, die du einträgst")?
+**Keine.** Betreiberentscheidung vom 2026-11-26: eine Support-Mail ist nicht nötig, die
+Support-Seite genügt; der Betrieb bleibt Loopback (`127.0.0.1`). Die Erweiterung erhebt
+nichts und der Entwickler bekommt nichts — `data_collection_permissions.required` steht
+deshalb auf `["none"]`.
 
 ## Review
 
@@ -282,4 +286,6 @@ Keine Stufe hängt von einer späteren ab. Stufe 4 ist erst vor dem Einreichen f
   Formularliste hat zusätzliche Software, Support-Seite, Datenerhebung und
   Versionsnotizen. Pflichtabschnitte ergänzt: `## Testing` als Prüfprotokoll,
   `## Acceptance criteria`, `## Dev plan`, `## Touch boundary`, `## Open questions`.
-  Das Regelwerk-Fenster ist ein Kriterium mit Stichtag.
+  Das Regelwerk-Fenster ist ein Kriterium mit Stichtag. Betreiberentscheidung vom
+  2026-11-26: keine Support-Mail (die Support-Seite genügt), Betrieb bleibt Loopback;
+  die Erweiterung erhebt keine Daten, der Entwickler bekommt keine.
