@@ -78,7 +78,7 @@ Jede Zeile nennt den Wortlaut, den die Kriterien grepen. Er ist verbindlich; wer
 | Erlaubt | Nicht erlaubt |
 |---|---|
 | `docs/53-browser-help.md`, `docs/54-refusals-englisch.md`, `docs/59-argumentnamen.md`, `docs/60-klick-nach-text-mcp.md` (nur die Zeilen der Amendments-Tabelle) | alle anderen Specs, `docs/70-beschreibungen-statt-skill.md` |
-| `CHANGELOG.md` (unter `[0.8.0]`), `docs/71-grenze-nachziehen.md` (Status, Review, Log) | `docs/README.md`, `PROJECT-STATE.md`, `ROADMAP.md` (Orchestrator) |
+| `CHANGELOG.md` (unter `[Unreleased]`), `docs/71-grenze-nachziehen.md` (Status, Review, Log) | `docs/README.md`, `PROJECT-STATE.md`, `ROADMAP.md` (Orchestrator) |
 | — | `bridge-rs/**`, `extension/**`, `scripts/**`, neue Abhängigkeiten |
 
 ## Testing
@@ -137,7 +137,7 @@ ihren eigenen Befehl.
    Kriterium 3 und 6.
 3. **`docs/54` und `docs/59`.** Je eine Zahl, in `docs/59` an beiden Stellen.
    Beweis: Kriterium 4 und 5.
-4. **Abschluss.** `CHANGELOG.md` unter `[0.8.0]`, `status: active`, Review-Zeile, Log;
+4. **Abschluss.** `CHANGELOG.md` unter `[Unreleased]`, `status: active`, Review-Zeile, Log;
    die `docs/README.md`-Statuszeile führt der Orchestrator. Beweis: Kriterium 7 und 8.
 
 Stufe 1 bis 3 sind unabhängig voneinander; keine hängt von einer späteren ab.
@@ -192,3 +192,7 @@ Wortlaute stehen in der Amendments-Tabelle.
   Die Historie bleibt (`docs/53:20`, `:204`, `:211`, `docs/60:313`). Abnahme:
   `npm run check` 0, `npm test` 584/0, `cargo test` 15 Blöcke, `help_contract`
   5 Fälle, `parity --check` 7/7. Spec auf `active` gesetzt.
+
+- **2026-11-26, Nachtrag.** Der CHANGELOG-Abschnitt heißt `[Unreleased]` statt `[0.8.0]`:
+  ein Datum im Abschnitt behauptet eine Veröffentlichung, die es nicht gibt. Kriterium 9
+  von `docs/69` grept den neuen Bereich.

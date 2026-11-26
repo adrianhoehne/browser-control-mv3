@@ -281,7 +281,7 @@ Kopien.
 4. **Abschluss — Orchestrator-Arbeit** (`CONTRIBUTING.md`, Schritt 7; der Implementer
    darf die Spec nicht ändern). Die Sätze für `docs/60`, `docs/53`, `docs/54` und
    `docs/59` stehen in `docs/71-grenze-nachziehen.md`; hier bleiben nur `CHANGELOG.md`
-   unter `[0.8.0]`, `status: active` in dieser Spec und die Statuszeile in
+   unter `[Unreleased]`, `status: active` in dieser Spec und die Statuszeile in
    `docs/README.md`. Beweis: Kriterium 6 und 7.
 
 ### What could go wrong
