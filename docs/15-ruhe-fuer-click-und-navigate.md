@@ -160,6 +160,12 @@ die rote Zeile steht unter `## Bekannte Lücken`.
   nicht „die Seite hat nicht reagiert"; wer daraus ein Wiederholen ableitet, klickt
   doppelt. `docs/56` hat dieselbe Zahl (`waitedMs: 0` bei den Suchseiten) gemessen.
 
+  **Nachtrag, selbe Seite, selbe Sitzung (2026-11-26):** ein zweiter Klick auf
+  derselben Seite erreicht die Ruhe sehr wohl — `click` auf „Main menu" meldet
+  `settled: true, waitedMs: 998`. Der Unterschied liegt am Ziel, nicht an der Seite:
+  der Sprunglink löst einen Sprung mit Animation aus, das Menü öffnet nur ein paar
+  Knoten. Die Ruhe-Erkennung ist damit live belegt, in beiden Richtungen.
+
 ## Bekannte Lücken
 
 - **Kriterium 7 ist live nur halb belegt** (2026-10-23): `navigate` auf einen

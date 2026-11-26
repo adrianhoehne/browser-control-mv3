@@ -73,7 +73,7 @@ prüfbar geschlossen, das Diagnose-Muster erklärt); und die drei Restlöcher im
 
 | Vorhaben | Größe |
 |---|---|
-| **`click` erreicht die Ruhe auf Seiten mit Timern nicht** — sechster Live-Versuch am 2026-11-23: `settled: false, waitedMs: 3937` auf einem Wikipedia-`#`-Anker. Der Guard (4 s) greift, der Rückfall trägt, aber jeder Klick auf einer solchen Seite kostet vier Sekunden und die Antwort unterscheidet „nicht still" nicht von „keine Reaktion" (`docs/15`, `## Bekannte Lücken`) | klein |
+| **`click` erreicht die Ruhe je nach Ziel nicht** — gemessen am 2026-11-23 und 2026-11-26 auf derselben Wikipedia-Seite: der Sprunglink (`#`-Anker) endet im Guard (`settled: false, waitedMs: 3937`), der Klick aufs Menü in `settled: true, waitedMs: 998`. Ein Klick, der die Ruhe verfehlt, kostet vier Sekunden, und die Antwort unterscheidet „nicht still" nicht von „keine Reaktion" (`docs/15`, `## Bekannte Lücken`) | klein |
 
 ## Funktionalität
 
