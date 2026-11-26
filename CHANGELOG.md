@@ -3,11 +3,40 @@
 Alle nennenswerten Änderungen. Format nach [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 Versionierung nach [SemVer](https://semver.org/lang/de/).
 
-## [Unreleased]
+## [0.8.0] — 2026-11-26
+
+**Klicken nach Text.** `browser_click` nimmt `contains_text` — allein oder zusammen
+mit `selector`, dann schränkt der Selektor ein. Der Klick trifft den engsten
+Treffer, ein exakter Treffer schlägt einen Teiltreffer, und bei mehreren Treffern
+antwortet er `text_ambiguous` mit den Kandidaten und einem Rat, statt zu raten.
+
+**Ein Klick sagt, was geschah.** Er scrollt ein Ziel außerhalb des Sichtfelds
+heran und nennt das im Feld `scrolled`; bleibt es draußen, lehnt er mit
+`offscreen_after_scroll` ab. Landet er auf einer nicht lesbaren Seite, heißt das
+`not_readable_after_click`; bekommt seine Anfrage keine Antwort,
+`click_outcome_unknown`.
+
+**`browser_inspect` findet den engsten Treffer.** Bei einer Textsuche entfällt ein
+Treffer, wenn ein Nachfahre ebenfalls trifft; `count` zählt die engsten Treffer.
+Jedes Element trägt zusätzlich `offscreen`.
+
+**Zwei Argumentnamen sind getrennt.** `browser_inspect` sucht mit `contains_text`,
+`browser_type` schreibt mit `typed_text`. Der Draht zwischen Bridge und Erweiterung
+behält `text`; die Anleitung von `browser_read` nennt jetzt alle Felder, die das
+Werkzeug liefert.
+
+**Abdeckung wird gemessen.** `npm run test:coverage` misst die Erweiterung
+(92,2 % Zeilen, Schwelle 90 %), `npm run test:coverage:rust` die Bridge über
+`cargo-llvm-cov` (94,53 %). Ein eigener CI-Job `coverage` fährt den ersten Befehl
+bei jedem Push.
 
 **Installationsskript startet einen laufenden Dienst neu.** `enable --now` ließ
 ihn bisher unangetastet; nach einer Neuinstallation lief weiter das alte Binary.
 Jetzt entscheidet `is-active` zwischen `restart` und `start`.
+
+Dazu die Specs `56` bis `67`. **Die Bridge führt ihre eigene Versionsreihe:** sie
+meldet `bridgeVersion: 0.1.0` (aus `bridge-rs/Cargo.toml`), unabhängig von der
+Version der Erweiterung.
 
 ## [0.7.0] — 2026-11-22
 
