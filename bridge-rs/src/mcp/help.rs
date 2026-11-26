@@ -41,7 +41,6 @@ Opens an http(s) URL in the agent tab and waits for the page to load, then for i
 |---|---|---|
 | `url` | yes | `http://` or `https://` only |
 | `tab` | no | an agent tab by id; without it the last used one |
-| `waitMs` | no | how long to wait for settling, at most 10000 |
 
 ## Returns
 `tabId`, `windowId`, `url`, `title`, `complete`, `settled`, `waitedMs`.
@@ -93,7 +92,7 @@ Clicks an element in the **current agent tab**, waits for the page to settle, an
 One of `selector` and `contains_text` is required, and both together are allowed: the selector then narrows the search to the elements it matches. `contains_text` alone clicks the innermost element whose text carries the term.
 
 ## Returns
-`tabId`, `url`, `title`, `clicked`, `scrolled`, `text` (cut at 20000 characters), `settled`, `waitedMs`. `scrolled` says whether the target had to be scrolled into the visible area first.
+`tabId`, `url`, `title`, `clicked`, `scrolled`, `text` (cut at 20000 characters), `truncated`, `via`, `settled`, `waitedMs`. `scrolled` says whether the target had to be scrolled into the visible area first.
 
 ## Example
 `browser_click({"selector":"a.more-info"})` answers `{"tabId":12,"url":"https://www.iana.org/help/example-domains","settled":true,"text":"…"}`. `browser_click({"contains_text":"In den Einkaufswagen"})` clicks the one element carrying that text; a page that carries it more than once is refused instead of clicked.
@@ -112,18 +111,18 @@ Writes text into the field that matches a CSS selector in the **current agent ta
 |---|---|---|
 | `selector` | yes | CSS selector of the field |
 | `typed_text` | yes | the text to write |
-| `enter` | no | send Enter afterwards, default false |
+| `submit` | no | send Enter afterwards, default false |
 | `tab` | no | an agent tab by id |
 | `frame` | no | a substring of a frame address |
 
 ## Returns
-`tabId`, `url`, `title`, `text` (cut at 20000 characters), `settled`, `waitedMs`.
+`tabId`, `url`, `title`, `typed`, `submitted`, `text` (cut at 20000 characters), `truncated`, `via`. `typed` echoes the text that was written and `submitted` says whether Enter went along; this tool does not wait for the page to settle, so no settle flag and no waited-ms number comes back.
 
 ## Example
-`browser_type({"selector":"input[name=q]","typed_text":"weather","enter":true})` answers the search page text after the submit.
+`browser_type({"selector":"input[name=q]","typed_text":"weather","submit":true})` answers the search page text after the submit.
 
 ## Pitfalls
-No `url` argument. A password field is refused unless the operator turned that switch on — the refusal is named and does not write. `enter: true` submits, which can lose what you typed if the page navigates.
+No `url` argument. A password field is refused unless the operator turned that switch on — the refusal is named and does not write. `submit: true` submits, which can lose what you typed if the page navigates.
 
 ## Related
 `browser_click`, `browser_read`"#;
@@ -182,7 +181,6 @@ Opens another agent tab in the default container (at most five) and returns its 
 | Name | Required | Meaning |
 |---|---|---|
 | `url` | yes | `http://` or `https://` |
-| `active` | no | bring it to the front, default true |
 
 ## Returns
 `tabId`, `url`, `title`.
@@ -284,14 +282,15 @@ Reads the transcript of the YouTube video tab as segments with timestamp and tex
 ## Arguments
 | Name | Required | Meaning |
 |---|---|---|
-| `request` | no | `auto`, or a language and track selection |
+| `offset` | no | characters to skip, default 0 |
+| `maxChars` | no | window size, default 20000, at most 100000 |
 | `tab` | no | an agent tab by id |
 
 ## Returns
-`videoId`, `title`, `language`, `segments` (each with `startMs`, `text`).
+`requestedLanguage`, `deliveredLanguage`, `source`, `segments` (each with `time`, `timeText`, `text`), `offset`, `chars`, `totalChars`, `truncated`. `requestedLanguage` names the track that was asked for, `deliveredLanguage` the language of the track file the page handed over, and `source` the container on the page the player data was found in; `offset`, `chars`, `totalChars` and `truncated` page through the concatenated segment texts, the same way as when reading page text.
 
 ## Example
-`browser_transcript({})` answers `{"videoId":"…","language":"de","segments":[{"startMs":0,"text":"…"}]}`.
+`browser_transcript({"maxChars":200})` answers `{"requestedLanguage":"de","deliveredLanguage":"de","source":"ytplayer.bootstrapPlayerResponse","offset":0,"chars":200,"totalChars":3140,"truncated":true,"segments":[{"time":0,"timeText":"0:00","text":"…"}]}`.
 
 ## Pitfalls
 Only a desktop YouTube watch page works; anything else answers `transcript_failed` with the reason, not with an empty list. The first call on a cold page can take longer than the bridge's call timeout — open the video, let it play, then ask.
