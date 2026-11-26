@@ -151,7 +151,7 @@ fn extension_failure_text(
                 return click_no_match_text(params);
             }
             if code == Some(NOT_CLICKABLE_CODE) {
-                return texts::not_clickable(&selector_of(params));
+                return texts::not_clickable(&click_target_of(params));
             }
             // Before `page_failure_text`, and a code of its own: this refusal is a text
             // search that named several targets, and the sentence carries the evidence the
@@ -162,7 +162,7 @@ fn extension_failure_text(
             // Before `page_failure_text`: a click that scrolled and still saw nothing
             // reachable names the target, like the three reasons before it.
             if code == Some(OFFSCREEN_AFTER_SCROLL_CODE) {
-                return texts::offscreen_after_scroll(&selector_of(params));
+                return texts::offscreen_after_scroll(&click_target_of(params));
             }
             // Before `page_failure_text` too: the page refusal of a click is not the one
             // `read` gives. The plain `not_readable` sentence would tell the agent the
@@ -315,13 +315,28 @@ fn match_of(params: Option<&Map<String, Value>>) -> String {
     }
 }
 
+/// The name a click's sentence gives its target: the term the caller searched for when it
+/// sent one, otherwise the selector (`docs/58`, `## Ziel` 6).
+///
+/// One helper for the three refusals that name the target — `no_match`, `not_clickable` and
+/// `offscreen_after_scroll` — because a text click puts only `text` on the wire (`click_tool`)
+/// and a sentence built from [`selector_of`] alone would print `undefined` at the caller's own
+/// term. Two copies of this choice would be the next drift.
+fn click_target_of(params: Option<&Map<String, Value>>) -> String {
+    match params.and_then(|params| params.get("text")) {
+        Some(_) => match_of(params),
+        None => selector_of(params),
+    }
+}
+
 /// The `no_match` sentence of a click, in the form that matches the call: a term the
 /// caller sent wins over the selector (`docs/58`, `## Ziel` 6), because that is the target
 /// the caller wanted found. A selector-only click keeps the old sentence word for word.
 fn click_no_match_text(params: Option<&Map<String, Value>>) -> String {
+    let target = click_target_of(params);
     match params.and_then(|params| params.get("text")) {
-        Some(_) => texts::no_match_for_text(&match_of(params)),
-        None => texts::no_match(&selector_of(params)),
+        Some(_) => texts::no_match_for_text(&target),
+        None => texts::no_match(&target),
     }
 }
 

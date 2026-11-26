@@ -775,6 +775,16 @@ const NO_MATCH_TEXT: &str = r#"No element matches: a#video-title-link."#;
 const NOT_CLICKABLE_TEXT: &str = r#"The element is not visible or is disabled: a#video-title-link."#;
 const OFFSCREEN_AFTER_SCROLL_TEXT: &str =
     r#"The element stays outside the viewport after scrolling: a#video-title-link."#;
+/// The same refusal after a text search: the term, not `undefined` — the live run clicked
+/// `"Jump to content"` on a Wikipedia page whose 1×1 jump link sits at `x = -1, y = -1`.
+const OFFSCREEN_AFTER_SCROLL_FOR_TEXT_TEXT: &str =
+    r#"The element stays outside the viewport after scrolling: Jump to content."#;
+/// The term of that live run.
+const CLICK_OFFSCREEN_TERM: &str = r#"Jump to content"#;
+/// `not_clickable` after a text search: the term again, in the sentence of the second
+/// refusal that names its target.
+const NOT_CLICKABLE_FOR_TEXT_TEXT: &str =
+    r#"The element is not visible or is disabled: Jump to content."#;
 const TYPE_SELECTOR: &str = r#"input#q"#;
 const TYPE_TEXT: &str = r#"suchbegriff"#;
 const TYPE_NO_MATCH_TEXT: &str = r#"No element matches: input#q."#;
@@ -2600,6 +2610,55 @@ async fn click_withOffscreenAfterScroll_shouldNameTheTarget() {
 
     // ... and it is a tool error with a sentence, not a protocol error with an error object.
     assert!(answer.get("error").is_none());
+
+    // WHEN the client clicks by a term alone instead, the way the live run did,
+    let (answer, request) = seam
+        .call_with(
+            call_request(
+                1181,
+                "browser_click",
+                Some(json!({ "contains_text": CLICK_OFFSCREEN_TERM })),
+            ),
+            error_frame("offscreen_after_scroll"),
+        )
+        .await;
+
+    // THEN the request carried only the term,
+    assert_eq!(request["params"], json!({ "text": CLICK_OFFSCREEN_TERM }));
+
+    // ... and the sentence names it too, instead of printing `undefined` where the selector
+    // would be — the same choice `no_match` already makes (`docs/58`, `## Ziel` 6),
+    assert!(is_error(&answer));
+    assert_eq!(text_of(&answer), OFFSCREEN_AFTER_SCROLL_FOR_TEXT_TEXT);
+    assert!(text_of(&answer).contains(CLICK_OFFSCREEN_TERM));
+    assert!(!text_of(&answer).contains("undefined"));
+}
+
+#[tokio::test]
+async fn mcp_toolsCallBrowserClick_withNotClickableForATerm_shouldNameTheTerm() {
+    // GIVEN an extension whose text search found an element that cannot be clicked:
+    let mut seam = Seam::connected(config()).await;
+
+    // WHEN the client clicks by the term alone,
+    let (answer, request) = seam
+        .call_with(
+            call_request(
+                1182,
+                "browser_click",
+                Some(json!({ "contains_text": CLICK_OFFSCREEN_TERM })),
+            ),
+            error_frame("not_clickable"),
+        )
+        .await;
+
+    // THEN the request carried only the term,
+    assert_eq!(request["params"], json!({ "text": CLICK_OFFSCREEN_TERM }));
+
+    // ... and the sentence names it instead of naming a selector nobody sent,
+    assert!(is_error(&answer));
+    assert_eq!(text_of(&answer), NOT_CLICKABLE_FOR_TEXT_TEXT);
+    assert!(text_of(&answer).contains(CLICK_OFFSCREEN_TERM));
+    assert!(!text_of(&answer).contains("undefined"));
 }
 
 #[tokio::test]
