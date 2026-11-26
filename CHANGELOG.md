@@ -34,6 +34,20 @@ bei jedem Push.
 ihn bisher unangetastet; nach einer Neuinstallation lief weiter das alte Binary.
 Jetzt entscheidet `is-active` zwischen `restart` und `start`.
 
+**Die Anleitungen von `browser_help` sagen die Wahrheit.** Drei von ihnen waren
+falsch (`f67b45c`): `browser_type` zeigte `"enter": true`, das Argument heißt
+`submit`; `browser_transcript` nannte ein Argument `request`, das es nicht gibt;
+`browser_click` verschwieg `truncated` und `via`. Den ersten Lauf des neuen
+Wächters überstanden zwei weitere Tabellenzeilen nicht — `waitMs` bei
+`browser_navigate` und `active` bei `browser_open_tab` standen als Argumente da,
+die das Schema nicht kennt. `7bf5153` hat vier weitere Returns-Zeilen
+nachgemessen (focus, inspect, frames, screenshot) und die Zeile von `status` um
+das Fensterfeld `type` ergänzt. **Der Test hält das jetzt fest:**
+`bridge-rs/tests/help_contract.rs` prüft in fünf Fällen die Argumenttabellen in
+beiden Richtungen gegen `tools::tool_list()`, alle 14 Returns-Zeilen gegen
+gemessene Listen, die Beispiele gegen Schema und Returns und `tools/list` unter
+8 500 Zeichen. Gemessen am 2026-11-26 gegen `127.0.0.1:8111`.
+
 Dazu die Specs `56` bis `67`. **Die Bridge führt ihre eigene Versionsreihe:** sie
 meldet `bridgeVersion: 0.1.0` (aus `bridge-rs/Cargo.toml`), unabhängig von der
 Version der Erweiterung.

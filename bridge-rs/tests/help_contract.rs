@@ -12,6 +12,12 @@
 //! `waitMs` in the manual of `browser_navigate` and `active` in the manual of
 //! `browser_open_tab`, neither of which the schema declares — and those two rows are gone.
 //!
+//! The `## Example` section is read as well, since it is the text a model copies: every
+//! key of a shown call must exist in the schema of the tool it calls, and every key of a
+//! quoted answer must exist in the return line of the same manual. That is where the
+//! first wrong manual was found by hand — `browser_type` passed `"enter": true` where the
+//! schema says `submit`.
+//!
 //! What it cannot do: no text check decides whether the extension still answers those
 //! fields. That part is a measurement, and the date and the page are written next to
 //! every list. The schema is checked for all fourteen tools, and so is the return line:
@@ -294,6 +300,120 @@ fn return_fields(manual: &str, tool: &str) -> BTreeSet<String> {
     fields
 }
 
+/// The tools whose example quotes an answer with the word `answers` before it.
+///
+/// Pinned for the reason of the return tables: without it, a manual that quietly dropped
+/// its quoted answer would stop being read instead of failing. Ten of the fourteen quote
+/// one; `type`, `inspect`, `eval` and `help` answer in prose or with a number.
+const QUOTED_ANSWERS: [&str; 10] = [
+    "browser_status",
+    "browser_navigate",
+    "browser_read",
+    "browser_click",
+    "browser_focus",
+    "browser_open_tab",
+    "browser_close_tab",
+    "browser_screenshot",
+    "browser_frames",
+    "browser_transcript",
+];
+
+/// One call an example shows: the tool it names and the argument names it passes.
+struct ExampleCall {
+    tool: String,
+    arguments: BTreeSet<String>,
+}
+
+/// One `## Example` section, as far as text can read it.
+///
+/// The section is prose, so it is split by backtick span. A span that starts with a tool
+/// name and parentheses (`browser_read({…})`) is a call. A span that is a JSON object and
+/// is written directly after the word `answers` is the quoted answer. An object in
+/// neither place is neither: `browser_eval` shows one without its tool name
+/// (`For the tab title: {"code":"return document.title"}`), so its keys are checked
+/// against schema and return line together — the text does not say which one they are.
+struct Example {
+    calls: Vec<ExampleCall>,
+    answers: Vec<(String, BTreeSet<String>)>,
+    unlabelled: Vec<(String, BTreeSet<String>)>,
+}
+
+/// Every key of a JSON value, nested objects and array entries included, as bare names —
+/// the same flattening the return lines use for `windows`, `elements` and `segments`.
+fn keys_in(value: &Value, into: &mut BTreeSet<String>) {
+    match value {
+        Value::Object(map) => {
+            for (key, child) in map {
+                into.insert(key.clone());
+                keys_in(child, into);
+            }
+        }
+        Value::Array(items) => items.iter().for_each(|item| keys_in(item, into)),
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {}
+    }
+}
+
+/// The keys of one JSON object, with the span quoted back when it does not parse.
+fn object_keys(text: &str, tool: &str, span: &str) -> BTreeSet<String> {
+    let value: Value = serde_json::from_str(text).unwrap_or_else(|error| {
+        panic!("the example of {tool} writes `{span}`, which is not JSON: {error}")
+    });
+    let mut keys = BTreeSet::new();
+    keys_in(&value, &mut keys);
+    keys
+}
+
+/// The call in one backticked span, when the span is one: `browser_read({…})`.
+fn call_in(span: &str, manual_tool: &str) -> Option<ExampleCall> {
+    if !span.starts_with("browser_") || !span.ends_with(')') {
+        return None;
+    }
+    let open = span.find('(')?;
+    let inner = span[open + 1..span.len() - 1].trim();
+    assert!(
+        inner.starts_with('{'),
+        "the example of {manual_tool} shows the call `{span}`, whose arguments are not a JSON object"
+    );
+
+    Some(ExampleCall {
+        tool: span[..open].to_string(),
+        arguments: object_keys(inner, manual_tool, span),
+    })
+}
+
+/// The `## Example` section of one manual, split into calls, quoted answers and the rest.
+fn example_of(manual: &str, tool: &str) -> Example {
+    let text = section(manual, "Example", tool).join("\n");
+    let mut example = Example {
+        calls: Vec::new(),
+        answers: Vec::new(),
+        unlabelled: Vec::new(),
+    };
+
+    let mut rest = text.as_str();
+    while let Some(open) = rest.find('`') {
+        let before = rest[..open].trim_end();
+        let after = &rest[open + 1..];
+        let Some(close) = after.find('`') else { break };
+        let span = &after[..close];
+        rest = &after[close + 1..];
+
+        let trimmed = span.trim();
+        if let Some(call) = call_in(trimmed, tool) {
+            example.calls.push(call);
+        } else if trimmed.starts_with('{') {
+            let keys = object_keys(trimmed, tool, span);
+            if before.ends_with("answers") {
+                example.answers.push((span.to_string(), keys));
+            } else {
+                example.unlabelled.push((span.to_string(), keys));
+            }
+        }
+    }
+
+    example
+}
+
 fn named(items: &BTreeSet<String>) -> String {
     if items.is_empty() {
         return "none".to_string();
@@ -426,6 +546,82 @@ fn every_pinned_manual_returnLine_shouldNameExactlyTheAnsweredFields() {
             named(&expected.difference(&documented).cloned().collect()),
         );
     }
+}
+
+/// The examples against schema and return line, both halves.
+///
+/// Two checks per example, both pure text: every key of a shown call exists in the schema
+/// of the tool it calls, and every key of a quoted answer exists in the return line of the
+/// manual's own tool. Values and types stay unread — whether `"width":1708` fits a real
+/// page is a measurement, not a sentence. The quoted answers are shortened on purpose
+/// (`browser_screenshot` omits `tabId`), so only existence is required, never completeness.
+#[test]
+fn every_manual_example_shouldOnlyNameKeysOfItsSchemaAndItsReturnLine() {
+    let mut quoting: BTreeSet<&str> = BTreeSet::new();
+
+    for tool in known_names() {
+        let manual = manual_for(tool).unwrap_or_else(|| panic!("{tool} has no manual"));
+        let example = example_of(manual, tool);
+
+        assert!(
+            !example.calls.is_empty(),
+            "the example of {tool} shows no call like `browser_x({{…}})`"
+        );
+
+        let (properties, _) = schema_of(tool);
+        for call in &example.calls {
+            assert_eq!(
+                call.tool, tool,
+                "the example of {tool} shows a call of {}, not of the tool it describes",
+                call.tool
+            );
+
+            let unknown: BTreeSet<String> =
+                call.arguments.difference(&properties).cloned().collect();
+            assert!(
+                unknown.is_empty(),
+                "the example of {tool} passes {} to {tool}; its schema declares {}",
+                named(&unknown),
+                named(&properties),
+            );
+        }
+
+        if !example.answers.is_empty() {
+            quoting.insert(tool);
+        }
+        let returns = return_fields(manual, tool);
+        for (span, keys) in &example.answers {
+            let unknown: BTreeSet<String> = keys.difference(&returns).cloned().collect();
+            assert!(
+                unknown.is_empty(),
+                "the example of {tool} quotes `{span}` as the answer, but the Returns line \
+                 does not name {}; it names {}",
+                named(&unknown),
+                named(&returns),
+            );
+        }
+
+        let known: BTreeSet<String> = returns.union(&properties).cloned().collect();
+        for (span, keys) in &example.unlabelled {
+            let unknown: BTreeSet<String> = keys.difference(&known).cloned().collect();
+            assert!(
+                unknown.is_empty(),
+                "the example of {tool} writes the object `{span}`; {} is neither an argument \
+                 of its schema nor a field of its Returns line",
+                named(&unknown),
+            );
+        }
+    }
+
+    let pinned: BTreeSet<&str> = QUOTED_ANSWERS.into_iter().collect();
+    assert_eq!(
+        quoting,
+        pinned,
+        "the pinned examples and the written ones disagree: quotes an answer but is not \
+         pinned {}, is pinned but quotes none {}",
+        sorted(&quoting.difference(&pinned).copied().collect()),
+        sorted(&pinned.difference(&quoting).copied().collect()),
+    );
 }
 
 /// Every tool of the contract carries a pinned return line.

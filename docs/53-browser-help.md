@@ -110,6 +110,11 @@ heutigen Fehlgriff verhindert hätte:
 | `bridge-rs/tests/mcp.rs` | `help_forEveryTool_shouldAnswerWithTheSixSections` | antwortet ohne Erweiterung (`Seam::nobody`) |
 | `bridge-rs/tests/mcp.rs` | `help_forRead_shouldSayThatItTakesNoUrl` | der Satz, der den Anlassfall verhindert |
 | `scripts/parity/expected/…` | Fixture 1 und 2 | die Werkzeugliste und ein `help`-Aufruf |
+| `bridge-rs/tests/help_contract.rs` | `every_manual_argument_shouldMatchTheToolSchema` | Argumenttabelle und Schema, in beiden Richtungen, für alle vierzehn Werkzeuge |
+| `bridge-rs/tests/help_contract.rs` | `every_pinned_manual_returnLine_shouldNameExactlyTheAnsweredFields` | alle vierzehn Returns-Zeilen gegen gemessene Feldlisten (Stand 2026-11-26, `127.0.0.1:8111`) |
+| `bridge-rs/tests/help_contract.rs` | `every_manual_example_shouldOnlyNameKeysOfItsSchemaAndItsReturnLine` | jeder Beispielaufruf gegen das Schema, jede zitierte Antwort gegen die Returns-Zeile |
+| `bridge-rs/tests/help_contract.rs` | `the_pinnedTools_shouldBeEveryToolOfTheContract` | die gepinnten Listen decken genau die vierzehn Werkzeuge, keine fehlt, keine doppelt |
+| `bridge-rs/tests/help_contract.rs` | `toolsList_shouldStayUnderTheCharacterBudget` | `tools/list` bleibt unter 8 500 Zeichen |
 
 ## Acceptance criteria
 
@@ -162,9 +167,12 @@ sind `tools/call`-Antworten, und kein Kriterium braucht dort einen `help`-Fall.
 
 ## Bekannte Lücken
 
-- **Die Texte sind handgeschrieben.** Sie können von der Wirklichkeit abweichen —
-  dagegen hilft nur, dass die Beispiele gegen den laufenden Dienst geprüft werden,
-  und das ist Betreiberarbeit.
+- **Die Texte sind handgeschrieben.** Sie können von der Wirklichkeit abweichen.
+  Seit 2026-11-26 hält `bridge-rs/tests/help_contract.rs` Argumenttabellen,
+  Returns-Zeilen und Beispiele gegen das Schema und gegen gemessene Feldlisten
+  (fünf Fälle, siehe `## Testing`). Was der Test **nicht** kann: entscheiden, ob die
+  Erweiterung diese Felder noch liefert — diese Messung gegen den laufenden Dienst
+  bleibt Betreiberarbeit, und die gepinnten Listen müssen ihr folgen.
 - **`browser_help` erklärt sich selbst**, aber nicht die MCP-Schicht darüber
   (`codemode` braucht `return`). Das bleibt beim Client.
 
@@ -181,6 +189,20 @@ worden. Der Nachtrag in `docs/54` (Stufe 3) hat die Sprache korrigiert, nicht di
 fehlende Runde ersetzt.
 
 ## Log
+
+- **2026-11-26, Handbuch korrigiert und bewacht.** Drei Anleitungen sagten die
+  Unwahrheit (`f67b45c`): `browser_type` zeigte `"enter": true` statt `submit`,
+  `browser_transcript` nannte ein Argument `request`, `browser_click` verschwieg
+  `truncated` und `via`. Der neue Wächter `bridge-rs/tests/help_contract.rs` fand
+  beim ersten Lauf zwei weitere Drifts — `waitMs` in der Argumenttabelle von
+  `browser_navigate`, `active` in der von `browser_open_tab`, beide kennt das
+  Schema nicht —, die zwei Zeilen sind gestrichen. `7bf5153` hat vier weitere
+  Returns-Zeilen nachgemessen (focus, inspect, frames, screenshot) und die Zeile
+  von `status` um das Fensterfeld `type` ergänzt. Der Wächter hat fünf Fälle:
+  Argumenttabellen in beiden Richtungen gegen `tools::tool_list()`, alle vierzehn
+  Returns-Zeilen gegen gemessene Listen, Beispiele gegen Schema und Returns,
+  `tools/list` unter 8 500 Zeichen; die Messung lief am 2026-11-26 gegen
+  `127.0.0.1:8111`. Abnahme: `npm run check` Exit 0, sonst nichts geändert.
 
 - **2026-11-22, gebaut und gemessen.** `browser_help` ist das vierzehnte Werkzeug;
   die dreizehn Anleitungen liegen in `bridge-rs/src/mcp/help.rs` und sind **nicht**

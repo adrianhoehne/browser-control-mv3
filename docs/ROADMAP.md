@@ -74,6 +74,7 @@ prüfbar geschlossen, das Diagnose-Muster erklärt); und die drei Restlöcher im
 | Vorhaben | Größe |
 |---|---|
 | **`click` erreicht die Ruhe je nach Ziel nicht** — gemessen am 2026-11-23 und 2026-11-26 auf derselben Wikipedia-Seite: der Sprunglink (`#`-Anker) endet im Guard (`settled: false, waitedMs: 3937`), der Klick aufs Menü in `settled: true, waitedMs: 998`. Ein Klick, der die Ruhe verfehlt, kostet vier Sekunden, und die Antwort unterscheidet „nicht still" nicht von „keine Reaktion" (`docs/15`, `## Bekannte Lücken`) | klein |
+| **Anleitungen können driften** — die Texte von `browser_help` sind handgeschrieben, und drei Anleitungen liefen der Wirklichkeit hinterher (`docs/53`, Log 2026-11-26). Seit `f67b45c` hält `bridge-rs/tests/help_contract.rs` Argumenttabellen, Returns-Zeilen und Beispiele gegen Schema und gemessene Listen (fünf Fälle). **Offen bleibt die Messung:** die gepinnten Feldlisten (`EXPECTED_RETURNS`, `MEASURED_RETURNS`) ändern sich nicht mit dem Code; nach jeder Feldänderung an einem Werkzeug muss jemand neu gegen den laufenden Dienst messen, sonst pinnt der Test den alten Stand (`docs/53`, `## Bekannte Lücken`) | klein |
 
 ## Funktionalität
 
