@@ -5,18 +5,22 @@ status: active
 
 # Die AMO-Einreichung
 
-Die Texte für die nächste Einreichung (`0.8.0`, unsigniert) in der Sprache, in der
-das Formular sie will (**englisch**). Das Deutsche daneben ist die Begründung für
-uns. Jede Behauptung trägt eine Fundstelle im Code, damit der Reviewer sie selbst
+Die Texte für eine **öffentliche** Store-Seite (`listed`) in der Sprache, in der das
+Formular sie will (**englisch**). Das Deutsche daneben ist die Begründung für uns.
+Jede Behauptung trägt eine Fundstelle im Code, damit ein Reviewer sie selbst
 nachsehen kann.
 
-**Gültigkeit der Regelwerke.** *Firefox Add-on Distribution Agreement* und *Add-on
+**Betreiberentscheidung vom 2026-11-26: `unlisted` bleibt dauerhaft.** Die Signatur
+läuft über AMO (`unlisted`), die XPI liegt am Release, im Store erscheint nichts.
+Diese Texte sind damit **Vorrat**: sie gelten, wenn AMO zu einer signierten Fassung
+nachfragt oder wenn die Entscheidung eines Tages anders fällt. Eine Frist haben sie
+nicht mehr.
+
+**Stand der Regelwerke.** *Firefox Add-on Distribution Agreement* und *Add-on
 Policies* wurden am **2026-11-20** gelesen (15 220 und 17 178 Zeichen, von
-`extensionworkshop.com`, weil AMO automatisierte Abrufe blockt). Beide werden zum
-**2026-12-01** ersetzt — diese Texte gelten deshalb für Einreichungen **bis
-2026-11-30**. Danach ist ein datierter Neulesungslauf nötig, bevor sie wieder
-Vorlage sind. Die Zeichenzahlen sind ein Schnappschuss der ersetzten Seiten und
-taugen nach dem Stichtag nicht als Beleg.
+`extensionworkshop.com`, weil AMO automatisierte Abrufe blockt). Sie werden zum
+**2026-12-01** ersetzt. Für `unlisted` ist das folgenlos; wer die Texte für eine
+Listung nutzt, liest vorher neu und trägt das Datum ein.
 
 **Was am 2026-11-22 mit `0.7.0` geschah:** eingereicht, angenommen, signiert, ohne
 Rückfrage; der `eval`-Absatz war nicht nötig. Das sagt nichts über `0.8.0` und
@@ -239,9 +243,13 @@ dabei.
    sed -n '/^## 4\./,/^## 5\./p' docs/52-amo-einreichung.md \
      | grep -cF 'world: MAIN'                               # ⇒ 1
    ```
-5. **Das Regelwerk-Fenster ist entscheidbar:**
-   `grep -cF 'bis 2026-11-30' docs/52-amo-einreichung.md` ⇒ `1`, und
-   `grep -cF '2026-12-01' docs/52-amo-einreichung.md` ⇒ mindestens `1`.
+5. **Der Stand der Regelwerke und die Entscheidung sind benannt:**
+
+   ```
+   sed -n '1,/^## 1\./p' docs/52-amo-einreichung.md | grep -cF '2026-12-01'   # ⇒ 1
+   sed -n '1,/^## 1\./p' docs/52-amo-einreichung.md \
+     | grep -cF '`unlisted` bleibt dauerhaft'                                 # ⇒ 1
+   ```
 6. **Die Formularliste ist vollständig** (auf die Zeilenform geschnitten, sonst
    zählt das Kriterium sich selbst mit):
 
@@ -281,7 +289,7 @@ Keine Stufe hängt von einer späteren ab. Stufe 4 ist erst vor dem Einreichen f
   Betreiber am Formular abhaken.
 - **Der Inhalt des neuen Regelwerks ist unbekannt.** Ab dem 2026-12-01 gelten andere
   Dokumente; ob der zitierte Satz bleibt und was sie zu `eval` und Datenerhebung
-  sagen, weiß niemand in diesem Repo.
+  sagen, weiß niemand in diesem Repo. Für `unlisted` ist das ohne Belang.
 - **Ein Endpunkt außerhalb von Loopback ist erlaubt.** Trägt der Betreiber einen
   `wss://`-Endpunkt ein, verlässt Seitentext das Gerät. Der Betrieb bleibt Loopback
   (Betreiberentscheidung vom 2026-11-26); erzwungen wird es nicht.
@@ -356,7 +364,7 @@ deshalb auf `["none"]`.
 
 - **2026-11-26, gebaut und abgenommen, mit dokumentierter Abweichung.** Alle sieben
   Kriterien mit Ist-Wert: 9 Zeilen im Prüfabschnitt, 10 Fences (fünf Textblöcke), 1 und
-  1 für die zwei Tab-Sätze, 1 / 1 / 1 für den `eval`-Absatz, „bis 2026-11-30" einmal,
+  1 für die zwei Tab-Sätze, 1 / 1 / 1 für den `eval`-Absatz, `2026-12-01` einmal,
   5 Formularzeilen, `git status` außer dieser Datei 0. Spec auf `active` gesetzt.
   **Abweichung:** nach dem dritten Review-Block verlangt `CONTRIBUTING.md` die Teilung;
   der Betreiber hat am 2026-11-26 entschieden, ungeteilt zu bauen. Die vorgeschlagene
@@ -364,3 +372,9 @@ deshalb auf `["none"]`.
   Prüfapparat genau die Sätze an den Code bindet, die im Text stehen. Die drei Blöcke
   sind im `## Review` nachlesbar; die Befunde der letzten Runde waren Textfehler, keine
   Strukturfehler.
+
+- **2026-11-26, Zweck geändert.** Betreiberentscheidung: `unlisted` bleibt dauerhaft.
+  Die Signatur über AMO ist der ganze Vorgang; im Store erscheint nichts. Diese Datei
+  ist damit Vorrat für Rückfragen und für den Fall einer späteren Listung. Die
+  Regelwerk-Frist (2026-11-30) ist keine Bedingung mehr; Kriterium 5 prüft stattdessen,
+  dass Datum und Entscheidung im Text stehen.
