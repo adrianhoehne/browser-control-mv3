@@ -1,6 +1,6 @@
 ---
 description: Das Installationsskript druckt das Token nur, wenn es in diesem Lauf entstanden ist; liegt schon eines, nennt Schritt 5 den Weg --print-token mit absolutem Pfad statt der Zeichenfolge.
-status: proposed
+status: active
 ---
 
 # Das Token erscheint einmal, nicht bei jedem Lauf
@@ -258,3 +258,21 @@ Fassung neu, die Klammer nennt die Runde dieser Fassung.
   ist gestrichen, weil `runInstall()` immer einen absoluten Pfad übergibt;
   `docs/README.md` steht in Stufe 3 als Orchestrator-Aufgabe; CHANGELOG-Rolle in der
   Touch boundary aufgelöst.
+
+- **2026-11-26, gebaut (Stufen 1 und 2).** `cmd_install` setzt `TOKEN_CREATED=0`,
+  `ensure_token` setzt `1` beim Anlegen; Schritt 5 ruft `read_token_value` nur dann
+  auf, zeigt den Wert mit `später nur mit --print-token` und nennt sonst
+  `$REPO_ROOT/scripts/install.sh --print-token`. Der Kopfkommentar steht in einer
+  Zeile und behält die zweite Hälfte der alten Zusage. Fälle:
+  `install_withAnExistingToken_doesNotPrintIt` neu; je eine Zusicherung in
+  `install_isIdempotent` und `install_printsTheTokenOnce`. Gemessen: `npm test`
+  584 → 585 `pass`, `# fail 0`, `# cancelled 0`; `node --test test/install.test.js`
+  24 `pass`; `npm run check`, `cargo test` und `scripts/parity.sh --impl rust
+  --check` mit Exit 0. `status: active` setzt der Orchestrator (Stufe 3).
+
+- **2026-11-26, gebaut und abgenommen.** `TOKEN_CREATED` eingezogen, Schritt 5 druckt den
+  Wert nur beim Anlegen und nennt sonst `$REPO_ROOT/scripts/install.sh --print-token`;
+  Kopfkommentar in einer Zeile. Neuer Fall `install_withAnExistingToken_doesNotPrintIt`,
+  Zusicherungen in `install_isIdempotent` und `install_printsTheTokenOnce`. `npm test`
+  584 → **585** (24 `install_`-Fälle), `cargo test` 15 Blöcke, `parity --check` 7/7,
+  `npm run check` 0. Spec auf `active` gesetzt.

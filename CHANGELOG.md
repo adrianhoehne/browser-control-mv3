@@ -71,6 +71,18 @@ Grenze weiter, jetzt gegen 10 000; `docs/53`, `docs/54`, `docs/59` und `docs/60`
 nennen die neue Zahl, und die beiden Messbefehle in `docs/60` zählen mit
 `LC_ALL=C.UTF-8` Zeichen statt Bytes.
 
+**Das Installationsskript druckt den Token nur noch beim Anlegen.** Ein Lauf, der
+ein vorhandenes Token vorfand, gab die Zeichenfolge bisher bei jedem Lauf aus — in
+einem Betreiber-Log, einem Ticket oder einer Sitzungsaufzeichnung stand sie damit
+dauerhaft. Jetzt druckt nur der Lauf sie, der sie anlegt (mit dem Zusatz
+`später nur mit --print-token`); ein Reparaturlauf nennt
+`<clone>/scripts/install.sh --print-token` mit absolutem Pfad. Der Fall
+`install_withAnExistingToken_doesNotPrintIt` hält fest, dass der Wert nicht auf
+`stdout` steht; `install_isIdempotent` prüft den zweiten Lauf, und
+`install_printsTheTokenOnce` prüft den Zusatz. `docs/35` und `INSTALL.md` sagen
+dasselbe (2026-11-26); die Zählung steht bei 24 `install_`-Fällen und 33 mit den
+neun Unit-Fällen.
+
 ## [0.7.0] — 2026-11-22
 
 **Ein neues Werkzeug: `browser_help`.** Es antwortet mit der ausführlichen

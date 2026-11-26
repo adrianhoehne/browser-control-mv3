@@ -105,14 +105,16 @@ cd ~/browser-control
 ./scripts/install.sh
 ```
 
-It writes the token (only if there is none), installs the user unit, reloads
-systemd, enables and starts the service and checks that it is `active`. At the end
-it prints the endpoint and the token — **once**, on stdout — together with the four
-Firefox steps that remain manual work: no page and no script may touch
-`about:debugging` or the extension's `storage.local`.
+It writes the token only if there is none.
+A run that finds one prints no token, but always the endpoint; `scripts/install.sh --print-token` prints the token.
+It installs the user unit, reloads systemd, enables and starts the service and
+checks that it is `active` — together with the four Firefox steps that remain
+manual work: no page and no script may touch `about:debugging` or the extension's
+`storage.local`.
 
 It needs **no root**: everything happens in your own `$HOME`, and nothing is written
-outside `~/.config/browser-control/` and `~/.config/systemd/user/`.
+outside `~/.config/browser-control/`, `~/.config/systemd/user/` and
+`~/.local/bin/`.
 
 | Option | Effect |
 |---|---|

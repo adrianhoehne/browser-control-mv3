@@ -18,8 +18,9 @@
 #   A missing artefact is a preflight error — not a start that dies in the journal.
 # - An existing token is read and checked, never replaced. Rotation is the
 #   operator's decision (INSTALL.md, "Rotating the token").
-# - The token is printed exactly once, on stdout, and never handed to another
-#   program as an argument — no `set -x`, no `systemctl` argument, no log line.
+# - The token is printed once, when it is created; otherwise only with --print-token,
+#   and never handed to another program as an argument — no `set -x`, no `systemctl`
+#   argument, no log line.
 # - The script is sourceable: sourcing it defines the functions and starts
 #   nothing, which is what makes the path guard falsifiable in the tests.
 #
@@ -389,6 +390,8 @@ ensure_token() {
   fi
 
   say "Token anlegen: $TOKEN_FILE (600, $TOKEN_LENGTH_HINT Hex-Zeichen)"
+  # Only a run that creates the token may print it; `cmd_install` reads this flag.
+  TOKEN_CREATED=1
   # `umask 077` in a subshell: globally it would hand the unit mode 600 too, and a
   # unit is not a secret.
   (
@@ -414,6 +417,8 @@ cmd_print_token() {
 cmd_install() {
   local value
 
+  TOKEN_CREATED=0
+
   step "1/5 Bridge-Binary"
   install_binary
 
@@ -427,9 +432,16 @@ cmd_install() {
   start_service
 
   step "5/5 Token und Endpunkt für Firefox"
-  value=$(read_token_value)
   say "Endpunkt: ws://127.0.0.1:$EXTENSION_PORT"
-  say "Token (erscheint hier genau einmal, jetzt einfügen): $value"
+  # A repair run ends up in logs, tickets and transcripts; the value belongs to the
+  # run that created it. `--print-token` is the way back and stays an express
+  # question. `$REPO_ROOT` is absolute, `$SCRIPT_PATH` is not.
+  if (( TOKEN_CREATED )); then
+    value=$(read_token_value)
+    say "Token neu angelegt, jetzt einfügen (später nur mit --print-token): $value"
+  else
+    say "Token unverändert (nicht gedruckt). Zum Einfügen: $REPO_ROOT/scripts/install.sh --print-token"
+  fi
 
   step "Firefox — Handarbeit, das Skript kann sie nicht übernehmen"
   say "1. about:debugging#/runtime/this-firefox öffnen und \"Load Temporary Add-on…\" wählen."

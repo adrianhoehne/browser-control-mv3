@@ -32,17 +32,21 @@ heißt jetzt `install_withOldNodeOnThePath_ignoresTheVersion` und belegt das
 Gegenteil: eine alte Node-Version stört nicht mehr, weil Node keine
 Betriebsvoraussetzung ist.
 
+**Stand 2026-11-26, nachgezogen aus `docs/68`:** **24 `install_`-Fälle**, zusammen **33**.
+Das Token erscheint beim Anlegen genau einmal, ein Reparaturlauf nennt nur
+`--print-token`. Neu ist `install_withAnExistingToken_doesNotPrintIt`.
+
 - **Ein Befehl** auf dem Server: `./scripts/install.sh` kopiert das gebaute
   Bridge-Binary nach `~/.local/bin`, legt das Token an, installiert die
   systemd-User-Unit, aktiviert den Dienst, startet oder **startet neu** und prüft
   ihn. Danach steht
-  da, was in Firefox noch zu tun ist — mit Endpunkt und Token zum Einfügen.
+  da, was in Firefox noch zu tun ist — beim Anlegen mit Endpunkt und Token,
+  sonst mit Endpunkt und dem Hinweis auf `--print-token`.
 - **Idempotent.** Ein zweiter Lauf ändert nichts, was schon stimmt. Ein
   **vorhandenes Token wird nie überschrieben** — Rotation bleibt Handarbeit
   und eine Entscheidung des Betreibers.
-- **Das Token erscheint genau einmal**, auf stdout, mit der Aufforderung, es
-  jetzt einzufügen. Nicht in einer Datei außer der Tokendatei, nicht im
-  Journal, nicht in einer Logzeile des Skripts.
+- **Das Token erscheint beim Anlegen genau einmal**; ein Reparaturlauf druckt es nicht und nennt `--print-token`.
+  Nicht in einer Datei außer der Tokendatei, nicht im Journal, nicht in einer Logzeile des Skripts.
 - **Nichts außerhalb von drei Orten.** Geschrieben wird nur nach
   `~/.config/browser-control/`, `~/.config/systemd/user/` und `~/.local/bin/`.
   Dazu gehören die Elternverzeichnisse, die ein `mkdir -p` dabei anlegt
@@ -133,11 +137,13 @@ Schritt — bei einem handgestarteten Bridge aus `INSTALL.md` §3 ist das
 | `test/install.test.js` | `install_dryRunWritesNothing` | `--dry-run`: Schritte genannt, `readTree(home)` unverändert, kein `systemctl` |
 | `test/install.test.js` | `install_createsTokenWithTightPermissions` | Tokendatei `600`, 65 Bytes, Verzeichnis `700` |
 | `test/install.test.js` | `install_withAnExistingToken_doesNotTouchIt` | zweiter Lauf: `sha256`, `mtimeNs` und Modus unverändert |
+| `test/install.test.js` | `install_withAnExistingToken_doesNotPrintIt` | vorhandenes Token: die Zeichenfolge steht nicht auf `stdout`, die Zeile nennt `--print-token` und den absoluten Pfad |
 | `test/install.test.js` | `install_withTooShortToken_exitsTwo` | 10-Zeichen-Token ⇒ Exit `2`, Datei byte-gleich |
 | `test/install.test.js` | `install_withAShortButUsableToken_keepsGoing` | 32 Zeichen ⇒ Exit `0` mit Hinweis (die Bridge akzeptiert es) |
 | `test/install.test.js` | `install_printTokenPrintsOnlyTheToken` | `--print-token`: nur das Token, kein `systemctl`, kein Schreiben |
 | `test/install.test.js` | `install_installsAndStartsTheUnit` | Unit liegt unter `~/.config/systemd/user/`; `daemon-reload` vor `enable --now`, danach `is-active` |
-| `test/install.test.js` | `install_isIdempotent` | zweiter Lauf: `openssl` einmal, Unit-`mtimeNs` gleich, eigener Dienst kein Portkonflikt |
+| `test/install.test.js` | `install_withAStoppedService_startsItInsteadOfRestarting` | gestoppter Dienst: `start` statt `restart` |
+| `test/install.test.js` | `install_isIdempotent` | zweiter Lauf: `openssl` einmal, Unit-`mtimeNs` gleich, der zweite Lauf druckt das Token nicht, eigener Dienst kein Portkonflikt |
 | `test/install.test.js` | `install_dryRunUninstallKeepsTheUnit` | `--dry-run --uninstall` sagt an und entfernt nichts |
 | `test/install.test.js` | `install_uninstallKeepsTheToken` | `--uninstall`: `disable --now`, Unit weg, Token bleibt |
 | `test/install.test.js` | `install_printsTheTokenOnce` | Token genau einmal auf stdout, nirgends sonst |
@@ -191,11 +197,13 @@ ohne ihn liest `grep` stdin und zählt immer `0`) — **und** dass er grün läu
    Datei unverändert; 32–63 Zeichen ⇒ akzeptiert (die Bridge startet damit) mit
    einem Hinweis auf die 64 Zeichen aus `INSTALL.md`. Beweis:
    `install_withTooShortToken_exitsTwo`, `install_withAShortButUsableToken_keepsGoing`.
-6. **Das Token bleibt geheim.** Es steht auf `stdout` genau einmal und in der
-   Tokendatei — nicht in einer zweiten Datei, nicht in `stderr`, nicht in einem
-   Stub-Log. Beweis: `install_printsTheTokenOnce` (zählt vier Stellen);
+6. **Das Token bleibt geheim.** Es erscheint beim Anlegen genau einmal, ein
+   Reparaturlauf druckt keinen Wert. Sonst steht es nur in der Tokendatei — nicht
+   in einer zweiten Datei, nicht in `stderr`, nicht in einem Stub-Log. Beweis:
+   `install_printsTheTokenOnce` (zählt vier Stellen);
    `install_printTokenPrintsOnlyTheToken` belegt zusätzlich, dass die Option
-   nichts anderes tut.
+   nichts anderes tut; `install_withAnExistingToken_doesNotPrintIt` belegt den
+   Reparaturlauf.
 7. **`--uninstall` lässt das Token stehen.** Beweis:
    `install_uninstallKeepsTheToken`.
 8. **Das Binary liegt dort, wo die Unit es startet, und wird nicht bei jedem
@@ -752,3 +760,11 @@ Minor, vier Nits — **alle übernommen**; die Einzelzeilen stehen in `## Log`.
   kein `enable --now`) und `install_withAStoppedService_startsItInsteadOfRestarting`
   (gestoppt ⇒ start, kein restart). Der systemctl-Stub führt dafür einen
   Zustand, damit `is-active` nach dem Start `0` meldet.
+- **2026-11-26, nachgezogen aus `docs/68`.** Ein Lauf, der ein vorhandenes Token
+  vorfindet, druckt den Wert nicht mehr; nur der Lauf, der das Token anlegt, zeigt
+  es — einmal, mit dem Zusatz `später nur mit --print-token`. Schritt 5 nennt
+  stattdessen `--print-token` mit absolutem Pfad; Schritt 2 behält seine Meldung
+  `Token bleibt unverändert`. Die Testing-Liste trägt
+  `install_withAnExistingToken_doesNotPrintIt` und
+  `install_withAStoppedService_startsItInsteadOfRestarting`, und die Zählung in
+  `## Ziel` nennt 24 `install_`-Fälle (33 mit den neun Unit-Fällen).

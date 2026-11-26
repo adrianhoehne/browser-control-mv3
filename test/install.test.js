@@ -574,6 +574,29 @@ test("install_withAnExistingToken_doesNotTouchIt", (t) => {
   assert.equal(afterStats.mode & 0o777n, beforeStats.mode & 0o777n);
 });
 
+test("install_withAnExistingToken_doesNotPrintIt", (t) => {
+  // GIVEN a sandbox with a token that is older than this run — the state of every
+  // repair run,
+  const sandbox = makeSandbox(t);
+  const token = `${freshToken()}\n`;
+  writeToken(sandbox, token);
+
+  // WHEN the installer runs over it,
+  const run = runInstall(sandbox, []);
+
+  // THEN the run is green and the value never reaches stdout: that output lands in
+  // logs, tickets and transcripts, and printing it once would be enough there.
+  assert.equal(run.status, 0, run.output);
+  assert.equal(countOccurrences(run.stdout, token.trim()), 0, run.stdout);
+
+  // AND the line says that it is not printed and names the way to get it — in one
+  // line, with an absolute path, so it works from any directory:
+  const line = run.stdout.split("\n").find((entry) => entry.includes("nicht gedruckt"));
+  assert.ok(line, run.stdout);
+  assert.match(line, /--print-token/);
+  assert.ok(line.includes(`${REPOSITORY_ROOT}/scripts/install.sh --print-token`), line);
+});
+
 test("install_withTooShortToken_exitsTwo", (t) => {
   // GIVEN a token file holding ten hex characters — the state the bridge refuses
   // with exit 2,
@@ -752,6 +775,11 @@ test("install_isIdempotent", async (t) => {
   assert.equal(sha256(fs.readFileSync(tokenPath, "utf8")), tokenHashBefore);
   assert.match(second.stdout, /Systemd-Unit ist schon aktuell/);
   assert.match(second.stdout, /gehört zum eigenen Dienst \(PID 4242\)/);
+
+  // ... and the second run prints no token either: it did not create one here, so
+  // the value stays out of an output nobody can unwrite.
+  const token = fs.readFileSync(tokenPath, "utf8").trim();
+  assert.equal(countOccurrences(second.stdout, token), 0, second.stdout);
 });
 
 test("install_dryRunUninstallKeepsTheUnit", (t) => {
@@ -855,6 +883,12 @@ test("install_printsTheTokenOnce", (t) => {
   // THEN the token appears exactly once on stdout — on the line that asks the
   // operator to paste it — and nowhere else:
   assert.equal(countOccurrences(run.stdout, token), 1, run.stdout);
+
+  // ... and that line says where the value will come from next time, because this
+  // run is the only one that shows it:
+  const tokenLine = run.stdout.split("\n").find((line) => line.includes(token));
+  assert.ok(tokenLine, run.stdout);
+  assert.match(tokenLine, /später nur mit --print-token/);
 
   // ... not on stderr, where a log collector would pick it up:
   assert.equal(countOccurrences(run.stderr, token), 0, run.stderr);
