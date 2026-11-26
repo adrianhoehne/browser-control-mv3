@@ -701,16 +701,24 @@ fn transcript_result() -> Value {
 // reads.
 
 const TOOL_DESCRIPTION: &str = r#"Shows the windows and tabs of the operator's browser in the Default container, along with the extension's connection state, and marks the agent tab with `agent: true`."#;
-const NAVIGATE_TOOL_DESCRIPTION: &str = r#"Opens an http(s) URL in the agent tab of the operator's browser (Default container), waits until the page has loaded and then until it has settled (3 s at most); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
-const READ_TOOL_DESCRIPTION: &str = r#"Reads the **current** agent tab and takes **no** URL — call `browser_navigate` first. Reads the title, the address and the text of the agent tab; `offset` skips that many characters of the text (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000). `offset`/`maxChars` page through the text; `chars` and `totalChars` tell you where you are. `via` says whether it is visible text or text content. `mode: article` reads only the article body — without navigation, footer and cookie banner. Waits first until the page has settled (3 s at most) and reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
+const NAVIGATE_TOOL_DESCRIPTION: &str = r#"Opens an http(s) URL in the agent tab of the operator's browser (Default container), waits until the page has loaded and then until it has settled (3 s at most); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last. Search pages open directly: `https://duckduckgo.com/?q=<term>`, `https://github.com/search?q=<term>`."#;
+const READ_TOOL_DESCRIPTION: &str = r#"Reads the **current** agent tab and takes **no** URL — call `browser_navigate` first. Reads the title, the address and the text of the agent tab; `offset` skips that many characters of the text (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000). `offset`/`maxChars` page through the text; `chars` and `totalChars` tell you where you are. `via` says whether it is visible text or text content. `mode: article` reads only the article body — without navigation, footer and cookie banner. Waits first until the page has settled (3 s at most) and reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last. Ask for `maxChars: 4000` and page on with `offset`; a full read costs context."#;
 const CLICK_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Clicks an element of the agent tab: by CSS `selector`, by `contains_text` (visible text, case-insensitive; an exact match wins over a partial one) or by both, where `selector` narrows the text search. Waits until the page has settled (3 s at most) and returns the page text afterwards (cut to 20 000 characters); reports `settled`/`waitedMs`. With `tab` exactly that tab, without `tab` the one used last."#;
 const TYPE_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Writes text into the field that matches the CSS selector, optionally sends Enter and returns the page text afterwards (cut to 20 000 characters). With `tab` exactly that tab, without `tab` the one used last."#;
 const FOCUS_TOOL_DESCRIPTION: &str = r#"Brings the agent tab to the front and its window to the foreground; the page itself is not changed, and `focused` comes from a query after focusing. With `tab` exactly that tab, without `tab` the one used last."#;
-const INSPECT_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Lists the elements of the agent tab (by CSS selector and/or text search) with tag, id, class, link, visible text, visibility and a ready-made selector to reuse. `my-card >>> button` steps right of the `>>>` into the open shadow tree of `my-card` (several levels allowed); every step is a simple selector — type, `#id`, `.class`, `[attr="value"]` or `:nth-of-type(n)`; closed shadow trees stay out of reach, and without `>>>` nothing changes. Changes nothing on the page. With `tab` exactly that tab, without `tab` the one used last."#;
+const INSPECT_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Lists the elements of the agent tab (by CSS selector and/or text search) with tag, id, class, link, visible text, visibility and a ready-made selector to reuse. `my-card >>> button` steps right of the `>>>` into the open shadow tree of `my-card` (several levels allowed); every step is a simple selector — type, `#id`, `.class`, `[attr="value"]` or `:nth-of-type(n)`; closed shadow trees stay out of reach, and without `>>>` nothing changes. Changes nothing on the page. With `tab` exactly that tab, without `tab` the one used last. `contains_text` matches visible text, not tag names or attributes; for `<input>` use `selector: "input"`."#;
 const OPEN_TAB_TOOL_DESCRIPTION: &str = r#"Opens another agent tab in the Default container (five at most) and returns `tabId`, `url` and `title`. Waits until the page has loaded, but not for it to settle — a `browser_read` afterwards should not cost `page_busy`."#;
 const CLOSE_TAB_TOOL_DESCRIPTION: &str = r#"Closes an agent tab and removes it from the list; without `tab` the one used last. Returns `tabId` and `closed`."#;
 const EVAL_TOOL_DESCRIPTION: &str = r#"Evaluates code in the **current** agent tab and takes **no** URL — call `browser_navigate` first. Runs code in the page context of the agent tab and returns the result as JSON; code may change the page, including filling password fields. `code` runs as a function body: the result comes back with `return`, without `return` it is `null`. Only possible when "Allow code evaluation" is switched on in the extension settings — otherwise `eval_not_allowed`. With `tab` exactly that tab, without `tab` the one used last."#;
 const EVAL_FUNCTION_BODY_SENTENCE: &str = r#"`code` runs as a function body"#;
+
+// The three measured sentences of `docs/70`, appended to the descriptions. They come from
+// the telefunken run of 2026-11-26, where a model paid for each of them: six calls into a
+// search box, two selectors on tag names, seventeen full reads. Pinned as literals for the
+// same reason as the descriptions above — the case must not import what it checks.
+const NAVIGATE_SEARCH_SENTENCE: &str = r#" Search pages open directly: `https://duckduckgo.com/?q=<term>`, `https://github.com/search?q=<term>`."#;
+const READ_WINDOW_SENTENCE: &str = r#" Ask for `maxChars: 4000` and page on with `offset`; a full read costs context."#;
+const INSPECT_CONTAINS_TEXT_SENTENCE: &str = r#" `contains_text` matches visible text, not tag names or attributes; for `<input>` use `selector: "input"`."#;
 const SCREENSHOT_TOOL_DESCRIPTION: &str = r#"Works on the **current** agent tab and takes **no** URL — call `browser_navigate` first. Photographs the visible viewport of the agent tab and returns the picture as MCP image content (3 MiB at most; PNG, scaled down and re-encoded as JPEG when larger). The numbers for it — `format`, `width`, `height`, `bytes` and `scaled` — stand next to it as a text block. With `tab` exactly that tab, without `tab` the one used last."#;
 const FRAMES_TOOL_DESCRIPTION: &str = r#"Lists the frames (iframes) of the agent tab with their address; `frame` in the other tools takes a substring of it. With `tab` exactly that tab, without `tab` the one used last."#;
 const TRANSCRIPT_TOOL_DESCRIPTION: &str = r#"Reads the transcript of the YouTube video tab as segments with timestamp and text, taken from the video's subtitle track. `requestedLanguage` names the chosen track, `deliveredLanguage` the language of the delivered track file, `source` where the player's data model was found. `offset` skips that many characters of the concatenated segment texts (default 0), `maxChars` limits the excerpt (default 20 000, at most 100 000); `segments` holds exactly the segments of this window, `chars` and `totalChars` tell you where you are, and `truncated` pages on. The tab must be in the foreground — call browser_focus first, otherwise the tool answers `transcript_needs_focus`. With `tab` exactly that tab, without `tab` the one used last."#;
@@ -1371,6 +1379,57 @@ async fn mcp_toolsListIsByteIdentical() {
         serde_json::to_string(&answer).expect("a JSON value always serialises"),
         recorded
     );
+}
+
+#[test]
+fn mcp_descriptions_shouldCarryTheThreeMeasuredSentences() {
+    // GIVEN the tool table the service really delivers — read from `tool_list()`, not from
+    // the literals above, so the case checks the answer and not its own source:
+    let table = tools::tool_list();
+    let tools = table.as_array().expect("tools/list carries an array");
+    let described: Vec<(&str, &str)> = tools
+        .iter()
+        .map(|tool| {
+            (
+                tool["name"].as_str().expect("every tool has a name"),
+                tool["description"]
+                    .as_str()
+                    .expect("every tool has a description"),
+            )
+        })
+        .collect();
+
+    // WHEN each of the three sentences measured in the telefunken run is looked for,
+    for (tool_name, sentence) in [
+        ("browser_navigate", NAVIGATE_SEARCH_SENTENCE),
+        ("browser_read", READ_WINDOW_SENTENCE),
+        ("browser_inspect", INSPECT_CONTAINS_TEXT_SENTENCE),
+    ] {
+        let own = described
+            .iter()
+            .find(|(name, _)| *name == tool_name)
+            .map(|(_, description)| *description)
+            .unwrap_or_else(|| panic!("{tool_name} is not in tools/list"));
+
+        // THEN it stands exactly once in the description the contract names ...
+        assert_eq!(
+            own.matches(sentence).count(),
+            1,
+            "{tool_name} must carry its sentence exactly once"
+        );
+
+        // ... and in none of the eleven others. A sentence pasted into a second
+        // description would be missed by everyone who reads only the tool they call.
+        for (name, description) in &described {
+            if *name == tool_name {
+                continue;
+            }
+            assert!(
+                !description.contains(sentence),
+                "{name} carries the sentence of {tool_name}"
+            );
+        }
+    }
 }
 
 #[test]

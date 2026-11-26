@@ -158,6 +158,10 @@ gibt** — das ist bei ihr erlaubt und sonst nicht. Die erste ist
 | `65-coverage-in-der-ci.md` | Die Zeilenabdeckung aus `docs/64` läuft als eigener, unabhängiger Job `coverage` in der CI; Schwelle 90 %, kein `needs:`. **`active`:** Stufen 1–3 gebaut (`0ab43ff`), Doku nachgezogen | `active` |
 | `66-rust-abdeckung.md` | `npm run test:coverage:rust` misst die Zeilenabdeckung der Bridge über `cargo-llvm-cov`, druckt die Übersicht je Modul und bricht unter 90 % ab; kein CI-Job. **`active`:** Stufen 1–3 gebaut (`fe2cb7e`), Doku nachgezogen | `active` |
 | `67-abdeckung-main.md` | Neun Prozessfälle heben `main.rs` von 55,97 auf 88,05 % Zeilen und die Gesamtabdeckung auf 94,53 — Start-, Signal- und Fehlerpfade. **`active`:** gebaut und abgenommen (2026-11-23) | `active` |
+| `68-token-nicht-wiederholt.md` | Das Installationsskript druckt das Token nur, wenn es in diesem Lauf entstanden ist; sonst nennt es `--print-token` mit absolutem Pfad. **`proposed`:** Befund vom 2026-11-26 (zwei Läufe druckten das unveränderte Token); die Doku-Seite ist nach `docs/69` geteilt | `proposed` |
+| `69-doku-token-einmal.md` | `docs/35` und `INSTALL.md` sagen nach `docs/68` dasselbe wie der Code; sieben `grep`-Prüfungen decken beide Richtungen ab. **`proposed`:** aus der Teilung von `docs/68` entstanden, baubar erst nach `docs/68` | `proposed` |
+| `70-beschreibungen-statt-skill.md` | Drei Sätze in den Beschreibungen schließen die Lücken aus dem telefunken-Lauf; `tools`-Array 8 176 → 8 465 Zeichen, Zeile 5 8 221 → 8 510, Grenze 10 000 als Reserve. **`active`:** gebaut und abgenommen (2026-11-26) | `active` |
+| `71-grenze-nachziehen.md` | Neun Stellen in `docs/53`, `docs/54`, `docs/59` und `docs/60` auf die neue Grenze gezogen, je Stelle ein eigener `grep`. **`active`:** im selben Commit wie `docs/70` gebaut (2026-11-26) | `active` |
 
 Meta-Datei dieses Ordners (`README.md`) trägt bewusst kein Frontmatter: sie ist
 Verfahren, keine Spec.

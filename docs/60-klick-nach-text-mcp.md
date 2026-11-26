@@ -63,8 +63,8 @@ kommt heute beim Agenten an:
    (`tools/list` trägt das Schema).
 7. **Die Anleitung** `browser_click` in `help.rs` nennt `contains_text`, den
    exakten Vorrang und den Rat.
-8. **Die Werkzeugliste bleibt klein:** `tools/list` höchstens 8 500 Zeichen
-   (Grenze aus `docs/53`).
+8. **Die Werkzeugliste bleibt klein:** `tools/list` höchstens **10 000** Zeichen
+   (vorher 8 500; Betreiberentscheidung vom 2026-11-26 zu `docs/70`).
 
 ## Der Vertrag (MCP-Seite)
 
@@ -120,9 +120,9 @@ Der Musterfall für die Leitung steht schon im Repo: `mcp.rs:2200` prüft
 4. **Mehrdeutig mit Rat.** Der Satz enthält die Zahl, zwei Kandidaten und
    `browser_inspect`.
 5. **`no_match` nennt den Begriff.** `gibtsnicht` im Satz, `undefined` **nicht**.
-6. **Die Liste bleibt klein.** `awk 'NR==5'
-   scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m` ⇒ höchstens
-   8 500 (heute, vor `docs/59`: 8 062).
+6. **Die Liste bleibt klein.** `LC_ALL=C.UTF-8 awk 'NR==5'
+   scripts/parity/expected/1-initialize-and-tools-list.txt | LC_ALL=C.UTF-8 wc -m` ⇒ höchstens
+   **10 000** (Stand 2026-11-26, nach `docs/70`: 8 510 Zeichen in Zeile 5; vor `docs/59`: 8 062).
 7. **Alles andere grün.** `npm run check` ⇒ 0, `bash scripts/parity.sh --impl rust
    --check` ⇒ 7/7 **nach** Stufe 2, und
    `cargo clippy --manifest-path bridge-rs/Cargo.toml --all-targets -- -D warnings`
@@ -173,9 +173,9 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
    `mcp_toolsCallBrowserClick_withoutAUsableSelector_…` (`:2214-2226`) wird zur Einzelprüfung
    mit `{"selector": 7}` reduziert und behält `-32602`; der `{}`-Ast wandert in den neuen Fall.
    Unverändert grün bleiben müssen `:2186-2211` (`:2200`), `:2272-2289` (`:2284`),
-   `:2244-2269` (`:2263`) und der Schema-Pin `:1075-1088`.
-   Kriterium 6: `awk 'NR==5' scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m`
-   ⇒ ≤ 8 500 — **die Beschreibungsänderung zählt gegen dasselbe Budget**, nach dem Edit messen.
+   `:2244-2269` (`:2263`) und der Schema-Pin `:1075-1088`. Kriterium 6: `LC_ALL=C.UTF-8 awk 'NR==5'`
+   `scripts/parity/expected/1-initialize-and-tools-list.txt | LC_ALL=C.UTF-8 wc -m`
+   ⇒ ≤ **10 000** (Grenze seit 2026-11-26, `docs/70`) — **die Beschreibungsänderung zählt gegen dasselbe Budget**, nach dem Edit messen.
 
 3. **Stufe 2 — Sätze und Abbildung (`texts.rs`, `failure.rs`)**
    `texts.rs`: `CLICK_AMBIGUOUS` im gepinnten Wortlaut als eine Zeile (der Zeilenumbruch in

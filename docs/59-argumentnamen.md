@@ -125,7 +125,7 @@ Stufe 1 an einer späteren Spec, und genau das verbietet `docs/README.md`.
    `|| true`, weil `grep -c` bei 0 Treffern mit Exit 1 endet.
 5. **Die Liste bleibt klein.** `awk 'NR==5'
    scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m` ⇒ **höchstens
-   8 500** (heute 8 062, Grenze aus `docs/53`).
+   10 000** Zeichen (Grenze seit 2026-11-26, `docs/70`).
 6. **Die Anleitung nennt die neuen Namen.** Beleg: der Fall
    `help_forInspectAndType_shouldNameTheNewArguments` ⇒ `1 passed` (die Zeile zählt; ein
    Filter ohne Treffer endet mit 0 und `0 passed`).
@@ -177,7 +177,7 @@ Verfasst von einem zweiten Autor (2026-11-23), geprüft gegen den Code.
    texts_shouldContainNoGermanUmlauts` ⇒ `1 passed`. Kriterium 4:
    `grep -cE '^\s{4}"text",$' bridge-rs/src/mcp/tools.rs || true` ⇒ 0 (heute 1, Zeile 68).
    Kriterium 5: `awk 'NR==5' scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m`
-   ⇒ ≤ 8 500. Kriterium 6: `bash scripts/parity.sh --impl rust --check; echo $?` ⇒ 7/7, 0 —
+   ⇒ ≤ **10 000** Zeichen (Grenze seit 2026-11-26, `docs/70`). Kriterium 6: `bash scripts/parity.sh --impl rust --check; echo $?` ⇒ 7/7, 0 —
    nie gleichzeitig mit einer Testsuite, der Lauf besitzt 18115/18116.
 
 3. **Stufe 2 — Doku**

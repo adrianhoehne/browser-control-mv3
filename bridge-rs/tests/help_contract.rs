@@ -656,15 +656,15 @@ fn the_pinnedTools_shouldBeEveryToolOfTheContract() {
     );
 }
 
-/// The budget of `docs/53`: the tool list stays under 8 500 characters, because it is
-/// read on every session. The manuals do not count — they are answered on demand.
+/// The budget of `docs/60`, Ziel 8: the tool list stays under 10 000 characters, because
+/// it is read on every session. The manuals do not count — they are answered on demand.
 #[test]
 fn toolsList_shouldStayUnderTheCharacterBudget() {
     let result = json!({ "tools": tool_list() }).to_string();
     let characters = result.chars().count();
 
     assert!(
-        characters < 8_500,
-        "tools/list is {characters} characters; the budget of docs/53 is 8 500"
+        characters < 10_000,
+        "tools/list is {characters} characters; the budget of docs/60, Ziel 8 is 10 000"
     );
 }

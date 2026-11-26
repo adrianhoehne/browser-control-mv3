@@ -80,7 +80,7 @@ er nicht — dafür sind die gepinnten Assertions da.
    `grep -o '"name":"[a-z_]*"' scripts/parity/expected/1-initialize-and-tools-list.txt | sort -u | wc -l` ⇒ **14**;
    die Zeile misst **8 062** Zeichen
    (`awk 'NR==5' scripts/parity/expected/1-initialize-and-tools-list.txt | wc -m`),
-   also unter der Grenze von 8 500 aus `docs/53`.
+   also unter der Grenze von **10 000** Zeichen aus `docs/60`.
 3. **Parity 7/7** nach der Fixture-Amendierung:
    `bash scripts/parity.sh --impl rust --check` ⇒ 7/7, `--self-test` ⇒ 7/7. Die
    Freigabe für alle drei Fixtures steht in `docs/PROJECT-STATE.md`,

@@ -114,12 +114,12 @@ heutigen Fehlgriff verhindert hätte:
 | `bridge-rs/tests/help_contract.rs` | `every_pinned_manual_returnLine_shouldNameExactlyTheAnsweredFields` | alle vierzehn Returns-Zeilen gegen gemessene Feldlisten (Stand 2026-11-26, `127.0.0.1:8111`) |
 | `bridge-rs/tests/help_contract.rs` | `every_manual_example_shouldOnlyNameKeysOfItsSchemaAndItsReturnLine` | jeder Beispielaufruf gegen das Schema, jede zitierte Antwort gegen die Returns-Zeile |
 | `bridge-rs/tests/help_contract.rs` | `the_pinnedTools_shouldBeEveryToolOfTheContract` | die gepinnten Listen decken genau die vierzehn Werkzeuge, keine fehlt, keine doppelt |
-| `bridge-rs/tests/help_contract.rs` | `toolsList_shouldStayUnderTheCharacterBudget` | `tools/list` bleibt unter 8 500 Zeichen |
+| `bridge-rs/tests/help_contract.rs` | `toolsList_shouldStayUnderTheCharacterBudget` | `tools/list` bleibt unter **10 000** Zeichen — Grenze seit 2026-11-26, `docs/70` |
 
 ## Acceptance criteria
 
 1. **Vierzehn Werkzeuge.** `tools/list` ⇒ 14 Einträge; `browser_help` ist dabei,
-   `tools/list` bleibt **unter 8 500 Zeichen**.
+   `tools/list` bleibt unter **10 000** Zeichen — Grenze seit 2026-11-26, `docs/70`.
 2. **Jede Anleitung vollständig.** Der Test über alle dreizehn Namen ⇒ grün.
 3. **Unbekannt nennt die gültigen Namen.**
    `browser_help({"tool":"gibtsnicht"})` ⇒ englischer Satz, `isError: true`, mit den

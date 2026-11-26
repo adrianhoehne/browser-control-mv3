@@ -52,6 +52,25 @@ Dazu die Specs `56` bis `67`. **Die Bridge führt ihre eigene Versionsreihe:** s
 meldet `bridgeVersion: 0.1.0` (aus `bridge-rs/Cargo.toml`), unabhängig von der
 Version der Erweiterung.
 
+**Die Lehre steht in der Beschreibung, nicht in einer Skill.** Drei Sätze hängen
+jetzt an den Beschreibungen von `browser_navigate`, `browser_read` und
+`browser_inspect`: Suchseiten öffnen direkt über `?q=`; `maxChars: 4000` und
+`offset` statt eines vollen Lesevorgangs; `contains_text` trifft sichtbaren Text,
+keinen Tag-Namen und kein Attribut — für ein Eingabefeld ist `selector: "input"`
+richtig. Anlass ist eine ausgewertete Sitzung vom 2026-11-26: 55 Werkzeugaufrufe,
+etwa sechs davon in einen Suchkasten, 17-mal `maxChars: 20000`, kein Aufruf von
+`browser_help`, und die Skill wurde nie gelesen. Die Werkzeugliste wächst dadurch
+von 8 221 auf 8 510 Zeichen (Zeile 5 des Artefakts, `LC_ALL=C.UTF-8 wc -m`). Der
+neue Fall `mcp_descriptions_shouldCarryTheThreeMeasuredSentences` hält jeden Satz
+in genau der Beschreibung, die ihn tragen soll, und in keiner der elf anderen.
+
+**Die Grenze von `tools/list` ist jetzt eine Reserve.** Sie steigt von 8 500 auf
+10 000 Zeichen (`docs/60`, Ziel 8; Betreiberentscheidung vom 2026-11-26). Der Bau
+schöpft sie nicht aus: 1 490 Zeichen bleiben Luft. `help_contract.rs` prüft die
+Grenze weiter, jetzt gegen 10 000; `docs/53`, `docs/54`, `docs/59` und `docs/60`
+nennen die neue Zahl, und die beiden Messbefehle in `docs/60` zählen mit
+`LC_ALL=C.UTF-8` Zeichen statt Bytes.
+
 ## [0.7.0] — 2026-11-22
 
 **Ein neues Werkzeug: `browser_help`.** Es antwortet mit der ausführlichen
