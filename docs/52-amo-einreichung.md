@@ -46,16 +46,17 @@ paste its address and token into the extension, and you decide which switches ar
 on.
 
 WHAT IT DOES
-- the agent opens a tab of its own and drives only that tab: open_tab, navigate,
-  read, inspect, click, type, focus, screenshot, frames, transcript, eval, help
+- the agent opens a tab of its own and drives only that tab: open_tab, close_tab,
+  navigate, read, inspect, click, type, focus, screenshot, frames, transcript, eval
+- browser_help answers the manual of a tool and needs no tab at all
 - browser_status reports your windows and tabs (address and title only) and lets the
   agent pick one of its own tabs
 - the extension keeps one pinned tab for the socket, because MV3 unloads the
   background page after 30 seconds of idle
 - four switches, all off by default: the toolbar on/off, password fields, code
   evaluation, screenshots
-- browser_status lists the tabs of your window with their address and title. It
-  does not read their content.
+- browser_status lists the tabs of your window with address, title, id and whether
+  they are active or pinned. It does not read their content.
 
 WHAT IT TRANSMITS
 Page text, DOM results and — only while its own switch is on — screenshots go to
@@ -66,7 +67,7 @@ WHAT IT DOES NOT DO
 - it does not read the page content of tabs you opened yourself, and it does not
   click or type in them; only browser_status reports their address and title
 - it does not change your search engine, your start page or your settings
-- it does not fetch or execute a script from any server
+- it does not fetch or execute a script from any remote server
 
 TWO FETCHES THAT CARRY NOTHING OUT
 - a HEAD request, without credentials, for the content type of a page the agent
@@ -75,7 +76,8 @@ TWO FETCHES THAT CARRY NOTHING OUT
 - the caption file of a YouTube video it is reading
 
 Neither sends data about you anywhere; the first names only the address the agent
-just failed to read, the second never leaves the page's own origin.
+just failed to read, the second only ever goes to a youtube.com address, never to
+another host.
 ```
 
 ## 3. Begründung der Berechtigungen (Feld „Notes to reviewers")
@@ -90,6 +92,10 @@ browser_status with address and title only; their content is never read.
 scripting: the agent's only way into a page. One file (page-agent.js) is injected,
 only into the agent tab, only when a tool asks for it.
 
+web_accessible_resources: the same single file, because `scripting` needs it in the
+page's world. It is the only entry, it contains no data and no configuration, and it
+is only ever injected by the extension itself.
+
 tabs: used to find and manage the agent tab ids and to keep the pinned bridge tab
 alive (background.js, tabs.create with pinned: true).
 
@@ -103,7 +109,9 @@ yourself; only the agent tab's address is ever read. Nothing is blocked, redirec
 or modified; webRequestBlocking is not requested.
 
 Data: the extension talks to one address that the operator enters — by default a
-loopback address, always with the operator's token. No data goes to the developer.
+loopback address, always with the operator's token. Apart from the two fetches named
+in the description, which go to the page's own server without the token. No data goes
+to the developer.
 ```
 
 ## 4. Der Absatz zu `eval` — der wichtigste
@@ -156,7 +164,7 @@ If you prefer a build without this switch for review, say so and I will submit o
 |---|---|---|
 | Der Reviewer liest `eval` als „remote code" | Rückfrage oder Ablehnung | Absatz 4 mitschicken; Plan B ist ein Build ohne den Schalter |
 | `<all_urls>` gilt als zu weit | Rückfrage oder Ablehnung | die zwei tragenden Codezeilen nennen: `resolveAgentTab` (nur eine Id aus der Agenten-Liste ist adressierbar) und der `webRequest`-Filter — nicht nur behaupten |
-| Der Betreiber trägt einen Endpunkt außerhalb von Loopback ein | Seitentext verlässt das Gerät | Bleibt Loopback (Entscheidung vom 2026-11-26). Die Erweiterung prüft die Adresse nicht — das steht als Lücke unten |
+| Der Betreiber trägt einen Endpunkt außerhalb von Loopback ein | Seitentext verlässt das Gerät | Bleibt Loopback (Entscheidung vom 2026-11-26). Die Erweiterung erzwingt Loopback nicht: `ws://` an einen fremden Host lehnt sie ab, `wss://` lässt sie zu (`isUnencryptedRemoteEndpoint`) |
 
 ## 7. Plan B — der Build ohne `eval`
 
@@ -185,7 +193,7 @@ dabei.
 
 | Behauptung im Text | Prüfung | Soll |
 |---|---|---|
-| vier Schalter, alle aus | `grep -c 'const ALLOW_PASSWORD_FIELDS_KEY' extension/bridge.js` / `'const ALLOW_EVAL'` / `'const ALLOW_SCREENSHOT'` und `grep -c 'const BRIDGE_ENABLED_KEY' extension/background.js` | je `1`; die drei Feature-Schalter lesen `=== true`, der Toolbar-Schalter `DEFAULT_BRIDGE_ENABLED = false` |
+| vier Schalter, alle aus | `grep -c '^  const ALLOW_PASSWORD_FIELDS_KEY = ' extension/bridge.js` / `'^  const ALLOW_EVAL = '` / `'^  const ALLOW_SCREENSHOT = '` und `grep -c 'const BRIDGE_ENABLED_KEY' extension/background.js` | je `1`; die drei Feature-Schalter lesen `=== true`, der Toolbar-Schalter `DEFAULT_BRIDGE_ENABLED = false` |
 | gepinnter Tab für den Socket | `grep -n 'pinned: true' extension/background.js` | `tabs.create` mit `pinned: true` |
 | MV3 entlädt nach 30 Sekunden | `docs/02`, `docs/42` | belegt |
 | nur Agenten-Tabs sind adressierbar | `grep -n 'resolveAgentTab' extension/bridge.js` | Funktion vorhanden, liest die Agenten-Liste |
@@ -200,8 +208,8 @@ dabei.
    Behauptung der Abschnitte 2 und 3 eine Zeile. Zählbar:
 
    ```
-   grep -c '^| ' docs/52-amo-einreichung.md            # ⇒ 29 (Tabellenzeilen gesamt)
-   grep -c '^| .*| `' docs/52-amo-einreichung.md       # ⇒ 14 (davon mit Befehl)
+   sed -n '/^## Testing/,/^## Acceptance criteria/p' docs/52-amo-einreichung.md \
+     | grep -c '^| '                                   # ⇒ 9 (Kopf, Trenner, sieben Prüfungen)
    ```
 2. **Die vier Textfelder stehen auf Englisch und sind kopierbar:** vier
    Textblöcke, je von einem Fence-Paar umschlossen:
@@ -244,7 +252,7 @@ dabei.
 7. **Nichts anderes bewegt** (gegen den Commit, gegen den dieser Increment läuft):
 
    ```
-   git status --short      # ⇒ genau eine Zeile: M docs/52-amo-einreichung.md
+   git status --short | grep -vc '^ M docs/52-amo-einreichung.md$'   # ⇒ 0
    ```
 
 ## Dev plan
@@ -275,14 +283,13 @@ Keine Stufe hängt von einer späteren ab. Stufe 4 ist erst vor dem Einreichen f
   Dokumente; ob der zitierte Satz bleibt und was sie zu `eval` und Datenerhebung
   sagen, weiß niemand in diesem Repo.
 - **Ein Endpunkt außerhalb von Loopback ist erlaubt.** Trägt der Betreiber einen
-  ein, verlässt Seitentext das Gerät. Der Betrieb bleibt Loopback
-  (Betreiberentscheidung vom 2026-11-26); die Erweiterung prüft die Adresse nicht.
+  `wss://`-Endpunkt ein, verlässt Seitentext das Gerät. Der Betrieb bleibt Loopback
+  (Betreiberentscheidung vom 2026-11-26); erzwungen wird es nicht.
 - **Die Manifest-Beschreibung ist deutsch und nennt einen „Server".** Sie braucht
   einen eigenen Nachtrag; `test/manifest.test.js` pinnt ihren Wortlaut heute nicht.
-- **Die Erweiterung prüft die Endpunktadresse nicht.** Loopback ist die Vorgabe und
-  der unterstützte Betrieb, aber ein Betreiber kann eine andere Adresse eintragen.
-  Wer das verhindern will, braucht eine Prüfung im Code — eine eigene Spec, nicht
-  diese.
+- **Die Erweiterung erzwingt Loopback nicht.** Sie lehnt `ws://` an einen fremden
+  Host ab (`isUnencryptedRemoteEndpoint`, `bridge.js:769`) und lässt `wss://` zu. Wer
+  nur Loopback zulassen will, braucht eine Prüfung im Code — eine eigene Spec.
 
 ## Open questions
 
@@ -297,7 +304,8 @@ deshalb auf `["none"]`.
 |---|---|---|---|
 | 1 | 2026-11-26 | `nicht bestanden` | „does not read or drive tabs you opened yourself" ist falsch (`browser_status` meldet Adresse und Titel aller Tabs); drei Pflichtabschnitte fehlten; der Zweck widersprach `docs/46` (`0.7.0` ist durch); das Regelwerk-Fenster war Prosa statt Kriterium; der vierte Schalter (Toolbar) fehlte; „survives Firefox sleeping" war der falsche Grund; zwei Same-Origin-`fetch` fehlten; Manifest-Beschreibung unerwähnt |
 | 2 | 2026-11-26 | `nicht bestanden` | die Support-Seite war eine 404 (das Repo heißt `adrianhoehne/browser-control-mv3`); Kriterium 6 zählte Wörter statt Tabellenzeilen; zwei Zeilen der Testing-Tabelle hatten ein Soll, das der Befehl widerlegt; „so viele Fälle wie heute" war keine Zahl; Kriterien 1, 2 und 7 hatten kein Kommando; die Notes verschwiegen, dass der `webRequest`-Mitschnitt alle YouTube-Tabs sieht; der HEAD-`fetch` beschrieb die falsche Seite; ein Verweis zeigte auf „Open questions: Keine"; `web_public_resources` heißt `web_accessible_resources`; die Werkzeugliste nannte 10 von 14 |
-| 3 | 2026-11-26 | im Review | Runde-2-Befunde eingearbeitet, siehe Log |
+| 3 | 2026-11-26 | `nicht bestanden` | Kriterium 1 zählte 30 statt 29 Zeilen und den halben Text; Kriterium 7 war am HEAD 0 Zeilen statt 1 und hing am Commit-Zeitpunkt; die Schalter-Zeile griff `ALLOW_EVAL` doppelt; „die Erweiterung prüft die Adresse nicht" war falsch (`ws://` an fremde Hosts wird abgelehnt) und stand dreimal; die Notes sagten „one address … always with the token"; „never leaves the page's own origin" war zu stark; `web_accessible_resources` fehlte in den Notes; `close_tab` fehlte in der Werkzeugliste; der Log behauptete Einarbeitung für drei offene Befunde |
+| 4 | 2026-11-26 | im Review | Runde-3-Befunde eingearbeitet; dritter Block erreicht, die Teilungsfrage liegt beim Betreiber |
 
 ## Log
 
@@ -328,3 +336,20 @@ deshalb auf `["none"]`.
   Umleitungen und trägt keine Cookies. Die Werkzeugliste nennt alle zwölf
   Tab-Werkzeuge plus `status` in eigener Zeile. `web_accessible_resources` heißt
   richtig.
+
+- **2026-11-26, Runde 3 eingearbeitet, ehrlich je Befund.** Erledigt: die drei Stellen,
+  die behaupteten „die Erweiterung prüft die Adresse nicht", sagen jetzt, was der Code
+  tut (`ws://` an einen fremden Host wird abgelehnt, `wss://` zugelassen); die Notes
+  nennen die zwei fremden `fetch` ausdrücklich; „never leaves the page's own origin"
+  heißt jetzt „nur an eine youtube.com-Adresse"; `web_accessible_resources` ist in den
+  Notes erklärt; die Werkzeugliste nennt `close_tab`, `help` steht in eigener Zeile;
+  `browser_status` nennt `id`, `active` und `pinned`; „from any remote server"; die
+  doppelte `browser_status`-Zeile ist weg. Kriterium 1 zählt den Prüfabschnitt (⇒ 9),
+  Kriterium 7 ist ein Wächter (`git status` außer dieser Datei ⇒ 0), die
+  Schalter-Zeile grept `^  const ALLOW_EVAL = ` (⇒ 1). **Nicht erledigt und offen:**
+  das AMO-Formular ist weiter ungelesen, und `docs/46` widerspricht mit „drei
+  Schaltern" — beides steht unter `## Bekannte Lücken` bzw. in der Roadmap.
+- **2026-11-26, Runde 2 — Nachtrag zur Ehrlichkeit.** Der Eintrag oben sagt pauschal
+  „eingearbeitet". Nicht erledigt waren damals `close_tab` in der Werkzeugliste, die
+  Zahlen von Kriterium 1 und der Commit-Zeitpunkt von Kriterium 7; alle drei sind in
+  Runde 3 geschlossen.
