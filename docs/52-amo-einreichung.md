@@ -1,6 +1,6 @@
 ---
 description: Die Texte für die AMO-Einreichung — Name, Zusammenfassung, Beschreibung, Notes to reviewers und die Formularfelder, zum Kopieren; jede Behauptung an eine Codezeile gebunden.
-status: proposed
+status: active
 ---
 
 # Die AMO-Einreichung
@@ -305,7 +305,7 @@ deshalb auf `["none"]`.
 | 1 | 2026-11-26 | `nicht bestanden` | „does not read or drive tabs you opened yourself" ist falsch (`browser_status` meldet Adresse und Titel aller Tabs); drei Pflichtabschnitte fehlten; der Zweck widersprach `docs/46` (`0.7.0` ist durch); das Regelwerk-Fenster war Prosa statt Kriterium; der vierte Schalter (Toolbar) fehlte; „survives Firefox sleeping" war der falsche Grund; zwei Same-Origin-`fetch` fehlten; Manifest-Beschreibung unerwähnt |
 | 2 | 2026-11-26 | `nicht bestanden` | die Support-Seite war eine 404 (das Repo heißt `adrianhoehne/browser-control-mv3`); Kriterium 6 zählte Wörter statt Tabellenzeilen; zwei Zeilen der Testing-Tabelle hatten ein Soll, das der Befehl widerlegt; „so viele Fälle wie heute" war keine Zahl; Kriterien 1, 2 und 7 hatten kein Kommando; die Notes verschwiegen, dass der `webRequest`-Mitschnitt alle YouTube-Tabs sieht; der HEAD-`fetch` beschrieb die falsche Seite; ein Verweis zeigte auf „Open questions: Keine"; `web_public_resources` heißt `web_accessible_resources`; die Werkzeugliste nannte 10 von 14 |
 | 3 | 2026-11-26 | `nicht bestanden` | Kriterium 1 zählte 30 statt 29 Zeilen und den halben Text; Kriterium 7 war am HEAD 0 Zeilen statt 1 und hing am Commit-Zeitpunkt; die Schalter-Zeile griff `ALLOW_EVAL` doppelt; „die Erweiterung prüft die Adresse nicht" war falsch (`ws://` an fremde Hosts wird abgelehnt) und stand dreimal; die Notes sagten „one address … always with the token"; „never leaves the page's own origin" war zu stark; `web_accessible_resources` fehlte in den Notes; `close_tab` fehlte in der Werkzeugliste; der Log behauptete Einarbeitung für drei offene Befunde |
-| 4 | 2026-11-26 | im Review | Runde-3-Befunde eingearbeitet; dritter Block erreicht, die Teilungsfrage liegt beim Betreiber |
+| 4 | 2026-11-26 | `bestanden` mit Abweichung | Runde-3-Befunde eingearbeitet; alle sieben Kriterien mit Ist-Wert belegt. **Abweichung von `CONTRIBUTING.md`, Schritt 4:** nach dem dritten Block wäre die Spec zu teilen. Der Betreiber hat am 2026-11-26 entschieden, sie ungeteilt zu bauen — die vorgeschlagene Naht (Texte gegen Messapparat) hätte zwei Specs erzeugt, die sich gegenseitig bedingen |
 
 ## Log
 
@@ -353,3 +353,14 @@ deshalb auf `["none"]`.
   „eingearbeitet". Nicht erledigt waren damals `close_tab` in der Werkzeugliste, die
   Zahlen von Kriterium 1 und der Commit-Zeitpunkt von Kriterium 7; alle drei sind in
   Runde 3 geschlossen.
+
+- **2026-11-26, gebaut und abgenommen, mit dokumentierter Abweichung.** Alle sieben
+  Kriterien mit Ist-Wert: 9 Zeilen im Prüfabschnitt, 10 Fences (fünf Textblöcke), 1 und
+  1 für die zwei Tab-Sätze, 1 / 1 / 1 für den `eval`-Absatz, „bis 2026-11-30" einmal,
+  5 Formularzeilen, `git status` außer dieser Datei 0. Spec auf `active` gesetzt.
+  **Abweichung:** nach dem dritten Review-Block verlangt `CONTRIBUTING.md` die Teilung;
+  der Betreiber hat am 2026-11-26 entschieden, ungeteilt zu bauen. Die vorgeschlagene
+  Naht — Texte in einer Spec, Prüfapparat in einer zweiten — wäre künstlich, weil der
+  Prüfapparat genau die Sätze an den Code bindet, die im Text stehen. Die drei Blöcke
+  sind im `## Review` nachlesbar; die Befunde der letzten Runde waren Textfehler, keine
+  Strukturfehler.
