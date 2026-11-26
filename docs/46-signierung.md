@@ -89,7 +89,7 @@ Eine signierte Auslieferung ist nur ehrlich, wenn dasteht, was die Erweiterung
 | `<all_urls>` (`host_permissions`) | Zugriff auf jede Seite, die der Betreiber öffnet | liest und bedient nur den **Agenten-Tab**, nie die Tabs des Betreibers; Filter im Code |
 | `scripting` | Code in Seiten ausführen | nur `page-agent.js`, nur im Agenten-Tab, nur auf Anforderung eines Werkzeugs |
 | `tabs` | Tab-Liste, Fokus, Schließen | Agenten-Tab verwalten, Brücken-Tab instand halten |
-| `storage` | lokale Einstellungen | Endpunkt, Token, drei Schalter |
+| `storage` | lokale Einstellungen | Endpunkt, Token, vier Schalter (Toolbar, Passwortfelder, Code-Auswertung, Screenshots) — **Stand 2026-11-26:** `docs/44` hat den Toolbar-Schalter ergänzt; die Zeile nannte bis dahin drei |
 | `webRequest` | Anfragen **beobachten** | nur `youtube.com/api/timedtext`, um die signierte Untertitel-Adresse mitzuschneiden; blockiert nichts |
 
 Diese Tabelle kommt in `README.md` (englisch), und `INSTALL.md` verweist darauf.
@@ -122,7 +122,7 @@ Namen) und kommt **nicht** ins Repo.
 
 | Datei | Fall | Was er beweist |
 |---|---|---|
-| `test/manifest.test.js` | `manifest_shouldDeclareNoDataCollection` | die Daten-Erklärung steht im Manifest (Schlüssel und Form nach der Messung) |
+| `test/manifest.test.js` | `manifest_shouldDeclareNoDataCollection` | die Daten-Erklärung steht im Manifest: `required: ["none"]`, `optional: []`, und kein loser Schlüssel daneben. **Stand 2026-11-26:** der Fall fehlte, obwohl er hier stand; er ist jetzt da (`test/manifest.test.js`) |
 | `test/manifest.test.js` | **`browserSpecificSettings_shouldKeepTheExtensionId`** (existiert schon, `test/manifest.test.js:158`) | ohne feste ID keine Signatur über Versionen hinweg |
 | `scripts/sign.sh` | `sign_withoutAmoEnv_shouldExitOneAndNameThePath` | die Signatur scheitert laut, nicht still |
 

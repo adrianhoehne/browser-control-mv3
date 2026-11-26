@@ -69,6 +69,24 @@ test("bridgePage_shouldLoadProtocolBeforeBridge", async () => {
   assert.doesNotMatch(html, /<script(?![^>]*src=)/);
 });
 
+test("manifest_shouldDeclareNoDataCollection", () => {
+  // GIVEN the declaration AMO asks for since the data-collection prompt (spec 46,
+  // Testing; spec 52 quotes it in the "Datenerhebung" row of the submission texts),
+  // WHEN we read the browser_specific_settings block,
+  // THEN it says `none` and offers nothing optional — the extension collects nothing,
+  // and a non-empty `optional` list would read as "maybe later", which is exactly the
+  // sentence spec 52 has to defend:
+  assert.deepStrictEqual(
+    MANIFEST.browser_specific_settings.gecko.data_collection_permissions,
+    { required: ["none"], optional: [] },
+  );
+
+  // ... and the declaration hangs on the gecko settings, not on the top level: a
+  // stray key outside would never be read by AMO and would look like a declaration
+  // that exists:
+  assert.equal(Object.hasOwn(MANIFEST, "data_collection_permissions"), false);
+});
+
 test("manifest_shouldAskForScriptingAndHostPermissions", () => {
   // GIVEN the permission set of the previous increments plus the one decision of
   // spec 34 (the operator chose to observe `api/timedtext` requests themselves on
